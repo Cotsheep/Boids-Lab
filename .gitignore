@@ -23,3 +23,18 @@ mono_crash.*.json
 *.exe
 # Uncomment if your project does not version PCK files as runtime dependencies.
 # *.pck
+
+# Local C# / IDE build state
+/bin/
+/obj/
+/.vs/
+*.csproj.user
+*.sln.docstates
+
+# Preserve the existing local Android build ignore
+/android/
+
+# Machine-local crash investigation; keep diagnostics off the remote
+/docs/diagnostics/
+/crash-evidence/
+*.dmp

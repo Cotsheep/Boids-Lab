@@ -1,0 +1,191 @@
+[gd_scene format=3 uid="uid://drutwekmpfdc3"]
+
+[ext_resource type="Script" uid="uid://byh1e31j0m7gx" path="res://scripts/app/MainController.cs" id="1_app"]
+[ext_resource type="Script" uid="uid://b8o4bat6tlsqp" path="res://scripts/ui/ControlPanel.cs" id="2_controls"]
+[ext_resource type="PackedScene" path="res://scenes/worlds/boids_world_2d.tscn" id="3_world"]
+[ext_resource type="Script" uid="uid://dj48aa7clgw3r" path="res://scripts/ui/StatsPanel.cs" id="4_stats"]
+[ext_resource type="Theme" uid="uid://ch548a574i185" path="res://scenes/lab_theme.tres" id="5_theme"]
+
+[node name="Game" type="Node" unique_id=2044987096]
+script = ExtResource("1_app")
+SimulationScene = ExtResource("3_world")
+
+[node name="World" type="Node" parent="."]
+unique_name_in_owner = true
+
+[node name="UI" type="CanvasLayer" parent="."]
+layer = 1
+
+[node name="UIRoot" type="Control" parent="UI"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme = ExtResource("5_theme")
+
+[node name="Layout" type="MarginContainer" parent="UI/UIRoot" unique_id=830591646]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_constants/margin_left = 24
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 24
+theme_override_constants/margin_bottom = 20
+
+[node name="Column" type="VBoxContainer" parent="UI/UIRoot/Layout" unique_id=1349841702]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 16
+
+[node name="Header" type="HBoxContainer" parent="UI/UIRoot/Layout/Column" unique_id=382974600]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 24
+
+[node name="Identity" type="VBoxContainer" parent="UI/UIRoot/Layout/Column/Header" unique_id=600973289]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+theme_override_constants/separation = 2
+
+[node name="Title" type="Label" parent="UI/UIRoot/Layout/Column/Header/Identity" unique_id=688284111]
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.47, 0.86, 0.79, 1)
+theme_override_font_sizes/font_size = 30
+text = "BoidsLab"
+
+[node name="Subtitle" type="Label" parent="UI/UIRoot/Layout/Column/Header/Identity" unique_id=990623667]
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.57, 0.65, 0.73, 1)
+theme_override_font_sizes/font_size = 13
+text = "Game world / research HUD"
+
+[node name="RunStatus" type="Label" parent="UI/UIRoot/Layout/Column/Header" unique_id=953573280]
+unique_name_in_owner = true
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.92, 0.73, 0.4, 1)
+theme_override_font_sizes/font_size = 13
+text = "PAUSED · CORE NOT IMPLEMENTED"
+
+[node name="HudContent" type="HBoxContainer" parent="UI/UIRoot/Layout/Column" unique_id=1053399029]
+layout_mode = 2
+size_flags_vertical = 3
+mouse_filter = 2
+theme_override_constants/separation = 20
+
+[node name="ControlsCard" type="PanelContainer" parent="UI/UIRoot/Layout/Column/HudContent" unique_id=642795156]
+custom_minimum_size = Vector2(340, 0)
+layout_mode = 2
+mouse_filter = 0
+
+[node name="Scroll" type="ScrollContainer" parent="UI/UIRoot/Layout/Column/HudContent/ControlsCard" unique_id=766896500]
+layout_mode = 2
+mouse_filter = 0
+horizontal_scroll_mode = 0
+follow_focus = true
+
+[node name="ControlPanel" type="VBoxContainer" parent="UI/UIRoot/Layout/Column/HudContent/ControlsCard/Scroll" unique_id=176356882]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+script = ExtResource("2_controls")
+
+[node name="WorldInfo" type="VBoxContainer" parent="UI/UIRoot/Layout/Column/HudContent" unique_id=1445098942]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+theme_override_constants/separation = 10
+
+[node name="SceneHeader" type="HBoxContainer" parent="UI/UIRoot/Layout/Column/HudContent/WorldInfo" unique_id=909942135]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="WorldTitle" type="Label" parent="UI/UIRoot/Layout/Column/HudContent/WorldInfo/SceneHeader" unique_id=1965263618]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+theme_override_font_sizes/font_size = 16
+text = "2D World"
+
+[node name="Stage" type="Label" parent="UI/UIRoot/Layout/Column/HudContent/WorldInfo/SceneHeader" unique_id=1988960134]
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.57, 0.65, 0.73, 1)
+theme_override_font_sizes/font_size = 12
+text = "FRAMEWORK / 01"
+
+[node name="WorldCoordinates" type="Label" parent="UI/UIRoot/Layout/Column/HudContent/WorldInfo" unique_id=121695228]
+unique_name_in_owner = true
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.45, 0.56, 0.65, 1)
+theme_override_font_sizes/font_size = 12
+text = "WORLD SPACE"
+
+[node name="CorePlaceholder" type="VBoxContainer" parent="UI/UIRoot/Layout/Column/HudContent/WorldInfo" unique_id=1469265937]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 6
+mouse_filter = 2
+
+[node name="Title" type="Label" parent="UI/UIRoot/Layout/Column/HudContent/WorldInfo/CorePlaceholder" unique_id=240260182]
+layout_mode = 2
+mouse_filter = 2
+theme_override_font_sizes/font_size = 24
+text = "Simulation Core Not Implemented"
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="Description" type="Label" parent="UI/UIRoot/Layout/Column/HudContent/WorldInfo/CorePlaceholder" unique_id=1308828675]
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.57, 0.65, 0.73, 1)
+text = "The world renders behind this HUD.\nBoid initialization, steering and integration are TODO."
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="Legend" type="Label" parent="UI/UIRoot/Layout/Column/HudContent/WorldInfo" unique_id=1591134761]
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.45, 0.56, 0.65, 1)
+theme_override_font_sizes/font_size = 12
+text = "Grid: world-space guide / spatial neighbor search: TODO"
+autowrap_mode = 3
+
+[node name="StatisticsCard" type="PanelContainer" parent="UI/UIRoot/Layout/Column" unique_id=924710969]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="Column" type="VBoxContainer" parent="UI/UIRoot/Layout/Column/StatisticsCard" unique_id=488977396]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="StatsPanel" type="HFlowContainer" parent="UI/UIRoot/Layout/Column/StatisticsCard/Column" unique_id=998212156]
+unique_name_in_owner = true
+layout_mode = 2
+mouse_filter = 2
+script = ExtResource("4_stats")
+
+[node name="Separator" type="HSeparator" parent="UI/UIRoot/Layout/Column/StatisticsCard/Column" unique_id=616172658]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="DebugInfo" type="Label" parent="UI/UIRoot/Layout/Column/StatisticsCard/Column" unique_id=921777468]
+unique_name_in_owner = true
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.57, 0.65, 0.73, 1)
+theme_override_font_sizes/font_size = 13
+text = "Core & debug overlays: TODO | -- = not measured"
+autowrap_mode = 3

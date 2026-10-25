@@ -1,0 +1,113 @@
+using System;
+using Godot;
+
+namespace BoidsLab;
+
+/// <summary>UI、模拟与画布共享此实例；数值范围和默认值只在此处定义。</summary>
+public sealed class BoidConfig
+{
+    public const string SavePath = "user://boids_lab.cfg";
+
+    public readonly record struct NumberRange(double Min, double Max, double Step, double Default)
+    {
+        public double Constrain(double value) => double.IsFinite(value)
+            ? Math.Clamp(Math.Round(value / Step) * Step, Min, Max)
+            : Default;
+    }
+
+    public static readonly NumberRange CountRange = new(0, 5000, 1, 200);
+    public static readonly NumberRange SeedRange = new(0, int.MaxValue, 1, 42);
+    public static readonly NumberRange RadiusRange = new(1, 500, 1, 80);
+    public static readonly NumberRange SpeedRange = new(0, 1000, 1, 120);
+    public static readonly NumberRange ForceRange = new(0, 2000, 1, 200);
+    public static readonly NumberRange SeparationRange = new(0, 5, 0.1, 1.5);
+    public static readonly NumberRange AlignmentRange = new(0, 5, 0.1, 1);
+    public static readonly NumberRange CohesionRange = new(0, 5, 0.1, 1);
+
+    public int BoidCount { get; set; } = (int)CountRange.Default;
+    public int RandomSeed { get; set; } = (int)SeedRange.Default;
+    public float PerceptionRadius { get; set; } = (float)RadiusRange.Default;
+    public float MaxSpeed { get; set; } = (float)SpeedRange.Default;
+    public float MaxForce { get; set; } = (float)ForceRange.Default;
+    public float SeparationWeight { get; set; } = (float)SeparationRange.Default;
+    public float AlignmentWeight { get; set; } = (float)AlignmentRange.Default;
+    public float CohesionWeight { get; set; } = (float)CohesionRange.Default;
+    public bool SeparationEnabled { get; set; } = true;
+    public bool AlignmentEnabled { get; set; } = true;
+    public bool CohesionEnabled { get; set; } = true;
+    public bool ShowGrid { get; set; } = true;
+    public bool ShowNeighbors { get; set; }
+    public bool ShowPerceptionRadius { get; set; }
+    public bool ShowVelocity { get; set; }
+
+    public void Normalize()
+    {
+        BoidCount = (int)CountRange.Constrain(BoidCount);
+        RandomSeed = (int)SeedRange.Constrain(RandomSeed);
+        PerceptionRadius = (float)RadiusRange.Constrain(PerceptionRadius);
+        MaxSpeed = (float)SpeedRange.Constrain(MaxSpeed);
+        MaxForce = (float)ForceRange.Constrain(MaxForce);
+        SeparationWeight = (float)SeparationRange.Constrain(SeparationWeight);
+        AlignmentWeight = (float)AlignmentRange.Constrain(AlignmentWeight);
+        CohesionWeight = (float)CohesionRange.Constrain(CohesionWeight);
+    }
+
+    public Error Load(string path = SavePath)
+    {
+        var file = new ConfigFile();
+        Error error = file.Load(path);
+        if (error != Error.Ok) return error;
+
+        // 类型损坏的条目回退到当前值；有效数字统一经过范围检查。
+        double Number(string key, double fallback)
+        {
+            Variant value = file.GetValue("simulation", key, fallback);
+            return value.VariantType is Variant.Type.Int or Variant.Type.Float
+                ? value.AsDouble() : fallback;
+        }
+        bool Flag(string section, string key, bool fallback)
+        {
+            Variant value = file.GetValue(section, key, fallback);
+            return value.VariantType == Variant.Type.Bool ? value.AsBool() : fallback;
+        }
+
+        BoidCount = (int)CountRange.Constrain(Number("boid_count", BoidCount));
+        RandomSeed = (int)SeedRange.Constrain(Number("random_seed", RandomSeed));
+        PerceptionRadius = (float)RadiusRange.Constrain(Number("perception_radius", PerceptionRadius));
+        MaxSpeed = (float)SpeedRange.Constrain(Number("max_speed", MaxSpeed));
+        MaxForce = (float)ForceRange.Constrain(Number("max_force", MaxForce));
+        SeparationWeight = (float)SeparationRange.Constrain(Number("separation_weight", SeparationWeight));
+        AlignmentWeight = (float)AlignmentRange.Constrain(Number("alignment_weight", AlignmentWeight));
+        CohesionWeight = (float)CohesionRange.Constrain(Number("cohesion_weight", CohesionWeight));
+        SeparationEnabled = Flag("simulation", "separation_enabled", SeparationEnabled);
+        AlignmentEnabled = Flag("simulation", "alignment_enabled", AlignmentEnabled);
+        CohesionEnabled = Flag("simulation", "cohesion_enabled", CohesionEnabled);
+        ShowGrid = Flag("visualization", "show_grid", ShowGrid);
+        ShowNeighbors = Flag("visualization", "show_neighbors", ShowNeighbors);
+        ShowPerceptionRadius = Flag("visualization", "show_perception_radius", ShowPerceptionRadius);
+        ShowVelocity = Flag("visualization", "show_velocity", ShowVelocity);
+        return Error.Ok;
+    }
+
+    public Error Save(string path = SavePath)
+    {
+        Normalize();
+        var file = new ConfigFile();
+        file.SetValue("simulation", "boid_count", BoidCount);
+        file.SetValue("simulation", "random_seed", RandomSeed);
+        file.SetValue("simulation", "perception_radius", PerceptionRadius);
+        file.SetValue("simulation", "max_speed", MaxSpeed);
+        file.SetValue("simulation", "max_force", MaxForce);
+        file.SetValue("simulation", "separation_weight", SeparationWeight);
+        file.SetValue("simulation", "alignment_weight", AlignmentWeight);
+        file.SetValue("simulation", "cohesion_weight", CohesionWeight);
+        file.SetValue("simulation", "separation_enabled", SeparationEnabled);
+        file.SetValue("simulation", "alignment_enabled", AlignmentEnabled);
+        file.SetValue("simulation", "cohesion_enabled", CohesionEnabled);
+        file.SetValue("visualization", "show_grid", ShowGrid);
+        file.SetValue("visualization", "show_neighbors", ShowNeighbors);
+        file.SetValue("visualization", "show_perception_radius", ShowPerceptionRadius);
+        file.SetValue("visualization", "show_velocity", ShowVelocity);
+        return file.Save(path);
+    }
+}

@@ -1,0 +1,18 @@
+namespace BoidsLab;
+
+/// <summary>UI 与模拟场景之间的最小约定，不暴露 Vector2/Vector3 或绘制节点。</summary>
+public interface ISimulationWorld
+{
+    string DisplayName { get; }
+    string LengthUnit { get; }
+    bool IsRunning { get; }
+    bool CoreImplemented { get; }
+    bool CanStep { get; }
+    SimulationStats Stats { get; }
+
+    void Initialize(BoidConfig config);
+    void SetRunning(bool running);
+    void Reset();
+    void StepOnce();
+    void ConfigurationChanged();
+}
