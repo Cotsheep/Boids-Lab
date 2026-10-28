@@ -10,13 +10,13 @@
 script = ExtResource("1_app")
 SimulationScene = ExtResource("3_world")
 
-[node name="World" type="Node" parent="."]
+[node name="World" type="Node" parent="." unique_id=556578890]
 unique_name_in_owner = true
 
-[node name="UI" type="CanvasLayer" parent="."]
-layer = 1
+[node name="UI" type="CanvasLayer" parent="." unique_id=1147369679]
 
-[node name="UIRoot" type="Control" parent="UI"]
+[node name="UIRoot" type="Control" parent="UI" unique_id=1521453734]
+unique_name_in_owner = true
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -57,25 +57,31 @@ theme_override_constants/separation = 2
 
 [node name="Title" type="Label" parent="UI/UIRoot/Layout/Column/Header/Identity" unique_id=688284111]
 layout_mode = 2
-mouse_filter = 2
 theme_override_colors/font_color = Color(0.47, 0.86, 0.79, 1)
 theme_override_font_sizes/font_size = 30
 text = "BoidsLab"
 
 [node name="Subtitle" type="Label" parent="UI/UIRoot/Layout/Column/Header/Identity" unique_id=990623667]
 layout_mode = 2
-mouse_filter = 2
 theme_override_colors/font_color = Color(0.57, 0.65, 0.73, 1)
 theme_override_font_sizes/font_size = 13
-text = "Game world / research HUD"
+text = "请输入文本"
 
 [node name="RunStatus" type="Label" parent="UI/UIRoot/Layout/Column/Header" unique_id=953573280]
 unique_name_in_owner = true
 layout_mode = 2
-mouse_filter = 2
 theme_override_colors/font_color = Color(0.92, 0.73, 0.4, 1)
 theme_override_font_sizes/font_size = 13
-text = "PAUSED · CORE NOT IMPLEMENTED"
+text = "已暂停"
+
+[node name="HideUiButton" type="Button" parent="UI/UIRoot/Layout/Column/Header" unique_id=1721052816]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 4
+tooltip_text = "隐藏全部界面，按 F1 可重新显示。"
+focus_mode = 0
+mouse_force_pass_scroll_events = false
+text = "隐藏UI · F1"
 
 [node name="HudContent" type="HBoxContainer" parent="UI/UIRoot/Layout/Column" unique_id=1053399029]
 layout_mode = 2
@@ -86,13 +92,13 @@ theme_override_constants/separation = 20
 [node name="ControlsCard" type="PanelContainer" parent="UI/UIRoot/Layout/Column/HudContent" unique_id=642795156]
 custom_minimum_size = Vector2(340, 0)
 layout_mode = 2
-mouse_filter = 0
+mouse_force_pass_scroll_events = false
 
 [node name="Scroll" type="ScrollContainer" parent="UI/UIRoot/Layout/Column/HudContent/ControlsCard" unique_id=766896500]
 layout_mode = 2
 mouse_filter = 0
-horizontal_scroll_mode = 0
 follow_focus = true
+horizontal_scroll_mode = 0
 
 [node name="ControlPanel" type="VBoxContainer" parent="UI/UIRoot/Layout/Column/HudContent/ControlsCard/Scroll" unique_id=176356882]
 unique_name_in_owner = true
@@ -114,24 +120,28 @@ mouse_filter = 2
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
-mouse_filter = 2
 theme_override_font_sizes/font_size = 16
-text = "2D World"
+text = "二维世界"
 
 [node name="Stage" type="Label" parent="UI/UIRoot/Layout/Column/HudContent/WorldInfo/SceneHeader" unique_id=1988960134]
 layout_mode = 2
-mouse_filter = 2
 theme_override_colors/font_color = Color(0.57, 0.65, 0.73, 1)
 theme_override_font_sizes/font_size = 12
-text = "FRAMEWORK / 01"
+text = "群集行为 / 04"
 
 [node name="WorldCoordinates" type="Label" parent="UI/UIRoot/Layout/Column/HudContent/WorldInfo" unique_id=121695228]
 unique_name_in_owner = true
 layout_mode = 2
-mouse_filter = 2
 theme_override_colors/font_color = Color(0.45, 0.56, 0.65, 1)
 theme_override_font_sizes/font_size = 12
-text = "WORLD SPACE"
+text = "世界坐标"
+
+[node name="ViewControlsHint" type="Label" parent="UI/UIRoot/Layout/Column/HudContent/WorldInfo" unique_id=288850025]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.57, 0.65, 0.73, 1)
+theme_override_font_sizes/font_size = 12
+text = "左键拖动：平移视角 · 滚轮：缩放视角与边界 · Home：重置视角 · F1：显示/隐藏界面"
+autowrap_mode = 3
 
 [node name="CorePlaceholder" type="VBoxContainer" parent="UI/UIRoot/Layout/Column/HudContent/WorldInfo" unique_id=1469265937]
 unique_name_in_owner = true
@@ -141,26 +151,23 @@ mouse_filter = 2
 
 [node name="Title" type="Label" parent="UI/UIRoot/Layout/Column/HudContent/WorldInfo/CorePlaceholder" unique_id=240260182]
 layout_mode = 2
-mouse_filter = 2
 theme_override_font_sizes/font_size = 24
-text = "Simulation Core Not Implemented"
+text = "模拟核心尚未实现"
 horizontal_alignment = 1
 autowrap_mode = 3
 
 [node name="Description" type="Label" parent="UI/UIRoot/Layout/Column/HudContent/WorldInfo/CorePlaceholder" unique_id=1308828675]
 layout_mode = 2
-mouse_filter = 2
 theme_override_colors/font_color = Color(0.57, 0.65, 0.73, 1)
-text = "The world renders behind this HUD.\nBoid initialization, steering and integration are TODO."
+text = "当前世界尚未提供可运行的运动核心。"
 horizontal_alignment = 1
 autowrap_mode = 3
 
 [node name="Legend" type="Label" parent="UI/UIRoot/Layout/Column/HudContent/WorldInfo" unique_id=1591134761]
 layout_mode = 2
-mouse_filter = 2
 theme_override_colors/font_color = Color(0.45, 0.56, 0.65, 1)
 theme_override_font_sizes/font_size = 12
-text = "Grid: world-space guide / spatial neighbor search: TODO"
+text = "分离 · 对齐 · 聚集 / 可切换朴素与网格搜索"
 autowrap_mode = 3
 
 [node name="StatisticsCard" type="PanelContainer" parent="UI/UIRoot/Layout/Column" unique_id=924710969]
@@ -184,8 +191,7 @@ mouse_filter = 2
 [node name="DebugInfo" type="Label" parent="UI/UIRoot/Layout/Column/StatisticsCard/Column" unique_id=921777468]
 unique_name_in_owner = true
 layout_mode = 2
-mouse_filter = 2
 theme_override_colors/font_color = Color(0.57, 0.65, 0.73, 1)
 theme_override_font_sizes/font_size = 13
-text = "Core & debug overlays: TODO | -- = not measured"
+text = "邻居连线、感知范围与速度调试绘制：待实现 | -- 表示尚未测量"
 autowrap_mode = 3

@@ -16,54 +16,65 @@ public partial class ControlPanel : VBoxContainer
     public void Bind(BoidConfig config, string lengthUnit)
     {
         // 主控制器在 _Ready 中调用一次；控件的值、范围均来自共享配置。
-        AddHeading("SIMULATION");
+        AddHeading("模拟控制");
         var buttons = new HBoxContainer();
         AddChild(buttons);
-        _startPause = AddButton(buttons, "StartPause", "Start", () => ToggleRunningRequested?.Invoke());
-        AddButton(buttons, "Reset", "Reset", () => ResetRequested?.Invoke())
-            .TooltipText = "Clear simulation state and pause. Keep current configuration.";
-        _step = AddButton(buttons, "Step", "Step", () => StepRequested?.Invoke());
+        _startPause = AddButton(buttons, "StartPause", "开始", () => ToggleRunningRequested?.Invoke());
+        AddButton(buttons, "Reset", "重置", () => ResetRequested?.Invoke())
+            .TooltipText = "暂停并按当前数量、种子和最大速度重新生成个体；清空加速度与旋转状态。";
+        _step = AddButton(buttons, "Step", "单步", () => StepRequested?.Invoke());
         _step.Disabled = true;
-        _step.TooltipText = "Unavailable: simulation core is not implemented.";
-        AddNote("Lifecycle controls only. Simulation core is not implemented.");
+        _step.TooltipText = "单步功能暂未开放。";
+        AddNote("点击开始观察群集运动；可独立开关分离、对齐与聚集规则。");
 
-        AddHeading("POPULATION");
-        AddNumber("BoidCount", "Boid Count", BoidConfig.CountRange, config.BoidCount,
-            value => config.BoidCount = (int)value, "Target count; no Boids are spawned yet.");
-        AddNumber("RandomSeed", "Random Seed", BoidConfig.SeedRange, config.RandomSeed,
-            value => config.RandomSeed = (int)value, "Reserved for reproducible initialization on Reset.");
+        AddHeading("群体设置");
+        AddNumber("BoidCount", "个体数量", BoidConfig.CountRange, config.BoidCount,
+            value => config.BoidCount = (int)value, "目标数量；点击重置后重新生成，不会立即增删个体。");
+        AddNumber("RandomSeed", "随机种子", BoidConfig.SeedRange, config.RandomSeed,
+            value => config.RandomSeed = (int)value, "点击重置后生效；相同种子和参数可复现初始位置与速度。");
 
-        AddHeading("MOTION PARAMETERS");
-        AddNumber("PerceptionRadius", "Perception Radius", BoidConfig.RadiusRange, config.PerceptionRadius,
-            value => config.PerceptionRadius = (float)value, $"{lengthUnit} · configuration only");
-        AddNumber("MaxSpeed", "Max Speed", BoidConfig.SpeedRange, config.MaxSpeed,
-            value => config.MaxSpeed = (float)value, $"{lengthUnit}/s · configuration only");
-        AddNumber("MaxForce", "Max Force", BoidConfig.ForceRange, config.MaxForce,
-            value => config.MaxForce = (float)value, $"Acceleration limit, {lengthUnit}/s² · configuration only");
+        AddHeading("邻居搜索");
+        AddSearchMode(config);
+        AddNumber("PerceptionRadius", "感知半径", BoidConfig.RadiusRange, config.PerceptionRadius,
+            value => config.PerceptionRadius = (float)value, $"单位：{lengthUnit}；按最短环绕距离查找邻居，包含半径边缘，不包含自身。");
+        AddNote("两种算法结果相同；切换方式或半径后，下一次运行更新重新测量。");
 
-        AddHeading("STEERING RULES");
-        AddToggle("SeparationEnabled", "Separation", config.SeparationEnabled, value => config.SeparationEnabled = value);
-        AddNumber("SeparationWeight", "Separation Weight", BoidConfig.SeparationRange, config.SeparationWeight,
-            value => config.SeparationWeight = (float)value);
-        AddToggle("AlignmentEnabled", "Alignment", config.AlignmentEnabled, value => config.AlignmentEnabled = value);
-        AddNumber("AlignmentWeight", "Alignment Weight", BoidConfig.AlignmentRange, config.AlignmentWeight,
-            value => config.AlignmentWeight = (float)value);
-        AddToggle("CohesionEnabled", "Cohesion", config.CohesionEnabled, value => config.CohesionEnabled = value);
-        AddNumber("CohesionWeight", "Cohesion Weight", BoidConfig.CohesionRange, config.CohesionWeight,
-            value => config.CohesionWeight = (float)value);
-        AddNote("Rules and weights are saved; steering behavior is TODO.");
+        AddHeading("运动参数");
+        AddNumber("MaxSpeed", "最大速度", BoidConfig.SpeedRange, config.MaxSpeed,
+            value => config.MaxSpeed = (float)value, $"速度上限，单位：{lengthUnit}/秒；也用作重置时的初始速率和有转向目标时的目标速率。");
+        AddNumber("MaxForce", "最大加速度", BoidConfig.ForceRange, config.MaxForce,
+            value => config.MaxForce = (float)value, $"线性加速度模长上限，单位：{lengthUnit}/秒²；限制各规则及合成后的总加速度。");
+        AddNumber("MaxAngularSpeed", "最大角速度", BoidConfig.AngularSpeedRange, config.MaxAngularSpeedDegrees,
+            value => config.MaxAngularSpeedDegrees = (float)value, "朝向旋转速度上限，单位：度/秒。");
+        AddNumber("MaxAngularAcceleration", "最大角加速度", BoidConfig.AngularAccelerationRange, config.MaxAngularAccelerationDegrees,
+            value => config.MaxAngularAccelerationDegrees = (float)value, "角速度变化率上限，单位：度/秒²；控制朝向平滑跟随运动方向。");
+        AddNote("无邻居或关闭全部规则时保持惯性运动；越界后从另一侧进入。");
 
-        AddHeading("DEBUG VISUALIZATION");
-        AddToggle("ShowGrid", "Show Grid", config.ShowGrid, value => config.ShowGrid = value);
-        AddToggle("ShowNeighbors", "Show Neighbors  [TODO]", config.ShowNeighbors, value => config.ShowNeighbors = value);
-        AddToggle("ShowPerceptionRadius", "Show Perception Radius  [TODO]", config.ShowPerceptionRadius, value => config.ShowPerceptionRadius = value);
-        AddToggle("ShowVelocity", "Show Velocity  [TODO]", config.ShowVelocity, value => config.ShowVelocity = value);
-        AddNote("Grid is available. TODO overlays only save their switch state.");
+        AddHeading("转向规则");
+        AddNumber("SeparationRadius", "分离半径", BoidConfig.SeparationRadiusRange, config.SeparationRadius,
+            value => config.SeparationRadius = (float)value, $"单位：{lengthUnit}；仅避开此范围内的邻居，实际范围不超过感知半径。");
+        AddToggle("SeparationEnabled", "启用分离规则", config.SeparationEnabled, value => config.SeparationEnabled = value);
+        AddNumber("SeparationWeight", "分离权重", BoidConfig.SeparationRange, config.SeparationWeight,
+            value => config.SeparationWeight = (float)value, "避开近邻；越近的邻居对分离方向影响越大，权重为零时不贡献加速度。");
+        AddToggle("AlignmentEnabled", "启用对齐规则", config.AlignmentEnabled, value => config.AlignmentEnabled = value);
+        AddNumber("AlignmentWeight", "对齐权重", BoidConfig.AlignmentRange, config.AlignmentWeight,
+            value => config.AlignmentWeight = (float)value, "朝邻居的平均速度方向转向，目标速率为最大速度。");
+        AddToggle("CohesionEnabled", "启用聚集规则", config.CohesionEnabled, value => config.CohesionEnabled = value);
+        AddNumber("CohesionWeight", "聚集权重", BoidConfig.CohesionRange, config.CohesionWeight,
+            value => config.CohesionWeight = (float)value, "朝邻居中心靠拢，使用最短环绕位移计算中心方向。");
+        AddNote("开关、权重和半径会保存，在下一次运行更新时生效；总加速度受上限限制。");
+
+        AddHeading("调试可视化");
+        AddToggle("ShowGrid", "显示网格", config.ShowGrid, value => config.ShowGrid = value);
+        AddToggle("ShowNeighbors", "显示邻居关系（待实现）", config.ShowNeighbors, value => config.ShowNeighbors = value);
+        AddToggle("ShowPerceptionRadius", "显示感知半径（待实现）", config.ShowPerceptionRadius, value => config.ShowPerceptionRadius = value);
+        AddToggle("ShowVelocity", "显示运动方向（待实现）", config.ShowVelocity, value => config.ShowVelocity = value);
+        AddNote("网格已可用，其余待实现选项仅保存开关状态。");
     }
 
     public void RefreshRunState(bool running, bool canStep)
     {
-        _startPause.Text = running ? "Pause" : "Start";
+        _startPause.Text = running ? "暂停" : "开始";
         _step.Disabled = !canStep;
     }
 
@@ -73,6 +84,28 @@ public partial class ControlPanel : VBoxContainer
         button.Pressed += action;
         row.AddChild(button);
         return button;
+    }
+
+    private void AddSearchMode(BoidConfig config)
+    {
+        var row = new VBoxContainer();
+        row.AddChild(new Label { Text = "搜索方式" });
+        var input = new OptionButton
+        {
+            Name = "NeighborSearchMode",
+            TooltipText = "朴素遍历检查所有其他个体；均匀网格只检查相邻格内的候选。搜索耗时包含快照、建格和结果写入。",
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+        };
+        input.AddItem("朴素遍历", (int)NeighborSearchMode.Naive);
+        input.AddItem("均匀网格", (int)NeighborSearchMode.UniformGrid);
+        input.Select((int)config.NeighborSearchMode);
+        input.ItemSelected += index =>
+        {
+            config.NeighborSearchMode = (NeighborSearchMode)input.GetItemId((int)index);
+            ConfigurationChanged?.Invoke();
+        };
+        row.AddChild(input);
+        AddChild(row);
     }
 
     private void AddHeading(string text)
@@ -92,7 +125,7 @@ public partial class ControlPanel : VBoxContainer
     }
 
     private void AddNumber(string name, string title, BoidConfig.NumberRange range, double current,
-        Action<double> setter, string tooltip = "Configuration only; algorithm is TODO.")
+        Action<double> setter, string tooltip = "修改后在下一次运行更新时生效。")
     {
         var row = new HBoxContainer { TooltipText = tooltip };
         row.AddChild(new Label { Text = title, SizeFlagsHorizontal = SizeFlags.ExpandFill });

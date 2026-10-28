@@ -18,8 +18,11 @@ public sealed class BoidConfig
     public static readonly NumberRange CountRange = new(0, 5000, 1, 200);
     public static readonly NumberRange SeedRange = new(0, int.MaxValue, 1, 42);
     public static readonly NumberRange RadiusRange = new(1, 500, 1, 80);
+    public static readonly NumberRange SeparationRadiusRange = new(1, 500, 1, 25);
     public static readonly NumberRange SpeedRange = new(0, 1000, 1, 120);
     public static readonly NumberRange ForceRange = new(0, 2000, 1, 200);
+    public static readonly NumberRange AngularSpeedRange = new(0, 1440, 1, 360);
+    public static readonly NumberRange AngularAccelerationRange = new(0, 7200, 1, 720);
     public static readonly NumberRange SeparationRange = new(0, 5, 0.1, 1.5);
     public static readonly NumberRange AlignmentRange = new(0, 5, 0.1, 1);
     public static readonly NumberRange CohesionRange = new(0, 5, 0.1, 1);
@@ -27,8 +30,12 @@ public sealed class BoidConfig
     public int BoidCount { get; set; } = (int)CountRange.Default;
     public int RandomSeed { get; set; } = (int)SeedRange.Default;
     public float PerceptionRadius { get; set; } = (float)RadiusRange.Default;
+    public float SeparationRadius { get; set; } = (float)SeparationRadiusRange.Default;
+    public NeighborSearchMode NeighborSearchMode { get; set; } = NeighborSearchMode.Naive;
     public float MaxSpeed { get; set; } = (float)SpeedRange.Default;
     public float MaxForce { get; set; } = (float)ForceRange.Default;
+    public float MaxAngularSpeedDegrees { get; set; } = (float)AngularSpeedRange.Default;
+    public float MaxAngularAccelerationDegrees { get; set; } = (float)AngularAccelerationRange.Default;
     public float SeparationWeight { get; set; } = (float)SeparationRange.Default;
     public float AlignmentWeight { get; set; } = (float)AlignmentRange.Default;
     public float CohesionWeight { get; set; } = (float)CohesionRange.Default;
@@ -45,8 +52,12 @@ public sealed class BoidConfig
         BoidCount = (int)CountRange.Constrain(BoidCount);
         RandomSeed = (int)SeedRange.Constrain(RandomSeed);
         PerceptionRadius = (float)RadiusRange.Constrain(PerceptionRadius);
+        SeparationRadius = (float)SeparationRadiusRange.Constrain(SeparationRadius);
+        if (!Enum.IsDefined(NeighborSearchMode)) NeighborSearchMode = NeighborSearchMode.Naive;
         MaxSpeed = (float)SpeedRange.Constrain(MaxSpeed);
         MaxForce = (float)ForceRange.Constrain(MaxForce);
+        MaxAngularSpeedDegrees = (float)AngularSpeedRange.Constrain(MaxAngularSpeedDegrees);
+        MaxAngularAccelerationDegrees = (float)AngularAccelerationRange.Constrain(MaxAngularAccelerationDegrees);
         SeparationWeight = (float)SeparationRange.Constrain(SeparationWeight);
         AlignmentWeight = (float)AlignmentRange.Constrain(AlignmentWeight);
         CohesionWeight = (float)CohesionRange.Constrain(CohesionWeight);
@@ -74,8 +85,14 @@ public sealed class BoidConfig
         BoidCount = (int)CountRange.Constrain(Number("boid_count", BoidCount));
         RandomSeed = (int)SeedRange.Constrain(Number("random_seed", RandomSeed));
         PerceptionRadius = (float)RadiusRange.Constrain(Number("perception_radius", PerceptionRadius));
+        SeparationRadius = (float)SeparationRadiusRange.Constrain(Number("separation_radius", SeparationRadius));
+        double searchMode = Number("neighbor_search_mode", (int)NeighborSearchMode.Naive);
+        NeighborSearchMode = searchMode == (int)NeighborSearchMode.UniformGrid
+            ? NeighborSearchMode.UniformGrid : NeighborSearchMode.Naive;
         MaxSpeed = (float)SpeedRange.Constrain(Number("max_speed", MaxSpeed));
         MaxForce = (float)ForceRange.Constrain(Number("max_force", MaxForce));
+        MaxAngularSpeedDegrees = (float)AngularSpeedRange.Constrain(Number("max_angular_speed_degrees", MaxAngularSpeedDegrees));
+        MaxAngularAccelerationDegrees = (float)AngularAccelerationRange.Constrain(Number("max_angular_acceleration_degrees", MaxAngularAccelerationDegrees));
         SeparationWeight = (float)SeparationRange.Constrain(Number("separation_weight", SeparationWeight));
         AlignmentWeight = (float)AlignmentRange.Constrain(Number("alignment_weight", AlignmentWeight));
         CohesionWeight = (float)CohesionRange.Constrain(Number("cohesion_weight", CohesionWeight));
@@ -96,8 +113,12 @@ public sealed class BoidConfig
         file.SetValue("simulation", "boid_count", BoidCount);
         file.SetValue("simulation", "random_seed", RandomSeed);
         file.SetValue("simulation", "perception_radius", PerceptionRadius);
+        file.SetValue("simulation", "separation_radius", SeparationRadius);
+        file.SetValue("simulation", "neighbor_search_mode", (int)NeighborSearchMode);
         file.SetValue("simulation", "max_speed", MaxSpeed);
         file.SetValue("simulation", "max_force", MaxForce);
+        file.SetValue("simulation", "max_angular_speed_degrees", MaxAngularSpeedDegrees);
+        file.SetValue("simulation", "max_angular_acceleration_degrees", MaxAngularAccelerationDegrees);
         file.SetValue("simulation", "separation_weight", SeparationWeight);
         file.SetValue("simulation", "alignment_weight", AlignmentWeight);
         file.SetValue("simulation", "cohesion_weight", CohesionWeight);

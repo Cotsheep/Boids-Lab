@@ -5,7 +5,7 @@ namespace BoidsLab;
 
 public partial class MainController : Node
 {
-    // 同一套 UI 的场景插槽：未来可指定实现 ISimulationWorld 的 Node3D 场景。
+    // 同一套 UI 的模拟场景，未来可指定实现 ISimulationWorld 的 Node3D 场景。
     [Export] public PackedScene SimulationScene { get; set; } = null!;
 
     private readonly BoidConfig _config = new();
@@ -15,6 +15,8 @@ public partial class MainController : Node
     private Label _status = null!;
     private Label _debug = null!;
     private Control _placeholder = null!;
+    private Control _uiRoot = null!;
+    private Button _hideUiButton = null!;
     private double _statsElapsed;
     private string? _storageWarning;
 
@@ -24,7 +26,7 @@ public partial class MainController : Node
         Error loadError = _config.Load();
         if (loadError != Error.Ok && loadError != Error.FileNotFound)
         {
-            _storageWarning = $"Could not load configuration: {loadError}";
+            _storageWarning = $"配置加载失败（错误代码：{(int)loadError}）";
             GD.PushWarning(_storageWarning);
         }
         _controls = GetNode<ControlPanel>("%ControlPanel");
@@ -32,6 +34,9 @@ public partial class MainController : Node
         _status = GetNode<Label>("%RunStatus");
         _debug = GetNode<Label>("%DebugInfo");
         _placeholder = GetNode<Control>("%CorePlaceholder");
+        _uiRoot = GetNode<Control>("%UIRoot");
+        _hideUiButton = GetNode<Button>("%HideUiButton");
+        _hideUiButton.Pressed += ToggleUi;
 
         if (SimulationScene is null)
             throw new InvalidOperationException("Assign a simulation scene in MainController.SimulationScene.");
@@ -45,7 +50,7 @@ public partial class MainController : Node
         _world.Initialize(_config);
         GetNode<Node>("%World").AddChild(worldNode);
         GetNode<Label>("%WorldTitle").Text = _world.DisplayName;
-        GetNode<Label>("%WorldCoordinates").Text = $"WORLD SPACE / {_world.LengthUnit}";
+        GetNode<Label>("%WorldCoordinates").Text = $"世界坐标 / {_world.LengthUnit}";
 
         _controls.Bind(_config, _world.LengthUnit);
         _controls.ToggleRunningRequested += ToggleRunning;
@@ -61,6 +66,25 @@ public partial class MainController : Node
         if (_statsElapsed < 0.25) return;
         _statsElapsed = 0;
         _stats.Refresh(_world.Stats, Engine.GetFramesPerSecond());
+    }
+
+    public override void _Input(InputEvent @event)
+    {
+        // 全局快捷键：即使 HUD 隐藏或输入框有焦点，也能恢复界面。
+        if (!@event.IsActionPressed("toggle_ui")) return;
+        ToggleUi();
+        GetViewport().SetInputAsHandled();
+    }
+
+    private void ToggleUi()
+    {
+        if (_uiRoot.Visible)
+        {
+            Control? focused = GetViewport().GuiGetFocusOwner();
+            if (focused is not null && _uiRoot.IsAncestorOf(focused))
+                focused.ReleaseFocus();
+        }
+        _uiRoot.Visible = !_uiRoot.Visible;
     }
 
     private void ToggleRunning()
@@ -86,7 +110,7 @@ public partial class MainController : Node
     {
         _config.Normalize();
         Error error = _config.Save();
-        _storageWarning = error == Error.Ok ? null : $"Could not save configuration: {error}";
+        _storageWarning = error == Error.Ok ? null : $"配置保存失败（错误代码：{(int)error}）";
         if (_storageWarning is not null) GD.PushWarning(_storageWarning);
         _world.ConfigurationChanged();
         RefreshInterface();
@@ -96,16 +120,17 @@ public partial class MainController : Node
     {
         _controls.RefreshRunState(_world.IsRunning, _world.CanStep);
         string runState = _world.IsRunning
-            ? (_world.CoreImplemented ? "RUNNING" : "RUN REQUESTED")
-            : "PAUSED";
-        _status.Text = _world.CoreImplemented ? runState : $"{runState} · CORE NOT IMPLEMENTED";
+            ? (_world.CoreImplemented ? "运行中" : "已请求运行")
+            : "已暂停";
+        _status.Text = _world.CoreImplemented ? runState : $"{runState} · 核心尚未实现";
         _placeholder.Visible = !_world.CoreImplemented;
-        _debug.Text = _storageWarning ?? $"Target: {_config.BoidCount} boids  |  Seed: {_config.RandomSeed}  |  Scene: {_world.DisplayName}  |  -- = not measured";
+        _debug.Text = _storageWarning ?? $"目标数量：{_config.BoidCount}  |  随机种子：{_config.RandomSeed}  |  场景：{_world.DisplayName}  |  -- 表示尚未测量";
         _stats.Refresh(_world.Stats, Engine.GetFramesPerSecond());
     }
 
     public override void _ExitTree()
     {
+        if (_hideUiButton is not null) _hideUiButton.Pressed -= ToggleUi;
         if (_controls is null) return;
         _controls.ToggleRunningRequested -= ToggleRunning;
         _controls.ResetRequested -= ResetSimulation;

@@ -2,51 +2,47 @@ using Godot;
 
 namespace BoidsLab;
 
-/// <summary>2D 世界中的绘制节点；使用世界坐标，不引用 UI 或面板尺寸。</summary>
+/// <summary>只绘制背景、网格及调试辅助图形；个体外观由各自场景中的节点呈现。</summary>
 public partial class SimulationView : Node2D
 {
     public const float GridSpacing = 40;
     private BoidConfig? _config;
-    private BoidSimulation? _simulation;
+    private BoidManager? _manager;
 
-    public void Bind(BoidConfig config, BoidSimulation simulation)
+    public void Bind(BoidConfig config, BoidManager manager)
     {
         _config = config;
-        _simulation = simulation;
+        _manager = manager;
         QueueRedraw();
     }
 
     public override void _Draw()
     {
-        if (_simulation is null) return;
-        DrawRect(_simulation.WorldBounds, new Color("0c1420"));
+        if (_manager is null) return;
+        DrawRect(_manager.WorldBounds, new Color("0c1420"));
         if (_config?.ShowGrid == true) DrawGrid();
-        DrawBoids();
         DrawDebugOverlays();
     }
 
     private void DrawGrid()
     {
         var color = new Color("1c2b3b");
-        Rect2 bounds = _simulation!.WorldBounds;
-        for (float x = bounds.Position.X; x < bounds.End.X; x += GridSpacing)
+        Rect2 bounds = _manager!.WorldBounds;
+        // 可见区域移动时，网格仍固定在世界坐标的整倍数上。
+        float firstX = Mathf.Ceil(bounds.Position.X / GridSpacing) * GridSpacing;
+        float firstY = Mathf.Ceil(bounds.Position.Y / GridSpacing) * GridSpacing;
+        for (float x = firstX; x < bounds.End.X; x += GridSpacing)
             DrawLine(new Vector2(x, bounds.Position.Y), new Vector2(x, bounds.End.Y), color);
-        for (float y = bounds.Position.Y; y < bounds.End.Y; y += GridSpacing)
+        for (float y = firstY; y < bounds.End.Y; y += GridSpacing)
             DrawLine(new Vector2(bounds.Position.X, y), new Vector2(bounds.End.X, y), color);
-    }
-
-    private void DrawBoids()
-    {
-        if (_simulation is null) return;
-        // TODO: 读取 _simulation.States，按 Position / Velocity 绘制三角形。
     }
 
     private void DrawDebugOverlays()
     {
-        if (_config is null || _simulation is null) return;
-        // TODO: ShowVelocity -> 速度向量。
-        // TODO: ShowPerceptionRadius -> 感知圆。
-        // TODO: ShowNeighbors -> 邻居关系线；等待核心提供真实邻居数据。
+        if (_config is null || _manager is null) return;
+        // TODO: 读取 _manager.Boids 中个体的真实状态。
+        // ShowVelocity -> 速度向量；ShowPerceptionRadius -> 感知圆。
+        // ShowNeighbors -> 邻居关系线；可读取 _manager.NeighborSearch 的步前快照与结果。
         // 这些开关目前只保存配置，不能产生虚构可视化。
     }
 }

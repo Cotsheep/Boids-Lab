@@ -1,0 +1,11 @@
+[gd_scene format=3 uid="uid://e0c4wsdkl48e"]
+
+[ext_resource type="Script" uid="uid://bnqhrt7lu8o6c" path="res://scripts/simulation/Boid2D.cs" id="1_boid"]
+
+[node name="Boid2D" type="Node2D" unique_id=915736651]
+script = ExtResource("1_boid")
+
+[node name="Body" type="Polygon2D" parent="." unique_id=499013883]
+color = Color(0.61511844, 0.84219694, 0.6533163, 1)
+polygon = PackedVector2Array(10, 0, -6, -5, -6, 5)
+uv = PackedVector2Array(10, 0, -6, -5, -6, 5)

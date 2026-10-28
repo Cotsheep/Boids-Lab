@@ -5,4 +5,5 @@ public readonly record struct SimulationStats(
     int? BoidCount,
     double? UpdateMilliseconds,
     long? NeighborCandidateChecks,
-    double? AverageNeighbors);
+    double? AverageNeighbors,
+    double? NeighborSearchMilliseconds = null);

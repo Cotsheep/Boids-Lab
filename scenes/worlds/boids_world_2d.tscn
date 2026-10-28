@@ -1,13 +1,19 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=5 format=3]
 
-[ext_resource type="Script" path="res://scripts/worlds/SimulationWorld2D.cs" id="1_world"]
+[ext_resource type="Script" uid="uid://b3s30e04dtug5" path="res://scripts/simulation/BoidManager.cs" id="1_world"]
 [ext_resource type="Script" uid="uid://h583hdm6217o" path="res://scripts/rendering/SimulationView.cs" id="2_view"]
+[ext_resource type="PackedScene" path="res://scenes/boids/boid_2d.tscn" id="3_boid"]
+[ext_resource type="Script" path="res://scripts/rendering/SimulationCamera2D.cs" id="4_camera"]
 
 [node name="BoidsWorld2D" type="Node2D"]
 script = ExtResource("1_world")
+BoidScene = ExtResource("3_boid")
 
 [node name="SimulationView" type="Node2D" parent="."]
 script = ExtResource("2_view")
 
+[node name="Boids" type="Node2D" parent="."]
+
 [node name="Camera2D" type="Camera2D" parent="."]
 position = Vector2(640, 360)
+script = ExtResource("4_camera")

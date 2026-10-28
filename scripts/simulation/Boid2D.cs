@@ -1,0 +1,94 @@
+using System;
+using Godot;
+
+namespace BoidsLab;
+
+/// <summary>独立 Boid 节点：保存自身状态，由管理器显式调用更新；子节点负责外观。</summary>
+public partial class Boid2D : Node2D
+{
+    public int Id { get; private set; }
+    /// <summary>世界像素/秒；与 Position 同属 Boids 容器坐标系。</summary>
+    public Vector2 Velocity { get; private set; }
+    /// <summary>本步施加的线性加速度（像素/秒²），受 MaxForce 限制。</summary>
+    public Vector2 Acceleration { get; private set; }
+    /// <summary>弧度/秒；Godot 的二维正旋转在屏幕上为顺时针。</summary>
+    public float AngularVelocity { get; private set; }
+    /// <summary>弧度/秒²；由朝向跟随控制计算。</summary>
+    public float AngularAcceleration { get; private set; }
+
+    // 临界阻尼跟随的响应频率（1/秒）；角速度反馈让朝向接近目标时减速。
+    private const float FacingResponse = 6f;
+    private const float DirectionSpeedSquared = 0.0001f;
+    private BoidConfig? _config;
+    private Vector2 _accelerationInput;
+
+    public void Initialize(BoidConfig config, int id, Vector2 velocity)
+    {
+        ArgumentNullException.ThrowIfNull(config);
+        if (!velocity.IsFinite()) throw new ArgumentOutOfRangeException(nameof(velocity));
+        _config = config;
+        Id = id;
+        Velocity = velocity.LimitLength(config.MaxSpeed);
+        Rotation = Velocity.LengthSquared() > DirectionSpeedSquared ? Velocity.Angle() : 0f;
+        _accelerationInput = Vector2.Zero;
+        Acceleration = Vector2.Zero;
+        AngularVelocity = 0f;
+        AngularAcceleration = 0f;
+        // Position 直接使用原生 Node2D 属性，由管理器在加入场景树前设置。
+        // 坐标属于 Boids 容器；该容器与世界绘制节点均保持默认变换。
+    }
+
+    /// <summary>
+    /// 设置持续施加的外部加速度；传入 Vector2.Zero 撤销。
+    /// 每步与群集转向加速度相加后按共享配置限制模长，群集规则不会覆盖此输入。
+    /// </summary>
+    public void SetAcceleration(Vector2 acceleration)
+    {
+        if (!acceleration.IsFinite()) throw new ArgumentOutOfRangeException(nameof(acceleration));
+        _accelerationInput = acceleration;
+    }
+
+    /// <summary>普通方法，不是 Godot 回调；返回本次是否改变了运动状态。</summary>
+    public bool UpdateBoid(double deltaSeconds, Vector2 steeringAcceleration = default)
+    {
+        if (_config is null)
+            throw new InvalidOperationException("Initialize the Boid before updating it.");
+        float dt = (float)deltaSeconds;
+        if (!float.IsFinite(dt) || dt <= 0f)
+            throw new ArgumentOutOfRangeException(nameof(deltaSeconds));
+        if (!steeringAcceleration.IsFinite()) throw new ArgumentOutOfRangeException(nameof(steeringAcceleration));
+
+        Vector2 previousPosition = Position;
+        Vector2 previousVelocity = Velocity;
+        float previousRotation = Rotation;
+        float previousAngularVelocity = AngularVelocity;
+
+        // 半隐式欧拉积分：先更新速度，再用新速度更新位置。
+        Acceleration = (_accelerationInput + steeringAcceleration).LimitLength(_config.MaxForce);
+        Velocity = (Velocity + Acceleration * dt).LimitLength(_config.MaxSpeed);
+        Position += Velocity * dt;
+        UpdateFacing(dt);
+
+        return Position != previousPosition || Velocity != previousVelocity
+            || Rotation != previousRotation || AngularVelocity != previousAngularVelocity;
+    }
+
+    private void UpdateFacing(float dt)
+    {
+        float maxSpeed = Mathf.DegToRad(_config!.MaxAngularSpeedDegrees);
+        float maxAcceleration = Mathf.DegToRad(_config.MaxAngularAccelerationDegrees);
+        // 下调速度上限属于硬限制；先裁剪旧值，再积分本步受限的角加速度。
+        float previousVelocity = Mathf.Clamp(AngularVelocity, -maxSpeed, maxSpeed);
+        float angleError = Velocity.LengthSquared() > DirectionSpeedSquared
+            ? Mathf.AngleDifference(Rotation, Velocity.Angle())
+            : 0f; // 静止时没有目标方向，只制动已有旋转。
+
+        float requestedAcceleration = FacingResponse * FacingResponse * angleError
+            - 2f * FacingResponse * previousVelocity;
+        float acceleration = Mathf.Clamp(requestedAcceleration, -maxAcceleration, maxAcceleration);
+        AngularVelocity = Mathf.Clamp(previousVelocity + acceleration * dt, -maxSpeed, maxSpeed);
+        AngularAcceleration = (AngularVelocity - previousVelocity) / dt;
+        if (AngularVelocity != 0f)
+            Rotation = Mathf.Wrap(Rotation + AngularVelocity * dt, -Mathf.Pi, Mathf.Pi);
+    }
+}
