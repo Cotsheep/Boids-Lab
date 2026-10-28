@@ -10,14 +10,20 @@ public partial class SimulationCamera2D : Camera2D
     public const float MinZoomFactor = 0.25f;
     public const float MaxZoomFactor = 8f;
     private const float ZoomPerNotch = 1.15f;
+    public const float DragThresholdPixels = 5f;
 
     public float ZoomFactor { get; private set; } = 1f;
     public event Action? ViewChanged;
+    public event Action<Vector2>? WorldPressStarted;
+    public event Action<bool>? WorldPressEnded;
 
     private Rect2 _homeBounds;
     private Viewport? _viewport;
     private Window? _window;
     private bool _isDragging;
+    private bool _pointerDown;
+    private Vector2 _pressPosition;
+    private Vector2 _pendingDrag;
 
     public override void _Ready()
     {
@@ -45,12 +51,14 @@ public partial class SimulationCamera2D : Camera2D
 
     public override void _Input(InputEvent @event)
     {
-        if (!_isDragging) return;
+        if (!_pointerDown) return;
 
         // 拖动开始后接管移动与松开事件，移到 UI 上松手也能正常结束。
-        if (@event is InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: false })
+        if (@event is InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: false } release)
         {
-            StopDragging();
+            bool clicked = !_isDragging && release.Position.DistanceTo(_pressPosition) < DragThresholdPixels
+                && GetViewport().GuiGetHoveredControl() is null;
+            EndPointerGesture(clicked);
             GetViewport().SetInputAsHandled();
         }
         else if (@event is InputEventMouseMotion motion)
@@ -61,8 +69,19 @@ public partial class SimulationCamera2D : Camera2D
                 return;
             }
 
-            // 将视口位移换算为世界位移，让不同缩放倍率下的画面都跟随鼠标。
-            GlobalPosition -= motion.Relative / Zoom;
+            Vector2 movement = motion.Relative;
+            if (!_isDragging)
+            {
+                _pendingDrag += motion.Relative;
+                if (_pendingDrag.Length() < DragThresholdPixels)
+                {
+                    GetViewport().SetInputAsHandled();
+                    return;
+                }
+                _isDragging = true;
+                movement = _pendingDrag; // 越过阈值时补上累计位移，画面仍跟随鼠标。
+            }
+            GlobalPosition -= movement / Zoom;
             ForceUpdateScroll();
             ViewChanged?.Invoke();
             GetViewport().SetInputAsHandled();
@@ -80,9 +99,13 @@ public partial class SimulationCamera2D : Camera2D
         }
 
         // 只在 UI 未处理的左键按下时开始，操作参数控件不会带动相机。
-        if (@event is InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: true })
+        if (@event is InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: true } press)
         {
-            _isDragging = true;
+            StopDragging();
+            _pointerDown = true;
+            _pressPosition = press.Position;
+            _pendingDrag = Vector2.Zero;
+            WorldPressStarted?.Invoke(press.Position);
             GetViewport().SetInputAsHandled();
             return;
         }
@@ -96,6 +119,7 @@ public partial class SimulationCamera2D : Camera2D
             _ => 0f,
         };
         if (direction == 0f) return;
+        StopDragging();
 
         float amount = wheel.Factor > 0f ? wheel.Factor : 1f;
         float nextZoom = Mathf.Clamp(ZoomFactor * Mathf.Pow(ZoomPerNotch, direction * amount),
@@ -111,10 +135,20 @@ public partial class SimulationCamera2D : Camera2D
         GetViewport().SetInputAsHandled();
     }
 
-    private void StopDragging() => _isDragging = false;
+    private void StopDragging() => EndPointerGesture(false);
+
+    private void EndPointerGesture(bool clicked)
+    {
+        bool wasDown = _pointerDown;
+        _pointerDown = false;
+        _isDragging = false;
+        _pendingDrag = Vector2.Zero;
+        if (wasDown) WorldPressEnded?.Invoke(clicked);
+    }
 
     private void OnViewportSizeChanged()
     {
+        StopDragging();
         ApplyZoom();
         ViewChanged?.Invoke();
     }

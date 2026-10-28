@@ -6,6 +6,7 @@ namespace BoidsLab;
 public partial class SimulationView : Node2D
 {
     public const float GridSpacing = 40;
+    public DebugOverlayGeometry DebugGeometry { get; } = new();
     private BoidConfig? _config;
     private BoidManager? _manager;
 
@@ -40,9 +41,20 @@ public partial class SimulationView : Node2D
     private void DrawDebugOverlays()
     {
         if (_config is null || _manager is null) return;
-        // TODO: 读取 _manager.Boids 中个体的真实状态。
-        // ShowVelocity -> 速度向量；ShowPerceptionRadius -> 感知圆。
-        // ShowNeighbors -> 邻居关系线；可读取 _manager.NeighborSearch 的步前快照与结果。
-        // 这些开关目前只保存配置，不能产生虚构可视化。
+        float scale = GetGlobalTransformWithCanvas().X.Length();
+        if (scale <= 0) return;
+        float unitsPerPixel = 1 / scale;
+        DebugGeometry.Build(_manager.Boids, _manager.SelectedBoid, _config, _manager.WorldBounds, unitsPerPixel);
+        if (DebugGeometry.RangePoints.Count > 0)
+            DrawMultiline(DebugGeometry.RangePoints.ToArray(), new Color(0.3f, 0.8f, 0.7f, 0.75f), 3 * unitsPerPixel, true);
+        if (DebugGeometry.SeparationRangePoints.Count > 0)
+            DrawMultiline(DebugGeometry.SeparationRangePoints.ToArray(), new Color(1f, 0.48f, 0.25f, 0.9f), 2 * unitsPerPixel, true);
+        if (DebugGeometry.NeighborPoints.Count > 0)
+            DrawMultiline(DebugGeometry.NeighborPoints.ToArray(), new Color(1f, 0.78f, 0.3f, 0.85f), 1.5f * unitsPerPixel, true);
+        if (DebugGeometry.VelocityPoints.Count > 0)
+            DrawMultiline(DebugGeometry.VelocityPoints.ToArray(), new Color(0.4f, 0.7f, 1f, 0.8f), unitsPerPixel, true);
+        if (_manager.SelectedBoid is { } selected)
+            DrawArc(selected.Position, Mathf.Max(14, 11 * unitsPerPixel), 0, Mathf.Tau, 64,
+                new Color("ffe394"), 2 * unitsPerPixel, true);
     }
 }

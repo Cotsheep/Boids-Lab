@@ -127,7 +127,7 @@ text = "二维世界"
 layout_mode = 2
 theme_override_colors/font_color = Color(0.57, 0.65, 0.73, 1)
 theme_override_font_sizes/font_size = 12
-text = "群集行为 / 04"
+text = "调试观察 / 05"
 
 [node name="WorldCoordinates" type="Label" parent="UI/UIRoot/Layout/Column/HudContent/WorldInfo" unique_id=121695228]
 unique_name_in_owner = true
@@ -140,7 +140,7 @@ text = "世界坐标"
 layout_mode = 2
 theme_override_colors/font_color = Color(0.57, 0.65, 0.73, 1)
 theme_override_font_sizes/font_size = 12
-text = "左键拖动：平移视角 · 滚轮：缩放视角与边界 · Home：重置视角 · F1：显示/隐藏界面"
+text = "空格：暂停/继续 · 轻点：选择/取消个体 · 左键拖动：平移视角 · 滚轮：缩放 · Home：重置视角 · F1：显示/隐藏界面"
 autowrap_mode = 3
 
 [node name="CorePlaceholder" type="VBoxContainer" parent="UI/UIRoot/Layout/Column/HudContent/WorldInfo" unique_id=1469265937]
@@ -193,5 +193,5 @@ unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(0.57, 0.65, 0.73, 1)
 theme_override_font_sizes/font_size = 13
-text = "邻居连线、感知范围与速度调试绘制：待实现 | -- 表示尚未测量"
+text = "调试显示：全体运动方向，选中个体的感知/分离范围与邻居连线 | -- 表示尚未测量"
 autowrap_mode = 3

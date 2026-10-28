@@ -45,6 +45,7 @@ public sealed class BoidConfig
     public bool ShowGrid { get; set; } = true;
     public bool ShowNeighbors { get; set; }
     public bool ShowPerceptionRadius { get; set; }
+    public bool ShowSeparationRadius { get; set; }
     public bool ShowVelocity { get; set; }
 
     public void Normalize()
@@ -102,6 +103,7 @@ public sealed class BoidConfig
         ShowGrid = Flag("visualization", "show_grid", ShowGrid);
         ShowNeighbors = Flag("visualization", "show_neighbors", ShowNeighbors);
         ShowPerceptionRadius = Flag("visualization", "show_perception_radius", ShowPerceptionRadius);
+        ShowSeparationRadius = Flag("visualization", "show_separation_radius", ShowSeparationRadius);
         ShowVelocity = Flag("visualization", "show_velocity", ShowVelocity);
         return Error.Ok;
     }
@@ -128,6 +130,7 @@ public sealed class BoidConfig
         file.SetValue("visualization", "show_grid", ShowGrid);
         file.SetValue("visualization", "show_neighbors", ShowNeighbors);
         file.SetValue("visualization", "show_perception_radius", ShowPerceptionRadius);
+        file.SetValue("visualization", "show_separation_radius", ShowSeparationRadius);
         file.SetValue("visualization", "show_velocity", ShowVelocity);
         return file.Save(path);
     }

@@ -49,7 +49,7 @@ public sealed class NeighborSearch2D
     public Vector2 GetOffset(int fromIndex, int toIndex)
     {
         if (!HasResults) throw new InvalidOperationException("Run a neighbor search before reading results.");
-        return WrappedOffset(_snapshots[fromIndex].Position, _snapshots[toIndex].Position);
+        return WrappedOffset(_snapshots[fromIndex].Position, _snapshots[toIndex].Position, Bounds.Size);
     }
 
     public void Invalidate()
@@ -164,15 +164,15 @@ public sealed class NeighborSearch2D
         if (i == j) return;
         // 有向距离检查：A 检查 B 与 B 检查 A 分别计一次；不统计自身与格子查找。
         CandidateChecks++;
-        Vector2 offset = WrappedOffset(_snapshots[i].Position, _snapshots[j].Position);
+        Vector2 offset = WrappedOffset(_snapshots[i].Position, _snapshots[j].Position, Bounds.Size);
         if ((double)offset.X * offset.X + (double)offset.Y * offset.Y <= (double)Radius * Radius)
             _neighbors[i].Add(j); // 包含恰在半径上的邻居，也包含位置重合的其他个体。
     }
 
-    private Vector2 WrappedOffset(Vector2 from, Vector2 to)
+    /// <summary>两个已位于同一环绕区域内的点之间的最短位移，模拟与当前画面调试共用。</summary>
+    public static Vector2 WrappedOffset(Vector2 from, Vector2 to, Vector2 size)
     {
         Vector2 offset = to - from;
-        Vector2 size = Bounds.Size;
         if (offset.X > size.X * 0.5f) offset.X -= size.X;
         else if (offset.X < -size.X * 0.5f) offset.X += size.X;
         if (offset.Y > size.Y * 0.5f) offset.Y -= size.Y;

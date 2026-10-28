@@ -19,6 +19,7 @@ public partial class BoidManager : Node2D, ISimulationWorld
     public Rect2 WorldBounds { get; private set; }
     public IReadOnlyList<Boid2D> Boids { get; }
     public NeighborSearch2D NeighborSearch { get; } = new();
+    public Boid2D? SelectedBoid { get; private set; }
     public SimulationStats Stats { get; private set; }
     public bool IsRunning { get; private set; }
     // 基础运动、邻居搜索与分离/对齐/聚集规则均已可运行。
@@ -32,6 +33,7 @@ public partial class BoidManager : Node2D, ISimulationWorld
     private SimulationCamera2D _camera = null!;
     private int _nextBoidId;
     private Vector2[] _steeringAccelerations = Array.Empty<Vector2>();
+    private Boid2D? _pressedBoid;
 
     public BoidManager()
     {
@@ -64,6 +66,8 @@ public partial class BoidManager : Node2D, ISimulationWorld
         _camera = GetNode<SimulationCamera2D>("Camera2D");
         _view.Bind(Config, this);
         _camera.ViewChanged += UpdateWorldBounds;
+        _camera.WorldPressStarted += OnWorldPressStarted;
+        _camera.WorldPressEnded += OnWorldPressEnded;
         _camera.Configure(new Rect2(Vector2.Zero, WorldSize));
         Reset();
     }
@@ -103,10 +107,45 @@ public partial class BoidManager : Node2D, ISimulationWorld
 
     public void SetRunning(bool running) => IsRunning = running;
 
+    private void OnWorldPressStarted(Vector2 viewportPosition)
+    {
+        _pressedBoid = null;
+        float closest = float.PositiveInfinity;
+        foreach (Boid2D boid in _boids)
+        {
+            if (!boid.HitTest(viewportPosition)) continue;
+            float distance = (boid.GetGlobalTransformWithCanvas() * Vector2.Zero).DistanceSquaredTo(viewportPosition);
+            // 完全重叠时优先命中已经选中的个体，仍可再次点击取消。
+            if (distance > closest || (distance == closest && boid != SelectedBoid)) continue;
+            closest = distance;
+            _pressedBoid = boid;
+        }
+    }
+
+    private void OnWorldPressEnded(bool clicked)
+    {
+        Boid2D? target = _pressedBoid;
+        _pressedBoid = null;
+        if (!clicked) return;
+        // 运行时按下命中的个体可能已经移动；仍选择同一个实例，而非松开处的新个体。
+        if (target is not null && !_boids.Contains(target)) return;
+        SelectBoid(target == SelectedBoid ? null : target);
+    }
+
+    private void SelectBoid(Boid2D? boid)
+    {
+        SelectedBoid?.SetSelected(false);
+        SelectedBoid = boid;
+        SelectedBoid?.SetSelected(true);
+        _view.QueueRedraw();
+    }
+
     public void Reset()
     {
         Config.Normalize();
         IsRunning = false;
+        SelectBoid(null);
+        _pressedBoid = null;
         foreach (Boid2D boid in _boids)
         {
             _boidsRoot.RemoveChild(boid);
@@ -166,6 +205,7 @@ public partial class BoidManager : Node2D, ISimulationWorld
     public void RemoveBoid(Boid2D boid)
     {
         if (!_boids.Remove(boid)) return;
+        if (SelectedBoid == boid) SelectBoid(null);
         _boidsRoot.RemoveChild(boid);
         boid.QueueFree();
         InvalidateNeighborResults();
@@ -221,6 +261,11 @@ public partial class BoidManager : Node2D, ISimulationWorld
 
     public override void _ExitTree()
     {
-        if (_camera is not null) _camera.ViewChanged -= UpdateWorldBounds;
+        if (_camera is not null)
+        {
+            _camera.ViewChanged -= UpdateWorldBounds;
+            _camera.WorldPressStarted -= OnWorldPressStarted;
+            _camera.WorldPressEnded -= OnWorldPressEnded;
+        }
     }
 }

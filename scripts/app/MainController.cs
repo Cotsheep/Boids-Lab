@@ -70,6 +70,13 @@ public partial class MainController : Node
 
     public override void _Input(InputEvent @event)
     {
+        // 空格优先于 GUI：按下切换一次，重复事件与松开也消费，防止触发 ui_accept。
+        if (@event.IsAction("toggle_pause"))
+        {
+            if (@event.IsActionPressed("toggle_pause")) ToggleRunning();
+            GetViewport().SetInputAsHandled();
+            return;
+        }
         // 全局快捷键：即使 HUD 隐藏或输入框有焦点，也能恢复界面。
         if (!@event.IsActionPressed("toggle_ui")) return;
         ToggleUi();

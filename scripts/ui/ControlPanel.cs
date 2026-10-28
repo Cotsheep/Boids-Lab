@@ -20,6 +20,7 @@ public partial class ControlPanel : VBoxContainer
         var buttons = new HBoxContainer();
         AddChild(buttons);
         _startPause = AddButton(buttons, "StartPause", "开始", () => ToggleRunningRequested?.Invoke());
+        _startPause.TooltipText = "空格：暂停 / 继续；无论焦点在哪个控件上都有效，长按不会重复切换。";
         AddButton(buttons, "Reset", "重置", () => ResetRequested?.Invoke())
             .TooltipText = "暂停并按当前数量、种子和最大速度重新生成个体；清空加速度与旋转状态。";
         _step = AddButton(buttons, "Step", "单步", () => StepRequested?.Invoke());
@@ -66,10 +67,12 @@ public partial class ControlPanel : VBoxContainer
 
         AddHeading("调试可视化");
         AddToggle("ShowGrid", "显示网格", config.ShowGrid, value => config.ShowGrid = value);
-        AddToggle("ShowNeighbors", "显示邻居关系（待实现）", config.ShowNeighbors, value => config.ShowNeighbors = value);
-        AddToggle("ShowPerceptionRadius", "显示感知半径（待实现）", config.ShowPerceptionRadius, value => config.ShowPerceptionRadius = value);
-        AddToggle("ShowVelocity", "显示运动方向（待实现）", config.ShowVelocity, value => config.ShowVelocity = value);
-        AddNote("网格已可用，其余待实现选项仅保存开关状态。");
+        AddToggle("ShowNeighbors", "显示选中个体的邻居连线", config.ShowNeighbors, value => config.ShowNeighbors = value);
+        AddToggle("ShowPerceptionRadius", "显示选中个体的感知范围", config.ShowPerceptionRadius, value => config.ShowPerceptionRadius = value);
+        AddToggle("ShowSeparationRadius", "显示选中个体的分离半径", config.ShowSeparationRadius, value => config.ShowSeparationRadius = value);
+        AddToggle("ShowVelocity", "显示全体运动方向", config.ShowVelocity, value => config.ShowVelocity = value);
+        AddNote("轻点个体可单选并高亮，再次点击取消；点击空白取消选择，拖动则平移相机。暂停时也可操作。");
+        AddNote("青绿色：感知范围；橙色：实际分离范围，不超过感知半径。");
     }
 
     public void RefreshRunState(bool running, bool canStep)

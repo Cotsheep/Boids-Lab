@@ -7,6 +7,9 @@ namespace BoidsLab;
 public partial class Boid2D : Node2D
 {
     public int Id { get; private set; }
+    public bool IsSelected { get; private set; }
+    private Polygon2D? _body;
+    private Color _normalColor;
     /// <summary>世界像素/秒；与 Position 同属 Boids 容器坐标系。</summary>
     public Vector2 Velocity { get; private set; }
     /// <summary>本步施加的线性加速度（像素/秒²），受 MaxForce 限制。</summary>
@@ -21,6 +24,28 @@ public partial class Boid2D : Node2D
     private const float DirectionSpeedSquared = 0.0001f;
     private BoidConfig? _config;
     private Vector2 _accelerationInput;
+
+    public override void _Ready()
+    {
+        _body = GetNodeOrNull<Polygon2D>("Body");
+        if (_body is not null) _normalColor = _body.Color;
+    }
+
+    internal void SetSelected(bool selected)
+    {
+        IsSelected = selected;
+        if (_body is not null) _body.Color = selected ? new Color("ffe394") : _normalColor;
+    }
+
+    internal bool HitTest(Vector2 viewportPosition)
+    {
+        // 三角形内精确命中；缩小时额外保留 10 个视口像素的点击容差。
+        if (_body is not null && Geometry2D.IsPointInPolygon(
+            _body.GetGlobalTransformWithCanvas().AffineInverse() * viewportPosition, _body.Polygon))
+            return true;
+        Vector2 center = GetGlobalTransformWithCanvas() * Vector2.Zero;
+        return center.DistanceSquaredTo(viewportPosition) <= 100f;
+    }
 
     public void Initialize(BoidConfig config, int id, Vector2 velocity)
     {
