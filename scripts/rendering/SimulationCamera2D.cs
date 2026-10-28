@@ -144,6 +144,8 @@ public partial class SimulationCamera2D : Camera2D
 
     private void StopDragging() => EndPointerGesture(false);
 
+    public void CancelPointerGesture() => StopDragging();
+
     private void EndPointerGesture(bool clicked)
     {
         bool wasDown = _pointerDown;

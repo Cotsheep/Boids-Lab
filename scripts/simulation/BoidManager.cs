@@ -25,12 +25,16 @@ public partial class BoidManager : Node2D, ISimulationWorld
     // 基础运动、邻居搜索与分离/对齐/聚集规则均已可运行。
     public bool CoreImplemented => true;
     public bool CanStep => false; // 按当前需求，暂不开放 UI 单步功能。
+    public ObstacleSelection? SelectedObstacleInfo => _obstacleEditor.SelectionInfo;
+    public ObstacleShape? ObstaclePlacement => _obstacleEditor.PlacementShape;
+    public event Action? ObstacleSelectionChanged;
 
     private readonly List<Boid2D> _boids = new();
     private BoidConfig? _config;
     private Node2D _boidsRoot = null!;
     private SimulationView _view = null!;
     private SimulationCamera2D _camera = null!;
+    private ObstacleEditor2D _obstacleEditor = null!;
     private int _nextBoidId;
     private Vector2[] _steeringAccelerations = Array.Empty<Vector2>();
     private Boid2D? _pressedBoid;
@@ -64,6 +68,10 @@ public partial class BoidManager : Node2D, ISimulationWorld
         _boidsRoot = GetNode<Node2D>("Boids");
         _view = GetNode<SimulationView>("SimulationView");
         _camera = GetNode<SimulationCamera2D>("Camera2D");
+        _obstacleEditor = GetNode<ObstacleEditor2D>("ObstacleEditor");
+        _obstacleEditor.Initialize(this, _camera, GetNode<Node2D>("Obstacles"));
+        _obstacleEditor.Changed += OnObstaclesChanged;
+        _obstacleEditor.GeometryChanged += InvalidateNeighborResults;
         _view.Bind(Config, this);
         _camera.ViewChanged += UpdateWorldBounds;
         _camera.WorldPressStarted += OnWorldPressStarted;
@@ -92,6 +100,7 @@ public partial class BoidManager : Node2D, ISimulationWorld
         foreach (Boid2D boid in _boids) WrapPosition(boid);
         InvalidateNeighborResults();
         _view.QueueRedraw();
+        _obstacleEditor.RefreshVisuals();
     }
 
     private bool WrapPosition(Boid2D boid)
@@ -107,7 +116,22 @@ public partial class BoidManager : Node2D, ISimulationWorld
 
     public void SetRunning(bool running) => IsRunning = running;
 
-    public void SetInteractionEnabled(bool enabled) => _camera.SetInteractionEnabled(enabled);
+    public void SetInteractionEnabled(bool enabled)
+    {
+        _camera.SetInteractionEnabled(enabled);
+        _obstacleEditor.SetInteractionEnabled(enabled);
+    }
+
+    public void BeginObstaclePlacement(ObstacleShape shape) => _obstacleEditor.BeginPlacement(shape);
+    public void CancelObstaclePlacement() => _obstacleEditor.CancelPlacement();
+    public void DeleteSelectedObstacle() => _obstacleEditor.DeleteSelected();
+    public void ResizeSelectedObstacle(float width, float height) => _obstacleEditor.ResizeSelected(width, height);
+    internal void ClearBoidSelection() => SelectBoid(null);
+
+    private void OnObstaclesChanged()
+    {
+        ObstacleSelectionChanged?.Invoke();
+    }
 
     private void OnWorldPressStarted(Vector2 viewportPosition)
     {
@@ -131,6 +155,7 @@ public partial class BoidManager : Node2D, ISimulationWorld
         if (!clicked) return;
         // 运行时按下命中的个体可能已经移动；仍选择同一个实例，而非松开处的新个体。
         if (target is not null && !_boids.Contains(target)) return;
+        _obstacleEditor.ClearSelection();
         SelectBoid(target == SelectedBoid ? null : target);
     }
 
@@ -146,6 +171,8 @@ public partial class BoidManager : Node2D, ISimulationWorld
     {
         Config.Normalize();
         IsRunning = false;
+        _obstacleEditor.CancelGesture();
+        _obstacleEditor.CancelPlacement();
         SelectBoid(null);
         _pressedBoid = null;
         foreach (Boid2D boid in _boids)
@@ -225,15 +252,30 @@ public partial class BoidManager : Node2D, ISimulationWorld
         if (_steeringAccelerations.Length != _boids.Count)
             _steeringAccelerations = new Vector2[_boids.Count];
         for (int i = 0; i < _boids.Count; i++)
-            _steeringAccelerations[i] = BoidSteering.Calculate(NeighborSearch, i, Config);
+        {
+            Vector2 avoidance = ObstacleAvoidance.Calculate(NeighborSearch.Snapshots[i],
+                _obstacleEditor.Obstacles, Config, WorldBounds);
+            // 优先给避障留出完整的转向能力，避免群集规则抵消避障方向。
+            _steeringAccelerations[i] = avoidance != Vector2.Zero ? avoidance
+                : BoidSteering.Calculate(NeighborSearch, i, Config);
+        }
 
         // 所有规则均已使用同一份快照计算完毕，之后才开始修改节点状态。
         bool changed = false;
         for (int i = 0; i < _boids.Count; i++)
         {
             Boid2D boid = _boids[i];
+            Vector2 before = boid.Position;
             changed |= boid.UpdateBoid(deltaSeconds, _steeringAccelerations[i]);
-            changed |= WrapPosition(boid);
+            if (Config.AvoidanceEnabled && _obstacleEditor.Obstacles.Count > 0)
+            {
+                Vector2 position = boid.Position;
+                Vector2 velocity = boid.Velocity;
+                ObstacleAvoidance.ResolveMotion(before, ref position, ref velocity,
+                    _obstacleEditor.Obstacles, Config.ObstacleClearance, WorldBounds);
+                changed |= boid.ApplyObstacleContact(position, velocity);
+            }
+            else changed |= WrapPosition(boid);
         }
 
         Stats = new SimulationStats(_boids.Count, Stopwatch.GetElapsedTime(started).TotalMilliseconds,
@@ -263,6 +305,11 @@ public partial class BoidManager : Node2D, ISimulationWorld
 
     public override void _ExitTree()
     {
+        if (_obstacleEditor is not null)
+        {
+            _obstacleEditor.Changed -= OnObstaclesChanged;
+            _obstacleEditor.GeometryChanged -= InvalidateNeighborResults;
+        }
         if (_camera is not null)
         {
             _camera.ViewChanged -= UpdateWorldBounds;

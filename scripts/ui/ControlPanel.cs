@@ -10,6 +10,8 @@ public partial class ControlPanel : VBoxContainer
     public event Action? StepRequested;
     public event Action? ConfigurationChanged;
 
+    public ObstaclePanel Obstacles { get; private set; } = null!;
+
     private Button _startPause = null!;
     private Button _step = null!;
 
@@ -26,6 +28,15 @@ public partial class ControlPanel : VBoxContainer
         _step = AddButton(buttons, "Step", "单步", () => StepRequested?.Invoke());
         _step.Disabled = true;
         _step.TooltipText = "单步功能暂未开放。";
+
+        AddHeading("障碍物");
+        Obstacles = new ObstaclePanel { Name = "ObstaclePanel", LengthUnit = lengthUnit };
+        AddChild(Obstacles);
+        AddToggle("AvoidanceEnabled", "启用避障", config.AvoidanceEnabled, value => config.AvoidanceEnabled = value);
+        AddNumber("AvoidanceLookAhead", "前瞻时间", BoidConfig.AvoidanceLookAheadRange, config.AvoidanceLookAhead,
+            value => config.AvoidanceLookAhead = (float)value, "单位：秒；沿当前运动方向提前观察障碍物。数值越大，越早开始避让。");
+        AddNumber("ObstacleClearance", "避障间距", BoidConfig.ObstacleClearanceRange, config.ObstacleClearance,
+            value => config.ObstacleClearance = (float)value, $"单位：{lengthUnit}；个体中心与障碍物之间预留的距离。");
 
         AddHeading("群体设置");
         AddNumber("BoidCount", "个体数量", BoidConfig.CountRange, config.BoidCount,

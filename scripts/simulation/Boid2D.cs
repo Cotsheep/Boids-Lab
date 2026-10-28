@@ -116,4 +116,13 @@ public partial class Boid2D : Node2D
         if (AngularVelocity != 0f)
             Rotation = Mathf.Wrap(Rotation + AngularVelocity * dt, -Mathf.Pi, Mathf.Pi);
     }
+
+    /// <summary>避障接触兜底：修正穿透位置并去掉朝障碍物内部的速度，不重置个体状态。</summary>
+    internal bool ApplyObstacleContact(Vector2 position, Vector2 velocity)
+    {
+        bool changed = Position != position || Velocity != velocity;
+        Position = position;
+        Velocity = velocity.LimitLength(_config!.MaxSpeed);
+        return changed;
+    }
 }

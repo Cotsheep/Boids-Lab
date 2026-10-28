@@ -1,3 +1,5 @@
+using System;
+
 namespace BoidsLab;
 
 /// <summary>UI 与模拟场景之间的最小约定，不暴露 Vector2/Vector3 或绘制节点。</summary>
@@ -9,6 +11,9 @@ public interface ISimulationWorld
     bool CoreImplemented { get; }
     bool CanStep { get; }
     SimulationStats Stats { get; }
+    ObstacleSelection? SelectedObstacleInfo { get; }
+    ObstacleShape? ObstaclePlacement { get; }
+    event Action? ObstacleSelectionChanged;
 
     void Initialize(BoidConfig config);
     void SetRunning(bool running);
@@ -17,4 +22,8 @@ public interface ISimulationWorld
     void Reset();
     void StepOnce();
     void ConfigurationChanged();
+    void BeginObstaclePlacement(ObstacleShape shape);
+    void CancelObstaclePlacement();
+    void DeleteSelectedObstacle();
+    void ResizeSelectedObstacle(float width, float height);
 }

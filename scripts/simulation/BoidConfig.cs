@@ -26,6 +26,8 @@ public sealed class BoidConfig
     public static readonly NumberRange SeparationRange = new(0, 5, 0.1, 1.5);
     public static readonly NumberRange AlignmentRange = new(0, 5, 0.1, 1);
     public static readonly NumberRange CohesionRange = new(0, 5, 0.1, 1);
+    public static readonly NumberRange AvoidanceLookAheadRange = new(0.1, 3, 0.05, 0.75);
+    public static readonly NumberRange ObstacleClearanceRange = new(0, 100, 1, 12);
 
     public int BoidCount { get; set; } = (int)CountRange.Default;
     public int RandomSeed { get; set; } = (int)SeedRange.Default;
@@ -42,6 +44,9 @@ public sealed class BoidConfig
     public bool SeparationEnabled { get; set; } = true;
     public bool AlignmentEnabled { get; set; } = true;
     public bool CohesionEnabled { get; set; } = true;
+    public bool AvoidanceEnabled { get; set; } = true;
+    public float AvoidanceLookAhead { get; set; } = (float)AvoidanceLookAheadRange.Default;
+    public float ObstacleClearance { get; set; } = (float)ObstacleClearanceRange.Default;
     public bool ShowGrid { get; set; } = true;
     public bool ShowNeighbors { get; set; }
     public bool ShowPerceptionRadius { get; set; }
@@ -62,6 +67,8 @@ public sealed class BoidConfig
         SeparationWeight = (float)SeparationRange.Constrain(SeparationWeight);
         AlignmentWeight = (float)AlignmentRange.Constrain(AlignmentWeight);
         CohesionWeight = (float)CohesionRange.Constrain(CohesionWeight);
+        AvoidanceLookAhead = (float)AvoidanceLookAheadRange.Constrain(AvoidanceLookAhead);
+        ObstacleClearance = (float)ObstacleClearanceRange.Constrain(ObstacleClearance);
     }
 
     public Error Load(string path = SavePath)
@@ -100,6 +107,9 @@ public sealed class BoidConfig
         SeparationEnabled = Flag("simulation", "separation_enabled", SeparationEnabled);
         AlignmentEnabled = Flag("simulation", "alignment_enabled", AlignmentEnabled);
         CohesionEnabled = Flag("simulation", "cohesion_enabled", CohesionEnabled);
+        AvoidanceEnabled = Flag("simulation", "avoidance_enabled", AvoidanceEnabled);
+        AvoidanceLookAhead = (float)AvoidanceLookAheadRange.Constrain(Number("avoidance_look_ahead", AvoidanceLookAhead));
+        ObstacleClearance = (float)ObstacleClearanceRange.Constrain(Number("obstacle_clearance", ObstacleClearance));
         ShowGrid = Flag("visualization", "show_grid", ShowGrid);
         ShowNeighbors = Flag("visualization", "show_neighbors", ShowNeighbors);
         ShowPerceptionRadius = Flag("visualization", "show_perception_radius", ShowPerceptionRadius);
@@ -127,6 +137,9 @@ public sealed class BoidConfig
         file.SetValue("simulation", "separation_enabled", SeparationEnabled);
         file.SetValue("simulation", "alignment_enabled", AlignmentEnabled);
         file.SetValue("simulation", "cohesion_enabled", CohesionEnabled);
+        file.SetValue("simulation", "avoidance_enabled", AvoidanceEnabled);
+        file.SetValue("simulation", "avoidance_look_ahead", AvoidanceLookAhead);
+        file.SetValue("simulation", "obstacle_clearance", ObstacleClearance);
         file.SetValue("visualization", "show_grid", ShowGrid);
         file.SetValue("visualization", "show_neighbors", ShowNeighbors);
         file.SetValue("visualization", "show_perception_radius", ShowPerceptionRadius);

@@ -63,6 +63,12 @@ public partial class MainController : Node
         _controls.ResetRequested += ResetSimulation;
         _controls.StepRequested += StepSimulation;
         _controls.ConfigurationChanged += ApplyConfiguration;
+        _controls.Obstacles.CreateRequested += _world.BeginObstaclePlacement;
+        _controls.Obstacles.CancelPlacementRequested += _world.CancelObstaclePlacement;
+        _controls.Obstacles.DeleteRequested += _world.DeleteSelectedObstacle;
+        _controls.Obstacles.ResizeRequested += _world.ResizeSelectedObstacle;
+        _world.ObstacleSelectionChanged += RefreshObstacleControls;
+        RefreshObstacleControls();
         _help.OpenChanged += OnHelpOpenChanged;
         RefreshInterface();
     }
@@ -92,7 +98,11 @@ public partial class MainController : Node
         }
         if (@event.IsAction("close_help"))
         {
-            if (@event.IsActionPressed("close_help")) _help.Close();
+            if (@event.IsActionPressed("close_help"))
+            {
+                if (_help.Visible) _help.Close();
+                else _world.CancelObstaclePlacement();
+            }
             GetViewport().SetInputAsHandled();
             return;
         }
@@ -132,6 +142,9 @@ public partial class MainController : Node
         }
         _uiRoot.Visible = !_uiRoot.Visible;
     }
+
+    private void RefreshObstacleControls() =>
+        _controls.Obstacles.Refresh(_world.SelectedObstacleInfo, _world.ObstaclePlacement);
 
     private void ToggleRunning()
     {
@@ -183,6 +196,11 @@ public partial class MainController : Node
             if (_helpButton is not null) _helpButton.Pressed -= _help.Toggle;
         }
         if (_controls is null) return;
+        _controls.Obstacles.CreateRequested -= _world.BeginObstaclePlacement;
+        _controls.Obstacles.CancelPlacementRequested -= _world.CancelObstaclePlacement;
+        _controls.Obstacles.DeleteRequested -= _world.DeleteSelectedObstacle;
+        _controls.Obstacles.ResizeRequested -= _world.ResizeSelectedObstacle;
+        _world.ObstacleSelectionChanged -= RefreshObstacleControls;
         _controls.ToggleRunningRequested -= ToggleRunning;
         _controls.ResetRequested -= ResetSimulation;
         _controls.StepRequested -= StepSimulation;

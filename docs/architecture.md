@@ -16,16 +16,18 @@ main.tscn / Game (Node，MainController)
 │   └── boids_world_2d.tscn / BoidsWorld2D (Node2D，BoidManager)
 │       ├── SimulationView (Node2D，背景、网格与调试绘制)
 │       ├── Boids (Node2D，运行时生成的个体容器)
-│       └── Camera2D (SimulationCamera2D，拖动、缩放与全景复位)
+│       ├── Obstacles (Node2D，运行时创建的矩形/圆形障碍物)
+│       ├── Camera2D (SimulationCamera2D，拖动、缩放与全景复位)
+│       └── ObstacleEditor (Node2D，ObstacleEditor2D，放置预览与编辑输入)
 └── UI (CanvasLayer，layer = 1)
-    ├── UIRoot (Control，全窗口 HUD)
-    │   ├── 顶部标题、运行状态与操作说明按钮
-    │   ├── 左侧参数面板 / ControlPanel
-    │   ├── 世界信息
-    │   └── 底部统计面板 / StatsPanel
-    └── HelpOverlay (Control，默认隐藏的操作说明弹层)
-        ├── Shade (ColorRect，背景遮罩)
-        └── Card (PanelContainer，标题、关闭按钮与可滚动说明)
+	├── UIRoot (Control，全窗口 HUD)
+	│   ├── 顶部标题、运行状态与操作说明按钮
+	│   ├── 左侧参数面板 / ControlPanel
+	│   ├── 世界信息
+	│   └── 底部统计面板 / StatsPanel
+	└── HelpOverlay (Control，默认隐藏的操作说明弹层)
+		├── Shade (ColorRect，背景遮罩)
+		└── Card (PanelContainer，标题、关闭按钮与可滚动说明)
 ```
 
 独立的个体场景由 `BoidManager.BoidScene` 指定，目前指向 `scenes/boids/boid_2d.tscn`：
@@ -71,14 +73,14 @@ F1 和顶部“隐藏界面”按钮切换整个 `UIRoot.Visible`，包含占位
 Godot → BoidManager._PhysicsProcess(delta)
 		   └── 运行请求开启时 → Step(delta)
 								  ├── NeighborSearch.Search：复制状态并搜索邻居
-								  ├── BoidSteering.Calculate：为全部个体计算三条规则的合加速度
+								  ├── ObstacleAvoidance.Calculate：有危险时优先避让，否则 BoidSteering.Calculate
 								  ├── 遍历已注册个体
 								  │     ├── Boid2D.UpdateBoid(delta, steering)：移动与朝向积分
-								  │     └── 按 WorldBounds 环绕越界位置
+								  │     └── ResolveMotion：接触修正与分段环绕；无障碍物时直接环绕
 								  └── 记录数量、搜索/更新耗时、候选次数与平均邻居数
 ```
 
-`Step()` 在个体循环前调用 `NeighborSearch2D.Search()`。两种搜索都读取同一时间步开始时的位置、速度副本，不访问已经更新过的节点状态。随后为全部个体计算三条规则的合加速度，写入复用的 `Vector2[]`；全部算完后再逐个积分。个体增删后按实际数量调整数组，每步覆盖所有条目，关闭规则不会遗留旧转向。
+`Step()` 在个体循环前调用 `NeighborSearch2D.Search()`。两种搜索都读取同一时间步开始时的位置、速度副本，不访问已经更新过的节点状态。随后为全部个体计算优先避障或群集转向，写入复用的 `Vector2[]`；全部算完后再逐个积分、进行障碍物接触修正并处理环绕。个体增删后按实际数量调整数组，每步覆盖所有条目，关闭规则不会遗留旧转向。
 
 `UpdateBoid()` 验证初始化状态和正的有限时间步长，执行移动与朝向积分，返回运动状态是否变化。管理器在运动或环绕改变状态后请求调试图形重绘。原生 `Polygon2D` 的显示由场景节点负责，不需要统一绘制所有个体的函数。这里使用 Godot 的固定物理回调（默认 60 次/秒）；`MainController` 每 0.25 秒只刷新统计标签，不影响运动频率。
 
@@ -113,7 +115,21 @@ Godot → BoidManager._PhysicsProcess(delta)
 群集加速度 = LimitLength(分离加速度 × 分离权重 + 对齐加速度 × 对齐权重 + 聚集加速度 × 聚集权重, MaxForce)
 ```
 
-每条规则关闭或权重为零时不贡献加速度；没有邻居或目标方向抵消为零时不凭空制动。`MaxSpeed = 0` 或 `MaxForce = 0` 时群集转向为零。没有最小速率限制，也没有碰撞体或不重叠保证。两种搜索的结果集合相同，但累加顺序可能导致微小浮点误差；长期轨迹不承诺逐位一致。
+每条规则关闭或权重为零时不贡献加速度；没有邻居或目标方向抵消为零时不凭空制动。`MaxSpeed = 0` 或 `MaxForce = 0` 时群集转向为零。没有最小速率限制，个体之间没有碰撞体或不重叠保证。两种搜索的结果集合相同，但累加顺序可能导致微小浮点误差；长期轨迹不承诺逐位一致。
+
+## 障碍物编辑与避障
+
+障碍物采用独立 `Obstacle2D` 节点，保存形状与尺寸，直接在世界坐标下绘制矩形或圆形。缩放改变几何尺寸，不通过 Node2D.Scale 放大描边或鼠标容差；选中边框与缩放手柄按相机倍率补偿为稳定的屏幕尺寸。障碍物位置不随 Boid 的环绕边界传送，相机变化也不修改障碍物几何。
+
+`ObstaclePanel` 只发送创建、删除、尺寸修改与取消放置请求。`Refresh(ObstacleSelection?, ObstacleShape?)` 接收选中对象的形状、宽高与当前放置状态；用 `SetValueNoSignal()` 回填数值，避免拖动时的状态同步反过来触发编辑。圆形显示直径，矩形显示宽度和高度；无选择时尺寸与删除控件禁用。尺寸范围来自 `Obstacle2D` 的统一常量，避障参数范围与持久化由 `BoidConfig` 管理。
+
+添加按钮进入放置模式，下次世界点击确定位置并选中。障碍物本体拖动、缩放手柄及 Shift + 滚轮缩放优先于相机输入；普通空白拖动和滚轮保留原有相机操作。障碍物选择与 Boid 选择互斥。Delete 删除选中障碍物，但编辑输入框时由 GUI 处理；Esc 或右键取消放置。操作说明打开时取消待定操作并禁用世界交互，模拟运行状态不受影响。
+
+`ObstacleAvoidance` 从当前个体状态和障碍物几何计算避让方向，障碍物检测与两种 Boid 邻居搜索独立。需要避让时优先采用避障转向，其他时间沿用三条群集规则。`AvoidanceEnabled` 默认开启，`AvoidanceLookAhead` 默认为 0.75 秒，`ObstacleClearance` 默认为 12 世界像素，旧配置没有这些键时保留默认值。障碍物布局、选中对象与放置状态不保存；Reset 保留布局，只重建鸟群。
+
+圆形按半径加间距检测，矩形按扩张后的轴对齐包围盒检测，因此矩形角部留距较保守。运动积分后用本步线段扫描障碍物，命中时截断位移、消除朝内的速度分量而保留切向速度；起点重叠时先尝试移到表面之外。接触修正与受 `MaxForce` 限制的转向是不同步骤，不把硬接触引起的速度改变伪装成受限加速度。关闭避障同时关闭这两部分。
+
+跨越相机边界的运动在接缝处分段、环绕后继续检测；障碍物不生成对侧副本，完全移出当前视野的障碍物不参与检测。障碍物互相重叠或占满整个可用区域时，不保证能找到无重叠的位置；修正采用有界迭代，避免无限循环，不实现刚体推挤或复杂路径规划。
 
 ## 速度、加速度与朝向
 
@@ -203,10 +219,15 @@ MainController               └──> SimulationView
 | `DebugOverlayGeometry.cs` | 当前状态的感知/分离范围、速度箭头、选中对象邻居查询及环绕线段裁剪 |
 | `SimulationCamera2D.cs` | 原生 Camera2D；区分点击/拖动，处理缩放、Home、视口适配，通知手势和视角变化 |
 | `ControlPanel.cs` | 创建原生参数控件，修改共享配置，通过 C# 事件发送控制请求；单位来自世界接口 |
+| `ObstaclePanel.cs` | 障碍物创建/删除按钮、选中对象尺寸输入与放置状态；不引用世界节点 |
+| `ObstacleShape.cs` | 形状枚举与尺寸选择信息，供编辑 UI 与世界共享 |
+| `Obstacle2D.cs` | 矩形/圆形的尺寸、命中测试、世界绘制、高亮及缩放手柄 |
+| `ObstacleAvoidance.cs` | 基于障碍物几何的前瞻避让与运动约束 |
+| `ObstacleEditor2D.cs` | 障碍物列表与选择、放置预览、拖动/缩放/删除输入；不推进 Boid 模拟 |
 | `HelpOverlay.cs` / `help_overlay.tscn` | 窗口内操作说明弹层、响应式布局、滚动正文和关闭行为；不修改模拟或配置 |
 | `StatsPanel.cs` | 展示实际测量结果，null 统一显示 `--` |
 | `main.tscn` | Game、World 容器及 CanvasLayer HUD |
-| `boids_world_2d.tscn` | 管理器根节点、个体容器、背景/调试节点和 Camera2D |
+| `boids_world_2d.tscn` | 管理器根节点、个体与障碍物容器、背景/调试节点和 Camera2D |
 | `boid_2d.tscn` | 单个 Boid 的场景模板，子 Polygon2D 定义三角形外观 |
 | `lab_theme.tres` | 原生 Theme / StyleBoxFlat，统一 UI 样式 |
 
@@ -241,6 +262,8 @@ ControlPanel 和 StatsPanel 不接触 Vector2、Vector3、Camera2D 或 Camera3D�
 当前空间划分只使用简单均匀网格；没有引入 Compute Shader、碰撞节点、ECS、多线程或对象池。后续根据测量结果决定是否继续优化。
 
 ## 验证边界
+
+`tests/obstacle_avoidance_checks.tscn` 验证两种形状的预测转向、接触扫描、切向运动、重叠恢复、正反方向环绕和视野外障碍排除；实际管理器检查避障开关、零转向上限下的接触兜底，以及每种形状连续 300 步的绕行和间距。`tests/obstacle_interaction_checks.tscn` 验证真实主场景中的放置、选择、拖动、手柄/数值/滚轮缩放、Delete 焦点隔离、弹窗、隐藏 HUD 及重置保留布局。仅使用无窗口模式，未进行图形驱动下的视觉验收。
 
 `tests/help_overlay_checks.tscn` 检查真实主场景的帮助按钮、F2/Esc、遮罩点击、内部滚动、HUD 隐藏时打开、焦点限制、空格控制、后台模拟继续更新、阻断背景鼠标和 Home、取消打开前的手势，以及 960 × 640 与 1920 × 1080 无窗口视口中的居中布局。不会保存用户配置或创建图形窗口。
 
