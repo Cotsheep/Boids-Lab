@@ -17,6 +17,9 @@ public partial class MainController : Node
     private Control _placeholder = null!;
     private Control _uiRoot = null!;
     private Button _hideUiButton = null!;
+    private Button _helpButton = null!;
+    private HelpOverlay _help = null!;
+    private Control? _focusBeforeHelp;
     private double _statsElapsed;
     private string? _storageWarning;
 
@@ -37,6 +40,9 @@ public partial class MainController : Node
         _uiRoot = GetNode<Control>("%UIRoot");
         _hideUiButton = GetNode<Button>("%HideUiButton");
         _hideUiButton.Pressed += ToggleUi;
+        _helpButton = GetNode<Button>("%HelpButton");
+        _help = GetNode<HelpOverlay>("%HelpOverlay");
+        _helpButton.Pressed += _help.Toggle;
 
         if (SimulationScene is null)
             throw new InvalidOperationException("Assign a simulation scene in MainController.SimulationScene.");
@@ -57,6 +63,7 @@ public partial class MainController : Node
         _controls.ResetRequested += ResetSimulation;
         _controls.StepRequested += StepSimulation;
         _controls.ConfigurationChanged += ApplyConfiguration;
+        _help.OpenChanged += OnHelpOpenChanged;
         RefreshInterface();
     }
 
@@ -77,10 +84,42 @@ public partial class MainController : Node
             GetViewport().SetInputAsHandled();
             return;
         }
+        if (@event.IsAction("toggle_help"))
+        {
+            if (@event.IsActionPressed("toggle_help")) _help.Toggle();
+            GetViewport().SetInputAsHandled();
+            return;
+        }
+        if (@event.IsAction("close_help"))
+        {
+            if (@event.IsActionPressed("close_help")) _help.Close();
+            GetViewport().SetInputAsHandled();
+            return;
+        }
         // 全局快捷键：即使 HUD 隐藏或输入框有焦点，也能恢复界面。
         if (!@event.IsActionPressed("toggle_ui")) return;
         ToggleUi();
         GetViewport().SetInputAsHandled();
+    }
+
+    private void OnHelpOpenChanged(bool open)
+    {
+        if (open)
+        {
+            _focusBeforeHelp = GetViewport().GuiGetFocusOwner();
+            _focusBeforeHelp?.ReleaseFocus();
+        }
+        // 屏蔽鼠标由弹层负责；同时隔离后台键盘焦点与世界输入，不暂停模拟。
+        _uiRoot.FocusBehaviorRecursive = open
+            ? Control.FocusBehaviorRecursiveEnum.Disabled
+            : Control.FocusBehaviorRecursiveEnum.Inherited;
+        _world.SetInteractionEnabled(!open);
+        if (!open)
+        {
+            if (GodotObject.IsInstanceValid(_focusBeforeHelp) && _focusBeforeHelp!.IsVisibleInTree())
+                _focusBeforeHelp.GrabFocus();
+            _focusBeforeHelp = null;
+        }
     }
 
     private void ToggleUi()
@@ -131,13 +170,18 @@ public partial class MainController : Node
             : "已暂停";
         _status.Text = _world.CoreImplemented ? runState : $"{runState} · 核心尚未实现";
         _placeholder.Visible = !_world.CoreImplemented;
-        _debug.Text = _storageWarning ?? $"目标数量：{_config.BoidCount}  |  随机种子：{_config.RandomSeed}  |  场景：{_world.DisplayName}  |  -- 表示尚未测量";
+        _debug.Text = _storageWarning ?? $"目标数量：{_config.BoidCount}  |  随机种子：{_config.RandomSeed}  |  场景：{_world.DisplayName}";
         _stats.Refresh(_world.Stats, Engine.GetFramesPerSecond());
     }
 
     public override void _ExitTree()
     {
         if (_hideUiButton is not null) _hideUiButton.Pressed -= ToggleUi;
+        if (_help is not null)
+        {
+            _help.OpenChanged -= OnHelpOpenChanged;
+            if (_helpButton is not null) _helpButton.Pressed -= _help.Toggle;
+        }
         if (_controls is null) return;
         _controls.ToggleRunningRequested -= ToggleRunning;
         _controls.ResetRequested -= ResetSimulation;

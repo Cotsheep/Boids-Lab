@@ -5,6 +5,7 @@
 [ext_resource type="PackedScene" path="res://scenes/worlds/boids_world_2d.tscn" id="3_world"]
 [ext_resource type="Script" uid="uid://dj48aa7clgw3r" path="res://scripts/ui/StatsPanel.cs" id="4_stats"]
 [ext_resource type="Theme" uid="uid://ch548a574i185" path="res://scenes/lab_theme.tres" id="5_theme"]
+[ext_resource type="PackedScene" path="res://scenes/ui/help_overlay.tscn" id="6_help"]
 
 [node name="Game" type="Node" unique_id=2044987096]
 script = ExtResource("1_app")
@@ -74,11 +75,19 @@ theme_override_colors/font_color = Color(0.92, 0.73, 0.4, 1)
 theme_override_font_sizes/font_size = 13
 text = "已暂停"
 
+[node name="HelpButton" type="Button" parent="UI/UIRoot/Layout/Column/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 4
+tooltip_text = "打开操作说明；主界面隐藏时也可按 F2。"
+mouse_force_pass_scroll_events = false
+text = "操作说明 · F2"
+
 [node name="HideUiButton" type="Button" parent="UI/UIRoot/Layout/Column/Header" unique_id=1721052816]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 4
-tooltip_text = "隐藏全部界面，按 F1 可重新显示。"
+tooltip_text = "隐藏主界面，按 F1 可重新显示；F2 可打开操作说明。"
 focus_mode = 0
 mouse_force_pass_scroll_events = false
 text = "隐藏UI · F1"
@@ -136,13 +145,6 @@ theme_override_colors/font_color = Color(0.45, 0.56, 0.65, 1)
 theme_override_font_sizes/font_size = 12
 text = "世界坐标"
 
-[node name="ViewControlsHint" type="Label" parent="UI/UIRoot/Layout/Column/HudContent/WorldInfo" unique_id=288850025]
-layout_mode = 2
-theme_override_colors/font_color = Color(0.57, 0.65, 0.73, 1)
-theme_override_font_sizes/font_size = 12
-text = "空格：暂停/继续 · 轻点：选择/取消个体 · 左键拖动：平移视角 · 滚轮：缩放 · Home：重置视角 · F1：显示/隐藏界面"
-autowrap_mode = 3
-
 [node name="CorePlaceholder" type="VBoxContainer" parent="UI/UIRoot/Layout/Column/HudContent/WorldInfo" unique_id=1469265937]
 unique_name_in_owner = true
 layout_mode = 2
@@ -161,13 +163,6 @@ layout_mode = 2
 theme_override_colors/font_color = Color(0.57, 0.65, 0.73, 1)
 text = "当前世界尚未提供可运行的运动核心。"
 horizontal_alignment = 1
-autowrap_mode = 3
-
-[node name="Legend" type="Label" parent="UI/UIRoot/Layout/Column/HudContent/WorldInfo" unique_id=1591134761]
-layout_mode = 2
-theme_override_colors/font_color = Color(0.45, 0.56, 0.65, 1)
-theme_override_font_sizes/font_size = 12
-text = "分离 · 对齐 · 聚集 / 可切换朴素与网格搜索"
 autowrap_mode = 3
 
 [node name="StatisticsCard" type="PanelContainer" parent="UI/UIRoot/Layout/Column" unique_id=924710969]
@@ -193,5 +188,8 @@ unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(0.57, 0.65, 0.73, 1)
 theme_override_font_sizes/font_size = 13
-text = "调试显示：全体运动方向，选中个体的感知/分离范围与邻居连线 | -- 表示尚未测量"
+text = ""
 autowrap_mode = 3
+
+[node name="HelpOverlay" parent="UI" instance=ExtResource("6_help")]
+unique_name_in_owner = true

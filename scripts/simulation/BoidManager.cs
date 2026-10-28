@@ -107,6 +107,8 @@ public partial class BoidManager : Node2D, ISimulationWorld
 
     public void SetRunning(bool running) => IsRunning = running;
 
+    public void SetInteractionEnabled(bool enabled) => _camera.SetInteractionEnabled(enabled);
+
     private void OnWorldPressStarted(Vector2 viewportPosition)
     {
         _pressedBoid = null;

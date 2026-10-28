@@ -1,0 +1,95 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/HelpOverlay.cs" id="1_help"]
+[ext_resource type="Theme" path="res://scenes/lab_theme.tres" id="2_theme"]
+
+[node name="HelpOverlay" type="Control"]
+visible = false
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 0
+mouse_force_pass_scroll_events = false
+theme = ExtResource("2_theme")
+script = ExtResource("1_help")
+
+[node name="Shade" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.01, 0.02, 0.035, 0.72)
+
+[node name="Card" type="PanelContainer" parent="."]
+layout_mode = 0
+offset_right = 760.0
+offset_bottom = 680.0
+mouse_filter = 0
+mouse_force_pass_scroll_events = false
+
+[node name="Column" type="VBoxContainer" parent="Card"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="Header" type="HBoxContainer" parent="Card/Column"]
+layout_mode = 2
+
+[node name="Title" type="Label" parent="Card/Column/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.47, 0.86, 0.79, 1)
+theme_override_font_sizes/font_size = 24
+text = "操作说明"
+
+[node name="Close" type="Button" parent="Card/Column/Header"]
+layout_mode = 2
+text = "关闭"
+tooltip_text = "也可按 Esc、F2，或点击弹窗外关闭。"
+
+[node name="Separator" type="HSeparator" parent="Card/Column"]
+layout_mode = 2
+
+[node name="Instructions" type="RichTextLabel" parent="Card/Column"]
+layout_mode = 2
+size_flags_vertical = 3
+focus_mode = 2
+mouse_filter = 0
+mouse_force_pass_scroll_events = false
+bbcode_enabled = true
+autowrap_mode = 3
+text = "[color=#78dcca][b]键盘与鼠标[/b][/color]
+空格：暂停 / 继续；弹窗打开时也有效，长按不会重复切换。
+F1：显示 / 隐藏主界面。
+F2：打开 / 关闭操作说明；主界面隐藏时仍然有效。
+Esc、关闭按钮或点击弹窗外：关闭操作说明。
+左键点击：单选并高亮个体；再次点击选中个体或点击空白取消选择。
+左键拖动：平移视角。滚轮：以鼠标位置为中心缩放。
+Home：重置视角；编辑输入框时优先处理文本操作。
+
+打开说明不会自动暂停或继续模拟；说明显示期间不能操作背景视角、选择或参数。关闭后恢复背景操作。
+
+[color=#78dcca][b]模拟与参数[/b][/color]
+点击开始观察群集运动；分离、对齐与聚集规则可分别开关。
+个体数量与随机种子在点击重置后生效。重置会暂停模拟，重新生成个体并清空运动与统计状态。单步功能暂未开放。
+规则开关、权重、半径和运动上限会保存，在下一次运行更新时生效；合成后的总加速度受上限限制。
+没有邻居或关闭全部规则时保持惯性运动；越界后从另一侧进入。模拟边界和背景随相机可见范围改变。
+
+[color=#78dcca][b]选择与调试显示[/b][/color]
+暂停和运行时均可选择个体，同时只能选中一个。拖动视角不会改变选择。
+感知范围、分离范围和邻居连线只显示选中个体的数据；运动方向对全体个体生效。
+[color=#78dcca]青绿色圆圈[/color]：感知范围。
+[color=#ffad5c]橙色圆圈[/color]：实际分离范围，不超过感知半径。
+[color=#70baff]蓝色箭头[/color]：运动方向。
+[color=#ffd36b]金色个体与圆环[/color]：当前选择；[color=#ffd36b]金色连线[/color]：该个体的邻居关系。
+显示开关会保存，选择状态不保存。隐藏主界面后仍可查看已开启的调试显示。
+
+[color=#78dcca][b]搜索与统计[/b][/color]
+朴素遍历与均匀网格查找相同的邻居集合；切换方式或半径后，下一次运行更新重新测量。画面的辅助网格与搜索网格独立。
+统计每 0.25 秒刷新读数，模拟仍按正常物理时间步连续运行。
+-- 表示尚未测量；暂停时保留最后一次读数，重置或查询条件改变后重新测量。"

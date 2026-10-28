@@ -26,7 +26,6 @@ public partial class ControlPanel : VBoxContainer
         _step = AddButton(buttons, "Step", "单步", () => StepRequested?.Invoke());
         _step.Disabled = true;
         _step.TooltipText = "单步功能暂未开放。";
-        AddNote("点击开始观察群集运动；可独立开关分离、对齐与聚集规则。");
 
         AddHeading("群体设置");
         AddNumber("BoidCount", "个体数量", BoidConfig.CountRange, config.BoidCount,
@@ -38,7 +37,6 @@ public partial class ControlPanel : VBoxContainer
         AddSearchMode(config);
         AddNumber("PerceptionRadius", "感知半径", BoidConfig.RadiusRange, config.PerceptionRadius,
             value => config.PerceptionRadius = (float)value, $"单位：{lengthUnit}；按最短环绕距离查找邻居，包含半径边缘，不包含自身。");
-        AddNote("两种算法结果相同；切换方式或半径后，下一次运行更新重新测量。");
 
         AddHeading("运动参数");
         AddNumber("MaxSpeed", "最大速度", BoidConfig.SpeedRange, config.MaxSpeed,
@@ -49,7 +47,6 @@ public partial class ControlPanel : VBoxContainer
             value => config.MaxAngularSpeedDegrees = (float)value, "朝向旋转速度上限，单位：度/秒。");
         AddNumber("MaxAngularAcceleration", "最大角加速度", BoidConfig.AngularAccelerationRange, config.MaxAngularAccelerationDegrees,
             value => config.MaxAngularAccelerationDegrees = (float)value, "角速度变化率上限，单位：度/秒²；控制朝向平滑跟随运动方向。");
-        AddNote("无邻居或关闭全部规则时保持惯性运动；越界后从另一侧进入。");
 
         AddHeading("转向规则");
         AddNumber("SeparationRadius", "分离半径", BoidConfig.SeparationRadiusRange, config.SeparationRadius,
@@ -63,7 +60,6 @@ public partial class ControlPanel : VBoxContainer
         AddToggle("CohesionEnabled", "启用聚集规则", config.CohesionEnabled, value => config.CohesionEnabled = value);
         AddNumber("CohesionWeight", "聚集权重", BoidConfig.CohesionRange, config.CohesionWeight,
             value => config.CohesionWeight = (float)value, "朝邻居中心靠拢，使用最短环绕位移计算中心方向。");
-        AddNote("开关、权重和半径会保存，在下一次运行更新时生效；总加速度受上限限制。");
 
         AddHeading("调试可视化");
         AddToggle("ShowGrid", "显示网格", config.ShowGrid, value => config.ShowGrid = value);
@@ -71,8 +67,6 @@ public partial class ControlPanel : VBoxContainer
         AddToggle("ShowPerceptionRadius", "显示选中个体的感知范围", config.ShowPerceptionRadius, value => config.ShowPerceptionRadius = value);
         AddToggle("ShowSeparationRadius", "显示选中个体的分离半径", config.ShowSeparationRadius, value => config.ShowSeparationRadius = value);
         AddToggle("ShowVelocity", "显示全体运动方向", config.ShowVelocity, value => config.ShowVelocity = value);
-        AddNote("轻点个体可单选并高亮，再次点击取消；点击空白取消选择，拖动则平移相机。暂停时也可操作。");
-        AddNote("青绿色：感知范围；橙色：实际分离范围，不超过感知半径。");
     }
 
     public void RefreshRunState(bool running, bool canStep)
@@ -115,14 +109,6 @@ public partial class ControlPanel : VBoxContainer
     {
         var label = new Label { Text = text };
         label.AddThemeColorOverride("font_color", new Color("78dcca"));
-        label.AddThemeFontSizeOverride("font_size", 13);
-        AddChild(label);
-    }
-
-    private void AddNote(string text)
-    {
-        var label = new Label { Text = text, AutowrapMode = TextServer.AutowrapMode.WordSmart };
-        label.AddThemeColorOverride("font_color", new Color("91a6bb"));
         label.AddThemeFontSizeOverride("font_size", 13);
         AddChild(label);
     }

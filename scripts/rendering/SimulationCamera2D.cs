@@ -49,6 +49,13 @@ public partial class SimulationCamera2D : Camera2D
         ViewChanged?.Invoke();
     }
 
+    public void SetInteractionEnabled(bool enabled)
+    {
+        StopDragging();
+        SetProcessInput(enabled);
+        SetProcessUnhandledInput(enabled);
+    }
+
     public override void _Input(InputEvent @event)
     {
         if (!_pointerDown) return;

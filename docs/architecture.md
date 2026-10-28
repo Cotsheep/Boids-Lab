@@ -18,11 +18,14 @@ main.tscn / Game (Node，MainController)
 │       ├── Boids (Node2D，运行时生成的个体容器)
 │       └── Camera2D (SimulationCamera2D，拖动、缩放与全景复位)
 └── UI (CanvasLayer，layer = 1)
-	└── UIRoot (Control，全窗口布局)
-		├── 顶部标题与运行状态
-		├── 左侧参数面板 / ControlPanel
-		├── 中央提示文字
-		└── 底部统计面板 / StatsPanel
+    ├── UIRoot (Control，全窗口 HUD)
+    │   ├── 顶部标题、运行状态与操作说明按钮
+    │   ├── 左侧参数面板 / ControlPanel
+    │   ├── 世界信息
+    │   └── 底部统计面板 / StatsPanel
+    └── HelpOverlay (Control，默认隐藏的操作说明弹层)
+        ├── Shade (ColorRect，背景遮罩)
+        └── Card (PanelContainer，标题、关闭按钮与可滚动说明)
 ```
 
 独立的个体场景由 `BoidManager.BoidScene` 指定，目前指向 `scenes/boids/boid_2d.tscn`：
@@ -49,6 +52,10 @@ HUD 使用独立 CanvasLayer，不跟随 Camera2D 的世界变换。UIRoot、纯
 F1 和顶部“隐藏界面”按钮切换整个 `UIRoot.Visible`，包含占位文字、提示和统计。`MainController._Input()` 接收全局 `toggle_ui` 动作，即使输入框有焦点也能隐藏/恢复 HUD，隐藏前释放控件焦点。相机在 `_UnhandledInput()` 中处理滚轮和 `reset_camera`（Home），让 UI 优先处理输入；参数面板关闭 `MouseForcePassScrollEvents`，滚轮不会穿透到相机。快捷键映射位于 `project.godot`。
 
 空格映射到 `toggle_pause`，由 `MainController._Input()` 在 GUI 处理前拦截。仅首次按下调用现有 `ToggleRunning()`；长按重复事件与松开事件也标记为已处理，避免触发有焦点控件的 `ui_accept`、改变复选框或在输入框插入空格。HUD 隐藏时同样有效，暂停按钮和状态文字同步刷新。这只切换模拟的运行状态，不暂停整个 SceneTree，所以相机、选择与 UI 继续响应。
+
+操作指引集中在 `scenes/ui/help_overlay.tscn` 的 RichTextLabel 中。`HelpOverlay` 与 `UIRoot` 并列，所以 F1 隐藏 HUD 后仍可由 F2 打开。F2（`toggle_help`）、Esc（`close_help`）与空格都由主控制器处理；弹层不会自动修改 `IsRunning`。弹层最大为 760 × 680，随可用视口缩小，正文在内部滚动，不创建原生 Window。
+
+`HelpOverlay` 负责显示、关闭、居中及遮罩点击。遮罩消费按下和松开，松开后再关闭，避免关闭点击穿透；点击卡片不会关闭。`MainController.OnHelpOpenChanged()` 暂时禁用 HUD 的递归键盘焦点，并通过 `ISimulationWorld.SetInteractionEnabled(false)` 禁用世界交互。2D 世界把该请求交给相机，取消未结束的点击/拖动并关闭其输入回调，物理更新照常执行。关闭后恢复世界输入和仍可见的原控件焦点。未来 3D 世界实现同一交互开关，无需让弹层依赖 Camera2D。
 
 相机只在 `_UnhandledInput()` 收到左键按下时开始一个待定手势，确保参数控件优先处理点击。通过 `WorldPressStarted(viewportPosition)` 让管理器记录按下时命中的个体；累计位移不足 5 个视口像素时不移动相机，越过阈值后按完整累计位移开始拖动。`_Input()` 接收后续移动与松开，跨入 UI 后也能结束拖动。未拖动且在世界内松开时发出 `WorldPressEnded(true)`，其余情况发出 false。失焦、丢失左键按住状态、Home、滚轮缩放或视口变化会取消待定手势，避免误选择或粘住相机。
 
@@ -184,8 +191,8 @@ MainController               └──> SimulationView
 
 | 文件 | 职责与扩展位置 |
 | --- | --- |
-| `MainController.cs` | 创建并加载共享配置、实例化世界、接收 UI 事件与切换 HUD；通过 ISimulationWorld 发送控制请求，每 0.25 s 刷新统计 |
-| `ISimulationWorld.cs` | UI 与世界的公共约定：初始化、运行/暂停、重置、单步、配置变化、统计及单位信息 |
+| `MainController.cs` | 创建并加载共享配置、实例化世界、接收 UI 事件、切换 HUD 与协调弹层输入隔离；通过 ISimulationWorld 发送控制请求，每 0.25 s 刷新统计 |
+| `ISimulationWorld.cs` | UI 与世界的公共约定：初始化、运行/暂停、交互开关、重置、单步、配置变化、统计及单位信息 |
 | `BoidManager.cs` | Node2D 世界根；按种子生成个体，管理创建、移除和 Reset；同步相机可见边界、统一更新、环绕与计时 |
 | `Boid2D.cs` | 保存个体线性/角运动状态；SetAcceleration 接收输入，UpdateBoid 积分速度与位置，UpdateFacing 平滑跟随运动方向 |
 | `NeighborSearch2D.cs` | 两种邻居搜索、步前状态快照、环绕距离、邻居下标列表及实测搜索统计 |
@@ -196,6 +203,7 @@ MainController               └──> SimulationView
 | `DebugOverlayGeometry.cs` | 当前状态的感知/分离范围、速度箭头、选中对象邻居查询及环绕线段裁剪 |
 | `SimulationCamera2D.cs` | 原生 Camera2D；区分点击/拖动，处理缩放、Home、视口适配，通知手势和视角变化 |
 | `ControlPanel.cs` | 创建原生参数控件，修改共享配置，通过 C# 事件发送控制请求；单位来自世界接口 |
+| `HelpOverlay.cs` / `help_overlay.tscn` | 窗口内操作说明弹层、响应式布局、滚动正文和关闭行为；不修改模拟或配置 |
 | `StatsPanel.cs` | 展示实际测量结果，null 统一显示 `--` |
 | `main.tscn` | Game、World 容器及 CanvasLayer HUD |
 | `boids_world_2d.tscn` | 管理器根节点、个体容器、背景/调试节点和 Camera2D |
@@ -206,6 +214,7 @@ MainController               └──> SimulationView
 
 - `Initialize(config)`：接收共享配置，验证参考尺寸。已就绪的世界会复位参考视角、同步可见边界并 Reset。
 - `SetRunning(running)`：开启或暂停固定物理时间步的运动更新。
+- `SetInteractionEnabled(enabled)`：世界就绪后启用/禁用相机和选择输入，取消待定手势；不改变模拟运行状态。
 - `Reset()`：暂停、移除旧个体，ID 归零，按配置重新生成；加速度、角速度和计时清零或恢复未测量。
 - `SpawnBoid(position, velocity)`：世界就绪后创建并注册一个个体，分配递增 ID，更新真实数量。
 - `RemoveBoid(boid)`：移除已注册个体，保留其余个体的 ID 和状态，更新真实数量。
@@ -232,6 +241,8 @@ ControlPanel 和 StatsPanel 不接触 Vector2、Vector3、Camera2D 或 Camera3D�
 当前空间划分只使用简单均匀网格；没有引入 Compute Shader、碰撞节点、ECS、多线程或对象池。后续根据测量结果决定是否继续优化。
 
 ## 验证边界
+
+`tests/help_overlay_checks.tscn` 检查真实主场景的帮助按钮、F2/Esc、遮罩点击、内部滚动、HUD 隐藏时打开、焦点限制、空格控制、后台模拟继续更新、阻断背景鼠标和 Home、取消打开前的手势，以及 960 × 640 与 1920 × 1080 无窗口视口中的居中布局。不会保存用户配置或创建图形窗口。
 
 `tests/pause_shortcut_checks.tscn` 在真实主场景中验证空格在无焦点、按钮、复选框、数字输入框、搜索方式控件有焦点及 HUD 隐藏时均切换运行状态，过滤长按重复与松开，不触发重置、修改参数或打开选择菜单；同时验证 Enter 仍可正常激活按钮。
 

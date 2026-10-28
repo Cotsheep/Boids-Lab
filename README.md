@@ -22,7 +22,9 @@
 
 | 操作 | 当前行为 |
 | --- | --- |
-| F1 / 隐藏界面按钮 | 隐藏全部 HUD（含占位文字）；再次按 F1 恢复，不改变模拟运行状态 |
+| F1 / 隐藏界面按钮 | 隐藏主界面 HUD（含占位文字）；再次按 F1 恢复，不改变模拟运行状态，操作说明独立显示 |
+| F2 / 操作说明按钮 | 打开或关闭默认隐藏的操作说明；HUD 隐藏后仍可按 F2 打开 |
+| Esc / 关闭按钮 / 点击说明外 | 关闭操作说明；点击不会穿透到背景个体或参数控件 |
 | 空格 | 全局暂停 / 继续；按钮、复选框、输入框有焦点或 HUD 隐藏时都有效，长按只切换一次，不触发控件原有空格行为 |
 | 鼠标左键轻点 | 单选并高亮个体；再次点击选中个体或点击空白取消选择，暂停和运行时均可操作 |
 | 鼠标左键拖动 | 在世界画面上按住左键平移视角与模拟边界；从参数面板或按钮开始的操作不会拖动相机 |
@@ -39,6 +41,8 @@
 | 显示分离半径 | 独立显示选中个体的实际分离范围，半径取分离半径与感知半径的较小值；默认关闭并保存开关状态 |
 | 显示运动方向 | 对全体个体生效，不依赖选择；静止个体不显示方向箭头 |
 | 性能统计 | 显示真实个体数量、引擎 FPS、本步更新/搜索耗时、候选检查次数和平均邻居数；尚未测量时显示 `--` |
+
+键鼠指引、参数说明和调试颜色图例集中在操作说明中，主界面保留实际控件、状态、统计及悬停提示。说明采用窗口内弹层，内容可滚动；打开或关闭都不自动改变模拟运行状态。弹层打开时，背景的选择、视角和参数操作被拦截，空格仍能暂停/继续；打开前尚未结束的拖动或点击会取消。说明默认隐藏，不保存其打开状态。
 
 启动时按配置生成个体，初始为暂停状态。“个体数量”和“随机种子”修改后在**重置**时生效；相同种子、数量、当前模拟边界与最大速度能在当前引擎版本中复现初始状态。每只个体在当前视野内随机选择初始位置和方向，初始速率为最大速度。运动上限修改后在下一次运行更新时生效；有规则转向目标时，最大速度也用作目标速率，没有邻居时不会仅因为提高速度上限就自动加速。
 
@@ -110,6 +114,7 @@ boids/
 │   ├── main.tscn
 │   ├── lab_theme.tres
 │   ├── boids/boid_2d.tscn
+│   ├── ui/help_overlay.tscn
 │   └── worlds/boids_world_2d.tscn
 ├── scripts/
 │   ├── app/MainController.cs
@@ -123,7 +128,7 @@ boids/
 │   ├── rendering/SimulationView.cs
 │   ├── rendering/DebugOverlayGeometry.cs
 │   ├── worlds/ISimulationWorld.cs
-│   └── ui/ControlPanel.cs, StatsPanel.cs
+│   └── ui/ControlPanel.cs, StatsPanel.cs, HelpOverlay.cs
 ├── tests/
 │   ├── MotionChecks.cs
 │   ├── motion_checks.tscn
@@ -134,11 +139,13 @@ boids/
 │   ├── DebugChecks.cs
 │   ├── debug_checks.tscn
 │   ├── PauseShortcutChecks.cs
-│   └── pause_shortcut_checks.tscn
+│   ├── pause_shortcut_checks.tscn
+│   ├── HelpOverlayChecks.cs
+│   └── help_overlay_checks.tscn
 └── docs/architecture.md
 ```
 
-参数控件在 `ControlPanel.Bind()` 中生成；HUD 布局和提示文字在 `main.tscn` 的 `UI/UIRoot` 分支中编辑，世界与相机在 `boids_world_2d.tscn` 中编辑。`BoidManager` 是世界根节点，负责生成、统一更新、边界环绕和计时；`Boid2D` 保存自身运动状态并完成积分，`boid_2d.tscn` 中的 Polygon2D 跟随节点变换显示三角形。`SimulationView` 负责背景、网格和调试绘制入口；`SimulationCamera2D` 处理拖动、缩放、全景复位和视口适配。主控制器通过 `ISimulationWorld` 操作世界，未来可接入实现该接口的 Node3D 场景。详见 [架构说明](docs/architecture.md)。
+参数控件在 `ControlPanel.Bind()` 中生成；HUD 布局在 `main.tscn` 的 `UI/UIRoot` 分支中编辑，操作说明内容在 `scenes/ui/help_overlay.tscn` 中编辑，世界与相机在 `boids_world_2d.tscn` 中编辑。`BoidManager` 是世界根节点，负责生成、统一更新、边界环绕和计时；`Boid2D` 保存自身运动状态并完成积分，`boid_2d.tscn` 中的 Polygon2D 跟随节点变换显示三角形。`SimulationView` 负责背景、网格和调试绘制入口；`SimulationCamera2D` 处理拖动、缩放、全景复位和视口适配。主控制器通过 `ISimulationWorld` 操作世界，未来可接入实现该接口的 Node3D 场景。详见 [架构说明](docs/architecture.md)。
 
 ## 本机构建说明
 
@@ -164,6 +171,7 @@ godot --headless --path . res://tests/neighbor_checks.tscn --quit-after 120
 godot --headless --path . res://tests/steering_checks.tscn --quit-after 120
 godot --headless --path . res://tests/debug_checks.tscn --quit-after 600
 godot --headless --path . res://tests/pause_shortcut_checks.tscn --quit-after 120
+godot --headless --path . res://tests/help_overlay_checks.tscn --quit-after 600
 ```
 
 检查真实节点的匀速移动、加速度积分、60/120 步时间一致性、线性/角速度上限、角加速度上限、朝向收敛与跨 ±180° 转向、零速处理、暂停/重置、种子复现、越界环绕、相机缩放/拖动后的可见边界、统计和新旧配置兼容。测试使用 `.godot/validation/` 中的临时配置，不覆盖用户设置。退出码 0 表示通过。本次 C# 构建与运动检查均通过；未进行图形窗口测试或 Boids 算法性能测试。
@@ -173,6 +181,8 @@ godot --headless --path . res://tests/pause_shortcut_checks.tscn --quit-after 12
 三条规则的无窗口检查覆盖单规则方向、分离距离权重、开关与权重即时生效、跨边界转向、完全重合与对称抵消、无邻居、加速度/速度限制、外部输入叠加、快照更新顺序、配置兼容和两种搜索模式的一致性。每种模式还通过 300 个物理步的群集运行检查，验证状态有限、速度与加速度限幅、位置在边界内及轨迹确实改变。这些是逻辑验证，不代表已人工评估图形效果。
 
 调试检查通过真实视口输入验证暂停/运行时单选、再次点击取消、拖动区分、UI 隔离、原色恢复、缩放命中和删除/重置清理；同时验证选中对象的感知范围/邻居线、全体方向、切换/取消选择后的范围清理、环绕接缝与大半径几何，以及绘制不改写模拟统计。采用无窗口验证，未进行原生窗口截图或图形效果验收。
+
+操作说明检查在真实主场景中验证默认隐藏、按钮/F2/Esc/点击外部开关、隐藏 HUD 后打开、焦点隔离、空格暂停/继续、保持模拟运行、背景输入阻断、取消待定手势、说明内部滚动和无窗口视口尺寸适配。弹窗检查及现有空格、选择调试检查均通过，未进行图形窗口视觉验收。
 
 ## 初版框架的历史验证
 

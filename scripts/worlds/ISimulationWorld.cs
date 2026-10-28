@@ -12,6 +12,8 @@ public interface ISimulationWorld
 
     void Initialize(BoidConfig config);
     void SetRunning(bool running);
+    // 仅控制相机/选择等用户操作；关闭时取消待定手势，不改变模拟运行状态。
+    void SetInteractionEnabled(bool enabled);
     void Reset();
     void StepOnce();
     void ConfigurationChanged();
