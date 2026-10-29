@@ -200,8 +200,8 @@ public partial class Motion3DChecks : Node
             && controls.FindChild("SeparationEnabled", true, false) is null
             && controls.FindChild("ShowSeparationRadius", true, false) is null, "Unsupported 3D features have no misleading controls");
         var searchMode = (OptionButton)controls.FindChild("NeighborSearchMode", true, false);
-        Check(searchMode.Disabled && searchMode.ItemCount == 1 && searchMode.GetItemId(0) == (int)NeighborSearchMode.Naive,
-            "3D offers only the implemented naive search");
+        Check(!searchMode.Disabled && searchMode.ItemCount == 2 && searchMode.GetItemId(1) == (int)NeighborSearchMode.UniformGrid,
+            "3D offers both implemented search methods");
         Check(controls.FindChild("ShowNeighbors", true, false) is CheckBox, "Implemented debug controls are available");
         var count = (SpinBox)controls.FindChild("BoidCount", true, false);
         count.Value = 12;

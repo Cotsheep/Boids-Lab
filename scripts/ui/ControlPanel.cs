@@ -136,7 +136,9 @@ public partial class ControlPanel : VBoxContainer
             AddChild(new Label
             {
                 Text = features.HasFlag(SimulationFeatures.NeighborSearch)
-                    ? "已实现基础运动、观察与朴素邻居搜索。三维网格、群体规则、领队和避障尚未实现；邻居关系暂不改变运动。"
+                    ? features.HasFlag(SimulationFeatures.UniformGridSearch)
+                        ? "已实现基础运动、观察以及朴素 / 网格邻居搜索。群体规则、领队和避障尚未实现；邻居关系暂不改变运动。"
+                        : "已实现基础运动、观察与朴素邻居搜索。三维网格、群体规则、领队和避障尚未实现；邻居关系暂不改变运动。"
                     : "仅实现个体创建与基础运动。邻居搜索、群体规则、领队、避障及调试绘制尚未实现。",
                 AutowrapMode = TextServer.AutowrapMode.WordSmart,
             });

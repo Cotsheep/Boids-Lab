@@ -11,9 +11,9 @@ public partial class BoidManager3D : Node3D, ISimulationWorld
     [Export] public Vector3 WorldSize { get; set; } = new(1280, 720, 720);
     [Export] public PackedScene BoidScene { get; set; } = null!;
 
-    public string DisplayName => "三维世界 · 朴素邻居搜索";
+    public string DisplayName => "三维世界";
     public string LengthUnit => "世界单位";
-    public SimulationFeatures Features => SimulationFeatures.NeighborSearch | SimulationFeatures.DebugDrawing;
+    public SimulationFeatures Features => SimulationFeatures.NeighborSearch | SimulationFeatures.DebugDrawing | SimulationFeatures.UniformGridSearch;
     public bool CoreImplemented => true; // 基础运动可运行；可选能力由 Features 明确声明。
     public bool CanStep => false;
     public bool IsRunning { get; private set; }
@@ -140,7 +140,7 @@ public partial class BoidManager3D : Node3D, ISimulationWorld
         if (!float.IsFinite(dt) || dt <= 0f) throw new ArgumentOutOfRangeException(nameof(deltaSeconds));
         long started = Stopwatch.GetTimestamp();
         foreach (Boid3D boid in _boids) boid.Position = WorldGeometry3D.Wrap(boid.Position, WorldBounds);
-        NeighborSearch.Search(Boids, Config.PerceptionRadius, WorldBounds);
+        NeighborSearch.Search(Boids, Config.PerceptionRadius, WorldBounds, Config.NeighborSearchMode);
         foreach (Boid3D boid in _boids)
         {
             // TODO: 后续先从共同快照计算全体群集转向，再传入对应个体。本阶段搜索不改变运动。
@@ -199,14 +199,14 @@ public partial class BoidManager3D : Node3D, ISimulationWorld
     public void ConfigurationChanged()
     {
         NormalizeConfiguration();
-        if (NeighborSearch.HasResults && Config.PerceptionRadius != NeighborSearch.Radius) InvalidateStats();
+        if (NeighborSearch.HasResults && (Config.PerceptionRadius != NeighborSearch.Radius
+            || Config.NeighborSearchMode != NeighborSearch.Mode)) InvalidateStats();
         RefreshDebug(); // 暂停时半径与绘制开关也立即刷新，不伪造一次模拟测量。
     }
 
     private void NormalizeConfiguration()
     {
         Config.Normalize();
-        Config.NeighborSearchMode = NeighborSearchMode.Naive; // 三维网格尚未实现，不接受配置中的网格模式。
     }
 
     // TODO: 后续实现三维单步、领队与障碍物；对应 UI 仍不开放。

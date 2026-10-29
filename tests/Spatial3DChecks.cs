@@ -69,6 +69,8 @@ public partial class Spatial3DChecks : Node
         for (int i = 0; i < 120; i++)
             boids.Add(MakeBoid(Bounds.Position + new Vector3(random.Randf(), random.Randf(), random.Randf()) * Bounds.Size, 1000 + i * 7));
         foreach (float radius in new[] { 1f, 7f, 30f, 50f, 100f }) VerifySearch(boids, search, radius);
+        search.Search(boids, 7, Bounds, NeighborSearchMode.UniformGrid);
+        Check(search.CandidateChecks < (long)boids.Count * (boids.Count - 1), "Sparse grid actually prunes candidate pairs");
         // 测试数量缩小和空集合不会残留上次的邻居或平均值。
         VerifySearch(boids.Take(3).ToArray(), search, 10);
         VerifySearch(Array.Empty<Boid3D>(), search, 10);
@@ -77,9 +79,16 @@ public partial class Spatial3DChecks : Node
 
     private void VerifySearch(IReadOnlyList<Boid3D> boids, NeighborSearch3D search, float radius)
     {
+        foreach (NeighborSearchMode mode in Enum.GetValues<NeighborSearchMode>()) VerifySearchMode(boids, search, radius, mode);
+    }
+
+    private void VerifySearchMode(IReadOnlyList<Boid3D> boids, NeighborSearch3D search, float radius, NeighborSearchMode mode)
+    {
         Vector3[] positions = boids.Select(b => b.Position).ToArray();
-        search.Search(boids, radius, Bounds);
-        Check(search.CandidateChecks == (long)boids.Count * (boids.Count - 1), "Naive candidate count excludes self and counts both directions");
+        search.Search(boids, radius, Bounds, mode);
+        long allPairs = (long)boids.Count * (boids.Count - 1);
+        Check(mode == NeighborSearchMode.Naive ? search.CandidateChecks == allPairs : search.CandidateChecks <= allPairs,
+            "Candidates exclude self and do not repeat periodic cells");
         long total = 0;
         for (int i = 0; i < boids.Count; i++)
         {
@@ -177,7 +186,7 @@ public partial class Spatial3DChecks : Node
         var world = GD.Load<PackedScene>("res://scenes/worlds/boids_world_3d.tscn").Instantiate<BoidManager3D>();
         world.Initialize(config);
         AddChild(world);
-        Check(config.NeighborSearchMode == NeighborSearchMode.Naive, "Unsupported saved grid mode is normalized before UI binding");
+        Check(config.NeighborSearchMode == NeighborSearchMode.UniformGrid, "Saved grid mode is supported");
         Boid3D a = world.SpawnBoid(Vector3.Zero, Vector3.Right * 120);
         world.SpawnBoid(new Vector3(40, 0, 0), Vector3.Left * 120);
         Check(world.Stats.NeighborCandidateChecks is null, "No measurement before the first physical step");
@@ -198,6 +207,12 @@ public partial class Spatial3DChecks : Node
             "Paused radius changes invalidate stale statistics without advancing time");
         world.Step(1.0 / 60);
         Check(world.NeighborSearch.Radius == 20 && world.Stats.AverageNeighbors == 0, "Next step measures the new radius");
+        config.NeighborSearchMode = NeighborSearchMode.Naive;
+        world.ConfigurationChanged();
+        Check(!world.NeighborSearch.HasResults && world.Stats.NeighborCandidateChecks is null, "Paused algorithm changes invalidate old counts");
+        world.Step(1.0 / 60);
+        Check(world.NeighborSearch.Mode == NeighborSearchMode.Naive && world.Stats.NeighborCandidateChecks == 2,
+            "Next step uses the selected algorithm");
         world.RemoveBoid(a);
         Check(!world.NeighborSearch.HasResults && world.Stats.BoidCount == 1, "Removal invalidates indices and counts");
         config.BoidCount = 1;
