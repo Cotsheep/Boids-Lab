@@ -5,7 +5,7 @@ using Godot;
 
 namespace BoidsLab.Tests;
 
-/// <summary>用独立的九幅平移图像距离参考验证两种搜索，不以一种实现作为另一种的唯一标准。</summary>
+/// <summary>用独立的世界坐标欧氏距离参考验证两种搜索，不以一种实现作为另一种的唯一标准。</summary>
 public partial class NeighborChecks : Node
 {
     private int _checks;
@@ -22,6 +22,7 @@ public partial class NeighborChecks : Node
         {
             CheckGeometry();
             CheckRandomPopulations();
+            CheckWrappedPopulations();
             CheckManagerAndUi();
             CheckConfiguration();
             GD.Print($"PASS: {_checks} neighbor search/statistics/integration assertions (headless).");
@@ -49,7 +50,7 @@ public partial class NeighborChecks : Node
             new(102, 76), new(1, 76), new(102, 1), new(50, 38) };
         foreach (float radius in new[] { 1f, 10f, 20f, 30f, 40f, 60f, 500f })
             Compare(points, bounds, radius);
-        // 非整除尺寸、负原点、恰在分格线上、跨缝、只有 1/2 行列、狭长区域。
+        // 负坐标、格线、远处坐标、狭长分布；与相机范围无关。
         foreach (Vector2 size in new[] { new Vector2(5, 7), new Vector2(103, 77), new Vector2(500, 10) })
         {
             var shifted = new Rect2(new Vector2(-200, -300), size);
@@ -59,6 +60,9 @@ public partial class NeighborChecks : Node
             foreach (float radius in new[] { 1f, 4f, 10f, 26f, 500f }) Compare(edges, shifted, radius);
         }
 
+        Compare(new[] { new Vector2(-1000000, 2000000), new Vector2(-999994, 2000008),
+            new Vector2(1000000, -2000000), new Vector2(-0.1f, -0.1f), new Vector2(0.1f, 0.1f) }, bounds, 10);
+        Compare(new[] { new Vector2(1e30f, -1e30f), new Vector2(1e30f, -1e30f), Vector2.Zero }, bounds, 10);
         // 稀疏规则点阵：网格必须确实减少候选检查；不对运行时间做易波动的断言。
         Vector2[] sparse = Enumerable.Range(0, 100).Select(i => new Vector2(i % 10 * 100, i / 10 * 100)).ToArray();
         Check(Compare(sparse, new Rect2(0, 0, 1000, 1000), 20) == 0, "Sparse cells avoid all unnecessary pair checks");
@@ -78,7 +82,21 @@ public partial class NeighborChecks : Node
         }
     }
 
-    private long Compare(Vector2[] positions, Rect2 bounds, float radius)
+    private void CheckWrappedPopulations()
+    {
+        var random = new Random(73);
+        foreach (Vector2 size in new[] { new Vector2(5, 7), new Vector2(103, 77), new Vector2(500, 10) })
+        {
+            var bounds = new Rect2(new Vector2(-200, -300), size);
+            var points = Enumerable.Range(0, 48).Select(_ => bounds.Position + new Vector2(
+                (float)random.NextDouble() * size.X, (float)random.NextDouble() * size.Y))
+                .Concat(new[] { bounds.Position, bounds.End, bounds.End - Vector2.One * 0.25f,
+                    bounds.Position - size * 2 }).ToArray();
+            foreach (float radius in new[] { 1f, 4f, 10f, 26f, 80f, 500f }) Compare(points, bounds, radius, true);
+        }
+    }
+
+    private long Compare(Vector2[] positions, Rect2 bounds, float radius, bool wrap = false)
     {
         var config = new BoidConfig();
         var boids = new List<Boid2D>();
@@ -90,17 +108,28 @@ public partial class NeighborChecks : Node
                 boid.Initialize(config, i * 3 + 7, Vector2.Right); // 故意不使用连续 ID。
                 boids.Add(boid);
             }
-            Vector2[] normalized = positions.Select(p => bounds.HasPoint(p) ? p : new Vector2(
-                Mathf.Wrap(p.X, bounds.Position.X, bounds.End.X),
-                Mathf.Wrap(p.Y, bounds.Position.Y, bounds.End.Y))).ToArray();
+            Vector2[] reference = positions;
+            // 独立规范化到区域内，再枚举九幅平移图像作为最短距离参考。
+            if (wrap) reference = positions.Select(p => new Vector2(
+                bounds.Position.X + (float)((((double)p.X - bounds.Position.X) % bounds.Size.X + bounds.Size.X) % bounds.Size.X),
+                bounds.Position.Y + (float)((((double)p.Y - bounds.Position.Y) % bounds.Size.Y + bounds.Size.Y) % bounds.Size.Y))).ToArray();
+            double Distance(int i, int j)
+            {
+                if (!wrap) return ReferenceDistanceSquared(reference[i], reference[j]);
+                double result = double.PositiveInfinity;
+                for (int y = -1; y <= 1; y++)
+                    for (int x = -1; x <= 1; x++)
+                        result = Math.Min(result, ReferenceDistanceSquared(reference[i], reference[j] + new Vector2(x * bounds.Size.X, y * bounds.Size.Y)));
+                return result;
+            }
             int[][] expected = Enumerable.Range(0, positions.Length).Select(i =>
                 Enumerable.Range(0, positions.Length).Where(j => i != j
-                    && ReferenceDistanceSquared(normalized[i], normalized[j], bounds.Size) <= (double)radius * radius).ToArray()).ToArray();
+                    && Distance(i, j) <= (double)radius * radius).ToArray()).ToArray();
             var search = new NeighborSearch2D();
             long gridChecks = 0;
             foreach (NeighborSearchMode mode in Enum.GetValues<NeighborSearchMode>())
             {
-                search.Search(boids, bounds, radius, mode);
+                search.Search(boids, radius, mode, wrap ? bounds : null);
                 Check(search.HasResults && search.Snapshots.Count == positions.Length, "Snapshot population matches input");
                 for (int i = 0; i < positions.Length; i++)
                 {
@@ -110,8 +139,8 @@ public partial class NeighborChecks : Node
                     foreach (int j in neighbors)
                     {
                         Vector2 offset = search.GetOffset(i, j);
-                        Check(Math.Abs(offset.LengthSquared() - ReferenceDistanceSquared(normalized[i], normalized[j], bounds.Size)) < 0.1,
-                            "Neighbor offset uses shortest toroidal distance");
+                        Check(Math.Abs(offset.LengthSquared() - Distance(i, j)) < 0.1,
+                            "Neighbor offset matches the selected world topology");
                     }
                 }
                 double expectedAverage = positions.Length == 0 ? 0 : (double)expected.Sum(n => n.Length) / positions.Length;
@@ -132,17 +161,11 @@ public partial class NeighborChecks : Node
         }
     }
 
-    private static double ReferenceDistanceSquared(Vector2 a, Vector2 b, Vector2 size)
+    private static double ReferenceDistanceSquared(Vector2 a, Vector2 b)
     {
-        double closest = double.PositiveInfinity;
-        for (int y = -1; y <= 1; y++)
-            for (int x = -1; x <= 1; x++)
-            {
-                double dx = (double)b.X + x * (double)size.X - a.X;
-                double dy = (double)b.Y + y * (double)size.Y - a.Y;
-                closest = Math.Min(closest, dx * dx + dy * dy);
-            }
-        return closest;
+        double dx = (double)b.X - a.X;
+        double dy = (double)b.Y - a.Y;
+        return dx * dx + dy * dy;
     }
 
     private void CheckManagerAndUi()
@@ -156,7 +179,7 @@ public partial class NeighborChecks : Node
         manager.Step(1.0 / 60);
         Check(manager.Stats.NeighborCandidateChecks == 0 && manager.Stats.AverageNeighbors == 0, "Empty population produces measured zeros");
 
-        Vector2 origin = manager.WorldBounds.Position + new Vector2(100, 100);
+        Vector2 origin = manager.ViewBounds.Position + new Vector2(100, 100);
         Boid2D removed = manager.SpawnBoid(origin, Vector2.Zero);
         manager.RemoveBoid(removed);
         Boid2D a = manager.SpawnBoid(origin, new Vector2(100, 0));
@@ -203,9 +226,9 @@ public partial class NeighborChecks : Node
         manager.Step(1.0 / 60);
         var camera = manager.GetNode<SimulationCamera2D>("Camera2D");
         camera._UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.WheelUp, Pressed = true });
-        Check(!search.HasResults && manager.Stats.NeighborSearchMilliseconds is null, "Camera boundary changes invalidate old searches");
+        Check(!search.HasResults && manager.Stats.NeighborSearchMilliseconds is null, "Without Leader camera changes invalidate boundary-dependent measurements");
         manager.Step(1.0 / 60);
-        Check(search.Bounds == manager.WorldBounds, "Next grid uses current camera bounds");
+        Check(search.WrapBounds == manager.ViewBounds, "Next search uses current wrapping bounds");
         manager.RemoveBoid(b);
         Check(!search.HasResults && manager.Stats.BoidCount == 1, "Removal invalidates results and updates actual count");
         manager.Step(1.0 / 60);

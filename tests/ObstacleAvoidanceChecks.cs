@@ -60,30 +60,30 @@ public partial class ObstacleAvoidanceChecks : Node
             try
             {
                 Obstacle2D[] list = { shape };
-                Vector2 acceleration = ObstacleAvoidance.Calculate(new(0, new(300, 500), new(200, 0)), list, config, Bounds);
+                Vector2 acceleration = ObstacleAvoidance.Calculate(new(0, new(300, 500), new(200, 0)), list, config);
                 Check(acceleration.X < 0 && MathF.Abs(acceleration.Y) > 0, "Head-on approach brakes and selects a side");
                 Check(acceleration.IsFinite() && acceleration.Length() <= config.MaxForce + 0.001f, "Avoidance acceleration respects maximum");
-                Vector2 otherSide = ObstacleAvoidance.Calculate(new(1, new(300, 500), new(200, 0)), list, config, Bounds);
+                Vector2 otherSide = ObstacleAvoidance.Calculate(new(1, new(300, 500), new(200, 0)), list, config);
                 Check(MathF.Sign(acceleration.Y) == -MathF.Sign(otherSide.Y), "Direct center approach has deterministic side choice by ID");
-                Near(ObstacleAvoidance.Calculate(new(0, new(300, 500), new(-200, 0)), list, config, Bounds), Vector2.Zero,
+                Near(ObstacleAvoidance.Calculate(new(0, new(300, 500), new(-200, 0)), list, config), Vector2.Zero,
                     "Departing obstacle does not trigger avoidance");
-                Near(ObstacleAvoidance.Calculate(new(0, new(438, 500), new(-200, 0)), list, config, Bounds), Vector2.Zero,
+                Near(ObstacleAvoidance.Calculate(new(0, new(438, 500), new(-200, 0)), list, config), Vector2.Zero,
                     "Moving away from near surface does not get pulled back");
-                Near(ObstacleAvoidance.Calculate(new(0, new(300, 500), Vector2.Zero), list, config, Bounds), Vector2.Zero,
+                Near(ObstacleAvoidance.Calculate(new(0, new(300, 500), Vector2.Zero), list, config), Vector2.Zero,
                     "Stationary distant individual stays stationary");
-                Check(ObstacleAvoidance.Calculate(new(0, new(437.99f, 500), Vector2.Zero), list, config, Bounds).Length() > 0,
+                Check(ObstacleAvoidance.Calculate(new(0, new(437.99f, 500), Vector2.Zero), list, config).Length() > 0,
                     "Stopped contact receives an escape direction");
                 config.AvoidanceEnabled = false;
-                Near(ObstacleAvoidance.Calculate(new(0, new(300, 500), new(200, 0)), list, config, Bounds), Vector2.Zero,
+                Near(ObstacleAvoidance.Calculate(new(0, new(300, 500), new(200, 0)), list, config), Vector2.Zero,
                     "Disable switch removes avoidance steering");
                 config.AvoidanceEnabled = true;
                 config.MaxForce = 0;
-                Near(ObstacleAvoidance.Calculate(new(0, new(300, 500), new(200, 0)), list, config, Bounds), Vector2.Zero,
+                Near(ObstacleAvoidance.Calculate(new(0, new(300, 500), new(200, 0)), list, config), Vector2.Zero,
                     "Zero acceleration limit stays finite and produces no steering");
                 config.MaxForce = 200;
                 shape.Position = new Vector2(1100, 500);
-                Near(ObstacleAvoidance.Calculate(new(0, new(950, 500), new(200, 0)), list, config, Bounds), Vector2.Zero,
-                    "Completely offscreen obstacle is not an invisible wall");
+                Check(ObstacleAvoidance.Calculate(new(0, new(950, 500), new(200, 0)), list, config).Length() > 0,
+                    "Offscreen obstacles still steer approaching Boids");
             }
             finally { shape.Free(); }
         }
@@ -109,18 +109,18 @@ public partial class ObstacleAvoidanceChecks : Node
                 Obstacle2D[] list = { obstacle };
                 Vector2 position = new(900, 500);
                 Vector2 velocity = new(800, 0);
-                ObstacleAvoidance.ResolveMotion(new(100, 500), ref position, ref velocity, list, 12, Bounds);
+                ObstacleAvoidance.ResolveMotion(new(100, 500), ref position, ref velocity, list, 12);
                 float left = 500 - obstacle.Dimensions.X / 2 - 12;
                 Check(position.X < left && position.X > left - 0.1f, "High-speed segment cannot tunnel through shape");
                 Near(velocity, Vector2.Zero, "Head-on contact removes inward velocity");
                 position = new(500, 500);
                 velocity = new(0, 100);
-                ObstacleAvoidance.ResolveMotion(position, ref position, ref velocity, list, 12, Bounds);
+                ObstacleAvoidance.ResolveMotion(position, ref position, ref velocity, list, 12);
                 Check(position.IsFinite() && velocity.IsFinite() && position.DistanceTo(new Vector2(500, 500)) >= obstacle.Dimensions.X / 2,
                     "Initial overlap recovers along a finite outward normal");
                 position = new(750, 200);
                 velocity = new(500, 0);
-                ObstacleAvoidance.ResolveMotion(new(250, 200), ref position, ref velocity, list, 12, Bounds);
+                ObstacleAvoidance.ResolveMotion(new(250, 200), ref position, ref velocity, list, 12);
                 Near(position, new(750, 200), "Unobstructed trajectory remains unchanged");
                 Near(velocity, new(500, 0), "Unobstructed velocity remains unchanged");
             }
@@ -131,25 +131,35 @@ public partial class ObstacleAvoidanceChecks : Node
         {
             Vector2 position = new(900, 560);
             Vector2 velocity = new(800, 160);
-            ObstacleAvoidance.ResolveMotion(new(100, 400), ref position, ref velocity, new[] { wall }, 12, Bounds);
+            ObstacleAvoidance.ResolveMotion(new(100, 400), ref position, ref velocity, new[] { wall }, 12);
             Near(position, new(479.99f, 560), "Wall contact preserves tangential displacement");
             Near(velocity, new(0, 160), "Wall contact preserves tangential velocity");
             wall.Position = new(60, 500);
             wall.SetDimensions(new(16, 200));
             position = new(1100, 500);
             velocity = new(200, 0);
+            ObstacleAvoidance.ResolveMotion(new(900, 500), ref position, ref velocity, new[] { wall }, 12);
+            Near(position, new(1100, 500), "Opposite edge obstacle does not block the world trajectory");
+            position = new(1100, 500);
             ObstacleAvoidance.ResolveMotion(new(900, 500), ref position, ref velocity, new[] { wall }, 12, Bounds);
-            Near(position, new(39.99f, 500), "Wrapped arrival segment is checked for obstacles");
+            Near(position, new(39.99f, 500), "Wrapping mode checks the opposite-side arrival path");
             wall.Position = new(950, 500);
             position = new(-100, 500);
             velocity = new(-200, 0);
+            ObstacleAvoidance.ResolveMotion(new(100, 500), ref position, ref velocity, new[] { wall }, 12);
+            Near(position, new(-100, 500), "Motion continues into negative world coordinates");
+            position = new(-100, 500);
             ObstacleAvoidance.ResolveMotion(new(100, 500), ref position, ref velocity, new[] { wall }, 12, Bounds);
-            Near(position, new(970.01f, 500), "Negative-direction wrap also sweeps arrival segment");
+            Near(position, new(970.01f, 500), "Negative wrapping also sweeps the arrival path");
             wall.Position = new(1100, 500);
             position = new(1100, 500);
             velocity = new(200, 0);
+            ObstacleAvoidance.ResolveMotion(new(900, 500), ref position, ref velocity, new[] { wall }, 12);
+            Near(position, new(1079.99f, 500), "Offscreen obstacle still stops the swept trajectory");
+            position = new(1100, 500);
+            velocity = new(200, 0);
             ObstacleAvoidance.ResolveMotion(new(900, 500), ref position, ref velocity, new[] { wall }, 12, Bounds);
-            Near(position, new(100, 500), "Offscreen obstacle does not prevent wrapping");
+            Near(position, new(100, 500), "Wrapping mode ignores completely outside obstacles");
         }
         finally { wall.Free(); }
     }
@@ -164,7 +174,7 @@ public partial class ObstacleAvoidanceChecks : Node
         try
         {
             var editor = world.GetNode<ObstacleEditor2D>("ObstacleEditor");
-            Vector2 center = world.WorldBounds.GetCenter();
+            Vector2 center = world.ViewBounds.GetCenter();
             Boid2D boid = world.SpawnBoid(center - new Vector2(200, 0), new Vector2(500, 0));
             world.Step(0.2);
             Near(boid.Position, center - new Vector2(100, 0), "No obstacles preserves original velocity integration");
@@ -203,7 +213,7 @@ public partial class ObstacleAvoidanceChecks : Node
             AddChild(world);
             try
             {
-                Vector2 center = world.WorldBounds.GetCenter();
+                Vector2 center = world.ViewBounds.GetCenter();
                 var obstacle = world.GetNode<ObstacleEditor2D>("ObstacleEditor").AddObstacle(kind, center);
                 Vector2 start = center - new Vector2(200, 0);
                 Boid2D boid = world.SpawnBoid(start, new Vector2(120, 0));

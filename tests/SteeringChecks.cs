@@ -64,7 +64,7 @@ public partial class SteeringChecks : Node
                 boids.Add(boid);
             }
             var search = new NeighborSearch2D();
-            search.Search(boids, Bounds, config.PerceptionRadius, mode);
+            search.Search(boids, config.PerceptionRadius, mode);
             return Enumerable.Range(0, states.Length).Select(i => BoidSteering.Calculate(search, i, config)).ToArray();
         }
         finally
@@ -102,10 +102,10 @@ public partial class SteeringChecks : Node
         config.CohesionEnabled = true;
         Near(Evaluate(config, pair)[0], new Vector2(100, 0), "Cohesion accelerates toward neighbor center");
         BoidSnapshot[] seam = { new(7, new(1, 1), Vector2.Zero), new(12, new(999, 999), Vector2.Zero) };
-        Near(Evaluate(config, seam)[0], -Vector2.One.Normalized() * 100, "Cohesion follows shortest diagonal across wrapped edges");
+        Near(Evaluate(config, seam)[0], Vector2.Zero, "Opposite viewport edges are not neighboring positions");
         config.CohesionEnabled = false;
         config.SeparationEnabled = true;
-        Near(Evaluate(config, seam)[0], Vector2.One.Normalized() * 100, "Separation also uses wrapped displacement");
+        Near(Evaluate(config, seam)[0], Vector2.Zero, "Separation does not jump across the viewport");
 
         config.CohesionEnabled = config.AlignmentEnabled = true;
         config.SeparationWeight = config.AlignmentWeight = config.CohesionWeight = 5;
@@ -183,7 +183,7 @@ public partial class SteeringChecks : Node
         BoidManager manager = GD.Load<PackedScene>("res://scenes/worlds/boids_world_2d.tscn").Instantiate<BoidManager>();
         manager.Initialize(config);
         AddChild(manager);
-        Vector2 origin = manager.WorldBounds.Position + new Vector2(100, 100);
+        Vector2 origin = manager.ViewBounds.Position + new Vector2(100, 100);
         Boid2D a = manager.SpawnBoid(origin, new Vector2(100, 0));
         Boid2D b = manager.SpawnBoid(origin + new Vector2(10, 0), new Vector2(0, 100));
         manager.Step(0.1);
@@ -237,7 +237,7 @@ public partial class SteeringChecks : Node
                     && x.Acceleration.IsFinite() && float.IsFinite(x.Rotation)
                     && x.Velocity.Length() <= config.MaxSpeed + 0.01f
                     && x.Acceleration.Length() <= config.MaxForce + 0.01f
-                    && manager.WorldBounds.HasPoint(x.Position)), "Sustained flocking preserves finite state, caps and world bounds");
+                    ), "Sustained flocking preserves finite state and speed/force caps");
             }
             Check(manager.Boids.Where((x, i) => x.Velocity.DistanceTo(initialVelocity[i]) > 1).Any(), "Enabled rules actually change trajectories");
             Check(manager.Stats.UpdateMilliseconds >= manager.Stats.NeighborSearchMilliseconds, "Total time includes steering and motion");

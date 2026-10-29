@@ -12,6 +12,7 @@ public partial class ObstacleEditor2D : Node2D
     public Obstacle2D? SelectedObstacle { get; private set; }
     public ObstacleShape? PlacementShape { get; private set; }
     public IReadOnlyList<Obstacle2D> Obstacles { get; }
+    public bool IsEditing => PlacementShape is not null || _dragTarget is not null || _swallowPlacementRelease;
     public ObstacleSelection? SelectionInfo => SelectedObstacle is { } selected
         ? new ObstacleSelection(selected.Shape, selected.Dimensions.X, selected.Dimensions.Y) : null;
 
@@ -129,6 +130,8 @@ public partial class ObstacleEditor2D : Node2D
 
     public override void _Input(InputEvent @event)
     {
+        // 编辑手势会消费事件，仍记录光标以便结束编辑后恢复连续跟随。
+        _camera.ObservePointer(@event);
         if (@event is InputEventMouseMotion preview && PlacementShape is not null)
         {
             _previewPosition = ToWorld(preview.Position);

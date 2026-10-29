@@ -16,33 +16,29 @@ public sealed class DebugOverlayGeometry
     public int SeparationCount { get; private set; }
     public int VelocityCount { get; private set; }
     public int NeighborCount { get; private set; }
-    public bool PerceptionCoversWorld { get; private set; }
-    public bool SeparationCoversWorld { get; private set; }
     private const int CircleSegments = 96;
 
     public void Build(IReadOnlyList<Boid2D> boids, Boid2D? selected, BoidConfig config,
-        Rect2 bounds, float unitsPerPixel)
+        Rect2 bounds, float unitsPerPixel, bool wrap = false)
     {
         RangePoints.Clear();
         SeparationRangePoints.Clear();
         VelocityPoints.Clear();
         NeighborPoints.Clear();
         PerceptionCount = SeparationCount = VelocityCount = NeighborCount = 0;
-        PerceptionCoversWorld = false;
-        SeparationCoversWorld = false;
         if (!bounds.HasArea()) return;
 
         if (config.ShowPerceptionRadius && selected is not null)
         {
             PerceptionCount = 1;
-            PerceptionCoversWorld = AddRange(RangePoints, selected.Position, config.PerceptionRadius, bounds);
+            AddRange(RangePoints, selected.Position, config.PerceptionRadius, bounds, wrap);
         }
         if (config.ShowSeparationRadius && selected is not null)
         {
             SeparationCount = 1;
             // 与分离规则使用相同的有效半径；不会显示感知范围以外的虚假作用区域。
             float radius = MathF.Min(config.SeparationRadius, config.PerceptionRadius);
-            SeparationCoversWorld = AddRange(SeparationRangePoints, selected.Position, radius, bounds);
+            AddRange(SeparationRangePoints, selected.Position, radius, bounds, wrap);
         }
 
         // 仅显示选中对象的范围时，不再遍历全体个体生成圆弧。
@@ -57,9 +53,9 @@ public sealed class DebugOverlayGeometry
                 Vector2 tip = boid.Position + direction * length;
                 Vector2 side = new(-direction.Y, direction.X);
                 float head = MathF.Min(5 * unitsPerPixel, length * 0.4f);
-                AddWrappedLine(VelocityPoints, boid.Position, tip, bounds);
-                AddWrappedLine(VelocityPoints, tip, tip - direction * head + side * head * 0.6f, bounds);
-                AddWrappedLine(VelocityPoints, tip, tip - direction * head - side * head * 0.6f, bounds);
+                AddLine(VelocityPoints, boid.Position, tip, bounds, wrap);
+                AddLine(VelocityPoints, tip, tip - direction * head + side * head * 0.6f, bounds, wrap);
+                AddLine(VelocityPoints, tip, tip - direction * head - side * head * 0.6f, bounds, wrap);
             }
         }
 
@@ -68,15 +64,41 @@ public sealed class DebugOverlayGeometry
         foreach (Boid2D boid in boids)
         {
             if (boid == selected) continue;
-            Vector2 offset = NeighborSearch2D.WrappedOffset(selected.Position, boid.Position, bounds.Size);
+            Vector2 offset = WorldGeometry2D.Offset(selected.Position, boid.Position, wrap ? bounds : null);
             if ((double)offset.X * offset.X + (double)offset.Y * offset.Y
                 > (double)config.PerceptionRadius * config.PerceptionRadius) continue;
             NeighborCount++;
-            AddWrappedLine(NeighborPoints, selected.Position, selected.Position + offset, bounds);
+            AddLine(NeighborPoints, selected.Position, selected.Position + offset, bounds, wrap);
         }
     }
 
-    private static bool AddRange(List<Vector2> output, Vector2 center, float radius, Rect2 bounds)
+    private static void AddRange(List<Vector2> output, Vector2 center, float radius, Rect2 bounds, bool wrap)
+    {
+        if (wrap) { AddWrappedRange(output, center, radius, bounds); return; }
+        Vector2 previous = center + new Vector2(radius, 0);
+        for (int i = 1; i <= CircleSegments; i++)
+        {
+            Vector2 next = center + Vector2.FromAngle(Mathf.Tau * i / CircleSegments) * radius;
+            AddVisibleLine(output, previous, next, bounds);
+            previous = next;
+        }
+    }
+
+    private static void AddVisibleLine(List<Vector2> output, Vector2 from, Vector2 to, Rect2 bounds)
+    {
+        // 只裁剪显示，不生成对侧副本，也不改变真实的感知范围。
+        if (!ClipLine(ref from, ref to, bounds) || from.DistanceSquaredTo(to) < 1e-10f) return;
+        output.Add(from);
+        output.Add(to);
+    }
+
+    private static void AddLine(List<Vector2> output, Vector2 from, Vector2 to, Rect2 bounds, bool wrap)
+    {
+        if (wrap) AddWrappedLine(output, from, to, bounds);
+        else AddVisibleLine(output, from, to, bounds);
+    }
+
+    private static void AddWrappedRange(List<Vector2> output, Vector2 center, float radius, Rect2 bounds)
     {
         // 环绕空间的最大距离是半对角线。全域范围用世界边框表示。
         if (radius >= bounds.Size.Length() * 0.5f)
@@ -85,7 +107,7 @@ public sealed class DebugOverlayGeometry
             Vector2 bottomLeft = new(bounds.Position.X, bounds.End.Y);
             output.AddRange(new[] { bounds.Position, topRight, topRight, bounds.End,
                 bounds.End, bottomLeft, bottomLeft, bounds.Position });
-            return true;
+            return;
         }
         // 只保留最短环绕位移区域内的圆弧，再将越界部分接到另一侧。
         // 半径大于某一轴的半宽时，避免绘制并非实际感知边界的重复圆弧。
@@ -100,7 +122,6 @@ public sealed class DebugOverlayGeometry
                 AddWrappedLine(output, center + from, center + to, bounds);
             previous = next;
         }
-        return false;
     }
 
     private static void AddWrappedLine(List<Vector2> output, Vector2 from, Vector2 to, Rect2 bounds)

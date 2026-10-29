@@ -15,15 +15,15 @@ public enum NeighborSearchMode
 public readonly record struct BoidSnapshot(int Id, Vector2 Position, Vector2 Velocity);
 
 /// <summary>
-/// 两种搜索共用快照、环绕距离判定和结果格式。结果属于最近一次物理步的起点，
+/// 两种搜索共用快照、当前边界的距离判定和结果格式。结果属于最近一次物理步的起点，
 /// 不随节点随后移动而变化；在下次 Search / Invalidate 时失效，不应跨步持有列表。
 /// </summary>
 public sealed class NeighborSearch2D
 {
     public bool HasResults { get; private set; }
     public IReadOnlyList<BoidSnapshot> Snapshots => HasResults ? _snapshotView : Array.Empty<BoidSnapshot>();
-    public Rect2 Bounds { get; private set; }
     public float Radius { get; private set; }
+    public Rect2? WrapBounds { get; private set; }
     public NeighborSearchMode Mode { get; private set; }
     public long CandidateChecks { get; private set; }
     public double AverageNeighbors { get; private set; }
@@ -33,7 +33,8 @@ public sealed class NeighborSearch2D
     private IReadOnlyList<BoidSnapshot> _snapshotView = Array.Empty<BoidSnapshot>();
     private List<int>[] _neighbors = Array.Empty<List<int>>();
     private IReadOnlyList<int>[] _neighborViews = Array.Empty<IReadOnlyList<int>>();
-    private readonly Dictionary<Vector2I, List<int>> _cells = new();
+    // 按需建立的无限网格；double 整数键避免远距离坐标转 int 溢出。
+    private readonly Dictionary<(double X, double Y), List<int>> _cells = new();
     private int _columns;
     private int _rows;
     private double _cellWidth;
@@ -45,11 +46,11 @@ public sealed class NeighborSearch2D
         return _neighborViews[index];
     }
 
-    /// <summary>从自身到邻居的最短环绕位移；供后续分离、聚集使用，不能直接相减节点坐标。</summary>
+    /// <summary>无限世界取直接位移，环绕世界取最短环绕位移。</summary>
     public Vector2 GetOffset(int fromIndex, int toIndex)
     {
         if (!HasResults) throw new InvalidOperationException("Run a neighbor search before reading results.");
-        return WrappedOffset(_snapshots[fromIndex].Position, _snapshots[toIndex].Position, Bounds.Size);
+        return WorldGeometry2D.Offset(_snapshots[fromIndex].Position, _snapshots[toIndex].Position, WrapBounds);
     }
 
     public void Invalidate()
@@ -57,19 +58,19 @@ public sealed class NeighborSearch2D
         HasResults = false;
     }
 
-    public void Search(IReadOnlyList<Boid2D> boids, Rect2 bounds, float radius, NeighborSearchMode mode)
+    public void Search(IReadOnlyList<Boid2D> boids, float radius, NeighborSearchMode mode, Rect2? wrapBounds = null)
     {
         ArgumentNullException.ThrowIfNull(boids);
-        if (!bounds.Position.IsFinite() || !bounds.Size.IsFinite() || !bounds.End.IsFinite()
-            || bounds.Size.X <= 0 || bounds.Size.Y <= 0)
-            throw new ArgumentOutOfRangeException(nameof(bounds));
+        if (wrapBounds is { } bounds && (!bounds.Position.IsFinite() || !bounds.End.IsFinite()
+            || !bounds.Size.IsFinite() || bounds.Size.X <= 0 || bounds.Size.Y <= 0))
+            throw new ArgumentOutOfRangeException(nameof(wrapBounds));
         if (!float.IsFinite(radius) || radius <= 0) throw new ArgumentOutOfRangeException(nameof(radius));
         if (!Enum.IsDefined(mode)) throw new ArgumentOutOfRangeException(nameof(mode));
 
         long started = Stopwatch.GetTimestamp();
         Invalidate();
-        Bounds = bounds;
         Radius = radius;
+        WrapBounds = wrapBounds;
         Mode = mode;
         CandidateChecks = 0;
         PrepareStorage(boids.Count);
@@ -79,11 +80,7 @@ public sealed class NeighborSearch2D
             Boid2D boid = boids[i];
             Vector2 position = boid.Position;
             if (!position.IsFinite()) throw new ArgumentException("Boid positions must be finite.", nameof(boids));
-            // SpawnBoid 或调试代码可以传入边界外坐标；只规范化副本，不修改节点。
-            if (!bounds.HasPoint(position))
-                position = new Vector2(Mathf.Wrap(position.X, bounds.Position.X, bounds.End.X),
-                    Mathf.Wrap(position.Y, bounds.Position.Y, bounds.End.Y));
-            _snapshots[i] = new BoidSnapshot(boid.Id, position, boid.Velocity);
+            _snapshots[i] = new BoidSnapshot(boid.Id, WorldGeometry2D.Wrap(position, WrapBounds), boid.Velocity);
             _neighbors[i].Clear();
         }
 
@@ -121,15 +118,18 @@ public sealed class NeighborSearch2D
 
     private void SearchGrid()
     {
-        // 均匀分割整个环绕区域，避免最后一列/行残缺而漏掉跨边界邻居。
-        // 每个单元不小于半径（某轴只有一格时例外），因此只需自身和相邻格。
-        _columns = CellCount(Bounds.Size.X);
-        _rows = CellCount(Bounds.Size.Y);
-        _cellWidth = Bounds.Size.X / (double)_columns;
-        _cellHeight = Bounds.Size.Y / (double)_rows;
+        if (WrapBounds is { } bounds)
+        {
+            // 均分环绕区域，避免末端残格漏查跨边界邻居。
+            _columns = (int)Math.Clamp(Math.Floor(bounds.Size.X / (double)Radius), 1, int.MaxValue / 2);
+            _rows = (int)Math.Clamp(Math.Floor(bounds.Size.Y / (double)Radius), 1, int.MaxValue / 2);
+            _cellWidth = bounds.Size.X / (double)_columns;
+            _cellHeight = bounds.Size.Y / (double)_rows;
+        }
+        // 两种模式都只保存占用的格子。
         for (int i = 0; i < _snapshots.Length; i++)
         {
-            Vector2I cell = CellAt(_snapshots[i].Position);
+            var cell = CellAt(_snapshots[i].Position);
             if (!_cells.TryGetValue(cell, out List<int>? members))
                 _cells.Add(cell, members = new List<int>());
             members.Add(i);
@@ -137,46 +137,47 @@ public sealed class NeighborSearch2D
 
         for (int i = 0; i < _snapshots.Length; i++)
         {
-            Vector2I center = CellAt(_snapshots[i].Position);
-            // 只有 1 或 2 列/行时，三个偏移会访问重复格；改为每格只访问一次。
-            int xStart = _columns <= 2 ? 0 : center.X - 1;
-            int yStart = _rows <= 2 ? 0 : center.Y - 1;
-            for (int y = 0; y < Math.Min(3, _rows); y++)
-                for (int x = 0; x < Math.Min(3, _columns); x++)
+            var center = CellAt(_snapshots[i].Position);
+            if (WrapBounds is not null)
+            {
+                // 只有一列或两列时，每格只访问一次，避免重复邻居。
+                double xStart = _columns <= 2 ? 0 : center.X - 1;
+                double yStart = _rows <= 2 ? 0 : center.Y - 1;
+                for (int y = 0; y < Math.Min(3, _rows); y++)
+                    for (int x = 0; x < Math.Min(3, _columns); x++)
+                        CheckCell(i, ((xStart + x + _columns) % _columns, (yStart + y + _rows) % _rows));
+                continue;
+            }
+            for (int y = -1; y <= 1; y++)
+                for (int x = -1; x <= 1; x++)
                 {
-                    var cell = new Vector2I(WrapCell(xStart + x, _columns), WrapCell(yStart + y, _rows));
-                    if (!_cells.TryGetValue(cell, out List<int>? members)) continue;
-                    foreach (int j in members) CheckCandidate(i, j);
+                    var cell = (center.X + x, center.Y + y);
+                    // 极远坐标的浮点整数可能无法表示 ±1；不要重复访问同一格。
+                    if ((x != 0 && cell.Item1 == center.X) || (y != 0 && cell.Item2 == center.Y)) continue;
+                    CheckCell(i, cell);
                 }
         }
     }
 
-    private int CellCount(float length) => (int)Math.Clamp(Math.Floor(length / (double)Radius), 1, int.MaxValue / 2);
+    private void CheckCell(int index, (double X, double Y) cell)
+    {
+        if (!_cells.TryGetValue(cell, out List<int>? members)) return;
+        foreach (int j in members) CheckCandidate(index, j);
+    }
 
-    private Vector2I CellAt(Vector2 position) => new(
-        Math.Clamp((int)Math.Floor(((double)position.X - Bounds.Position.X) / _cellWidth), 0, _columns - 1),
-        Math.Clamp((int)Math.Floor(((double)position.Y - Bounds.Position.Y) / _cellHeight), 0, _rows - 1));
-
-    private static int WrapCell(int coordinate, int count) => (coordinate % count + count) % count;
+    private (double X, double Y) CellAt(Vector2 position) => WrapBounds is { } bounds
+        ? (Math.Clamp(Math.Floor(((double)position.X - bounds.Position.X) / _cellWidth), 0, _columns - 1),
+           Math.Clamp(Math.Floor(((double)position.Y - bounds.Position.Y) / _cellHeight), 0, _rows - 1))
+        : (Math.Floor(position.X / (double)Radius), Math.Floor(position.Y / (double)Radius));
 
     private void CheckCandidate(int i, int j)
     {
         if (i == j) return;
         // 有向距离检查：A 检查 B 与 B 检查 A 分别计一次；不统计自身与格子查找。
         CandidateChecks++;
-        Vector2 offset = WrappedOffset(_snapshots[i].Position, _snapshots[j].Position, Bounds.Size);
+        Vector2 offset = WorldGeometry2D.Offset(_snapshots[i].Position, _snapshots[j].Position, WrapBounds);
         if ((double)offset.X * offset.X + (double)offset.Y * offset.Y <= (double)Radius * Radius)
             _neighbors[i].Add(j); // 包含恰在半径上的邻居，也包含位置重合的其他个体。
     }
 
-    /// <summary>两个已位于同一环绕区域内的点之间的最短位移，模拟与当前画面调试共用。</summary>
-    public static Vector2 WrappedOffset(Vector2 from, Vector2 to, Vector2 size)
-    {
-        Vector2 offset = to - from;
-        if (offset.X > size.X * 0.5f) offset.X -= size.X;
-        else if (offset.X < -size.X * 0.5f) offset.X += size.X;
-        if (offset.Y > size.Y * 0.5f) offset.Y -= size.Y;
-        else if (offset.Y < -size.Y * 0.5f) offset.Y += size.Y;
-        return offset;
-    }
 }

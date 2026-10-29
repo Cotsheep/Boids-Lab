@@ -9,11 +9,14 @@ public partial class ControlPanel : VBoxContainer
     public event Action? ResetRequested;
     public event Action? StepRequested;
     public event Action? ConfigurationChanged;
+    public event Action<bool>? LeaderAssignmentRequested;
 
     public ObstaclePanel Obstacles { get; private set; } = null!;
 
     private Button _startPause = null!;
     private Button _step = null!;
+    private CheckBox _leaderToggle = null!;
+    private Label _leaderStatus = null!;
 
     public void Bind(BoidConfig config, string lengthUnit)
     {
@@ -28,6 +31,19 @@ public partial class ControlPanel : VBoxContainer
         _step = AddButton(buttons, "Step", "单步", () => StepRequested?.Invoke());
         _step.Disabled = true;
         _step.TooltipText = "单步功能暂未开放。";
+
+        AddHeading("领队");
+        _leaderToggle = new CheckBox
+        {
+            Name = "IsLeader", Text = "设为领队", Disabled = true,
+            TooltipText = "先选中一个个体再勾选；勾选其他个体会转移唯一领队，取消普通选择不会清除领队。有领队时地图无限，解除身份后恢复视口环绕。",
+        };
+        _leaderToggle.Toggled += enabled => LeaderAssignmentRequested?.Invoke(enabled);
+        AddChild(_leaderToggle);
+        _leaderStatus = new Label { Name = "LeaderStatus", Text = "未指定领队", AutowrapMode = TextServer.AutowrapMode.WordSmart };
+        _leaderStatus.AddThemeColorOverride("font_color", new Color("d69cff"));
+        _leaderStatus.AddThemeFontSizeOverride("font_size", 13);
+        AddChild(_leaderStatus);
 
         AddHeading("障碍物");
         Obstacles = new ObstaclePanel { Name = "ObstaclePanel", LengthUnit = lengthUnit };
@@ -47,7 +63,7 @@ public partial class ControlPanel : VBoxContainer
         AddHeading("邻居搜索");
         AddSearchMode(config);
         AddNumber("PerceptionRadius", "感知半径", BoidConfig.RadiusRange, config.PerceptionRadius,
-            value => config.PerceptionRadius = (float)value, $"单位：{lengthUnit}；按最短环绕距离查找邻居，包含半径边缘，不包含自身。");
+            value => config.PerceptionRadius = (float)value, $"单位：{lengthUnit}；有领队时按直接距离、无领队时按最短环绕距离查找邻居，包含半径边缘，不包含自身。");
 
         AddHeading("运动参数");
         AddNumber("MaxSpeed", "最大速度", BoidConfig.SpeedRange, config.MaxSpeed,
@@ -60,6 +76,10 @@ public partial class ControlPanel : VBoxContainer
             value => config.MaxAngularAccelerationDegrees = (float)value, "角速度变化率上限，单位：度/秒²；控制朝向平滑跟随运动方向。");
 
         AddHeading("转向规则");
+        AddNumber("LeaderFollowDistance", "领队后方距离", BoidConfig.LeaderFollowDistanceRange, config.LeaderFollowDistance,
+            value => config.LeaderFollowDistance = (float)value, $"单位：{lengthUnit}；领队到身后跟随区域前缘的间隔；区域随跟随数量扩大，不受发现领队的感知半径限制。");
+        AddNumber("LeaderFollowWeight", "领队跟随权重", BoidConfig.LeaderFollowWeightRange, config.LeaderFollowWeight,
+            value => config.LeaderFollowWeight = (float)value, "跟随与原有群集规则共同作用；设为零关闭跟随贡献，避障仍优先。");
         AddNumber("SeparationRadius", "分离半径", BoidConfig.SeparationRadiusRange, config.SeparationRadius,
             value => config.SeparationRadius = (float)value, $"单位：{lengthUnit}；仅避开此范围内的邻居，实际范围不超过感知半径。");
         AddToggle("SeparationEnabled", "启用分离规则", config.SeparationEnabled, value => config.SeparationEnabled = value);
@@ -70,7 +90,7 @@ public partial class ControlPanel : VBoxContainer
             value => config.AlignmentWeight = (float)value, "朝邻居的平均速度方向转向，目标速率为最大速度。");
         AddToggle("CohesionEnabled", "启用聚集规则", config.CohesionEnabled, value => config.CohesionEnabled = value);
         AddNumber("CohesionWeight", "聚集权重", BoidConfig.CohesionRange, config.CohesionWeight,
-            value => config.CohesionWeight = (float)value, "朝邻居中心靠拢，使用最短环绕位移计算中心方向。");
+            value => config.CohesionWeight = (float)value, "朝邻居中心靠拢，按当前地图模式的位移计算中心方向。");
 
         AddHeading("调试可视化");
         AddToggle("ShowGrid", "显示网格", config.ShowGrid, value => config.ShowGrid = value);
@@ -84,6 +104,14 @@ public partial class ControlPanel : VBoxContainer
     {
         _startPause.Text = running ? "暂停" : "开始";
         _step.Disabled = !canStep;
+    }
+
+    public void RefreshLeaderState(int? selectedId, int? leaderId, bool hasTarget)
+    {
+        _leaderToggle.Disabled = !selectedId.HasValue;
+        _leaderToggle.SetPressedNoSignal(selectedId.HasValue && selectedId == leaderId);
+        _leaderStatus.Text = leaderId.HasValue
+            ? $"当前领队：#{leaderId} · {(hasTarget ? "跟随鼠标" : "鼠标移入场景后跟随")}" : "未指定领队";
     }
 
     private static Button AddButton(HBoxContainer row, string name, string text, Action action)

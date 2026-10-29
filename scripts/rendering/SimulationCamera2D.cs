@@ -13,6 +13,7 @@ public partial class SimulationCamera2D : Camera2D
     public const float DragThresholdPixels = 5f;
 
     public float ZoomFactor { get; private set; } = 1f;
+    public Vector2? CursorViewportPosition { get; private set; }
     public event Action? ViewChanged;
     public event Action<Vector2>? WorldPressStarted;
     public event Action<bool>? WorldPressEnded;
@@ -24,6 +25,7 @@ public partial class SimulationCamera2D : Camera2D
     private bool _pointerDown;
     private Vector2 _pressPosition;
     private Vector2 _pendingDrag;
+    private bool _interactionEnabled = true;
 
     public override void _Ready()
     {
@@ -31,6 +33,7 @@ public partial class SimulationCamera2D : Camera2D
         _viewport.SizeChanged += OnViewportSizeChanged;
         _window = GetWindow();
         _window.FocusExited += StopDragging;
+        _window.MouseExited += OnMouseExited;
         ApplyZoom();
     }
 
@@ -52,12 +55,15 @@ public partial class SimulationCamera2D : Camera2D
     public void SetInteractionEnabled(bool enabled)
     {
         StopDragging();
-        SetProcessInput(enabled);
+        _interactionEnabled = enabled;
         SetProcessUnhandledInput(enabled);
     }
 
     public override void _Input(InputEvent @event)
     {
+        // 保存原始视口坐标，在最终相机变换后换算；兼容嵌入视口和输入回放。
+        ObservePointer(@event);
+        if (!_interactionEnabled) return;
         if (!_pointerDown) return;
 
         // 拖动开始后接管移动与松开事件，移到 UI 上松手也能正常结束。
@@ -137,12 +143,19 @@ public partial class SimulationCamera2D : Camera2D
         // 缩放前后鼠标指向同一个世界位置，方便观察局部群体。
         GlobalPosition += pointerBeforeZoom - GetGlobalMousePosition();
         ForceUpdateScroll();
-        // 只发布鼠标中心补偿完成后的最终视角，避免一次缩放导致两次环绕。
+        // 只发布鼠标中心补偿完成后的最终视角，保持背景和调试图形与最终视角一致。
         ViewChanged?.Invoke();
         GetViewport().SetInputAsHandled();
     }
 
     private void StopDragging() => EndPointerGesture(false);
+
+    private void OnMouseExited() => CursorViewportPosition = null;
+
+    public void ObservePointer(InputEvent @event)
+    {
+        if (@event is InputEventMouse mouse) CursorViewportPosition = mouse.Position;
+    }
 
     public void CancelPointerGesture() => StopDragging();
 
@@ -178,6 +191,7 @@ public partial class SimulationCamera2D : Camera2D
     {
         StopDragging();
         if (_window is not null) _window.FocusExited -= StopDragging;
+        if (_window is not null) _window.MouseExited -= OnMouseExited;
         if (_viewport is not null) _viewport.SizeChanged -= OnViewportSizeChanged;
     }
 }

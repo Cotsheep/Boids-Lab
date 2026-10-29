@@ -8,6 +8,8 @@ public partial class Boid2D : Node2D
 {
     public int Id { get; private set; }
     public bool IsSelected { get; private set; }
+    public bool IsLeader { get; private set; }
+    public static readonly Color LeaderColor = new("d69cff");
     private Polygon2D? _body;
     private Color _normalColor;
     /// <summary>世界像素/秒；与 Position 同属 Boids 容器坐标系。</summary>
@@ -29,12 +31,25 @@ public partial class Boid2D : Node2D
     {
         _body = GetNodeOrNull<Polygon2D>("Body");
         if (_body is not null) _normalColor = _body.Color;
+        RefreshAppearance();
     }
 
     internal void SetSelected(bool selected)
     {
         IsSelected = selected;
-        if (_body is not null) _body.Color = selected ? new Color("ffe394") : _normalColor;
+        RefreshAppearance();
+    }
+
+    internal void SetLeader(bool leader)
+    {
+        IsLeader = leader;
+        RefreshAppearance();
+    }
+
+    private void RefreshAppearance()
+    {
+        if (_body is not null)
+            _body.Color = IsLeader ? LeaderColor : IsSelected ? new Color("ffe394") : _normalColor;
     }
 
     internal bool HitTest(Vector2 viewportPosition)

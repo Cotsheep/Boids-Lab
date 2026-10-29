@@ -193,7 +193,7 @@ public partial class DebugChecks : Node
         Pointer(Screen(a));
         for (int i = 0; i < 30; i++)
             _camera._UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.WheelUp, Pressed = true });
-        a.Position = _manager.WorldBounds.GetCenter();
+        a.Position = _manager.ViewBounds.GetCenter();
         a.Rotation = Mathf.Pi / 2;
         await Frame();
         Vector2 insideTip = a.GetNode<Polygon2D>("Body").GetGlobalTransformWithCanvas() * new Vector2(8, 0);
@@ -203,7 +203,7 @@ public partial class DebugChecks : Node
         _manager.RemoveBoid(a);
         await Frame();
         Check(_manager.SelectedBoid is null && _view.DebugGeometry.NeighborCount == 0, "Removing selected instance clears debug selection");
-        Boid2D replacement = _manager.SpawnBoid(_manager.WorldBounds.GetCenter(), Vector2.Zero);
+        Boid2D replacement = _manager.SpawnBoid(_manager.ViewBounds.GetCenter(), Vector2.Zero);
         for (int i = 0; i < 50; i++)
             _camera._UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.WheelDown, Pressed = true });
         await Click(Screen(replacement) + new Vector2(7, 0));
@@ -275,38 +275,43 @@ public partial class DebugChecks : Node
             a.Position = new Vector2(2, 50);
             b.Position = new Vector2(98, 50);
             geometry.Build(new[] { a, b }, a, config, bounds, 1);
-            Check(geometry.NeighborCount == 1 && geometry.NeighborPoints.Count == 4, "Wrapped neighbors draw short segments at both edges");
-            float length = 0;
-            for (int i = 0; i < geometry.NeighborPoints.Count; i += 2)
-                length += geometry.NeighborPoints[i].DistanceTo(geometry.NeighborPoints[i + 1]);
-            Check(MathF.Abs(length - 4) < 0.001f, "Wrapped connection preserves shortest path length");
-            Check(geometry.RangePoints.Any(p => p.X < 1) && geometry.RangePoints.Any(p => p.X > 99), "Perception arcs continue across the seam");
-            Check(geometry.SeparationRangePoints.Any(p => p.X < 1) && geometry.SeparationRangePoints.Any(p => p.X > 99),
-                "Separation arcs also continue across the seam");
+            Check(geometry.NeighborCount == 0 && geometry.NeighborPoints.Count == 0, "Opposite viewport edges do not create neighbor connections");
+            Check(geometry.RangePoints.Any(p => p.X < 1) && geometry.RangePoints.All(p => p.X <= 12.01f), "Circle is clipped at the left edge, without an opposite-side copy");
+            Check(geometry.SeparationRangePoints.All(p => p.X <= 10.01f), "Separation circle is also clipped without wrapping");
             CheckInside(geometry, bounds);
             a.Position = new Vector2(2, 2);
             b.Position = new Vector2(98, 98);
             geometry.Build(new[] { a, b }, a, config, bounds, 1);
-            Check(geometry.NeighborCount == 1, "Corner wrap finds diagonal neighbor");
+            Check(geometry.NeighborCount == 0, "Opposite viewport corners remain distant");
+            CheckInside(geometry, bounds);
+
+            geometry.Build(new[] { a, b }, a, config, bounds, 1, wrap: true);
+            Check(geometry.NeighborCount == 1 && geometry.NeighborPoints.Count == 4,
+                "Wrapping mode joins opposite corners with two short segments");
+            Check(geometry.RangePoints.Any(p => p.X > 99) && geometry.RangePoints.Any(p => p.X < 1),
+                "Wrapping range continues across visible edges");
             CheckInside(geometry, bounds);
 
             bounds = new Rect2(-100, -50, 100, 40);
             a.Position = bounds.GetCenter();
             config.PerceptionRadius = 30;
             geometry.Build(new[] { a }, a, config, bounds, 1);
-            Check(!geometry.PerceptionCoversWorld && geometry.RangePoints.Count > 0, "Radius exceeding one half-axis still draws valid toroidal boundary arcs");
+            Check(geometry.RangePoints.Count > 0, "Large radius draws visible circle arcs");
             CheckInside(geometry, bounds);
             config.PerceptionRadius = 80;
             config.SeparationRadius = 100;
             geometry.Build(new[] { a }, a, config, bounds, 1);
-            Check(geometry.PerceptionCoversWorld && geometry.RangePoints.Count == 8, "Range covering entire torus is shown by world outline");
-            Check(geometry.SeparationCoversWorld && geometry.SeparationRangePoints.Count == 8,
-                "Separation covering entire torus also uses world outline");
+            Check(geometry.RangePoints.Count == 0, "Circle enclosing viewport has its boundary outside the view");
+            Check(geometry.SeparationRangePoints.Count == 0,
+                "Large separation radius does not invent a viewport border");
             CheckInside(geometry, bounds);
             geometry.Build(new[] { a }, null, config, bounds, 1);
-            Check(!geometry.PerceptionCoversWorld && geometry.RangePoints.Count == 0
-                && !geometry.SeparationCoversWorld && geometry.SeparationRangePoints.Count == 0,
-                "Deselection also clears full-world perception outline");
+            Check(geometry.RangePoints.Count == 0
+                && geometry.SeparationRangePoints.Count == 0,
+                "Deselection clears both range displays");
+            geometry.Build(new[] { a }, a, config, bounds, 1, wrap: true);
+            Check(geometry.RangePoints.Count == 8 && geometry.SeparationRangePoints.Count == 8,
+                "Only wrapping mode uses the rectangle outline for ranges covering the whole domain");
         }
         finally
         {

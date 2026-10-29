@@ -63,6 +63,9 @@ public partial class MainController : Node
         _controls.ResetRequested += ResetSimulation;
         _controls.StepRequested += StepSimulation;
         _controls.ConfigurationChanged += ApplyConfiguration;
+        _controls.LeaderAssignmentRequested += _world.SetSelectedBoidLeader;
+        _world.BoidControlStateChanged += RefreshLeaderControls;
+        RefreshLeaderControls();
         _controls.Obstacles.CreateRequested += _world.BeginObstaclePlacement;
         _controls.Obstacles.CancelPlacementRequested += _world.CancelObstaclePlacement;
         _controls.Obstacles.DeleteRequested += _world.DeleteSelectedObstacle;
@@ -146,6 +149,9 @@ public partial class MainController : Node
     private void RefreshObstacleControls() =>
         _controls.Obstacles.Refresh(_world.SelectedObstacleInfo, _world.ObstaclePlacement);
 
+    private void RefreshLeaderControls() =>
+        _controls.RefreshLeaderState(_world.SelectedBoidId, _world.LeaderId, _world.HasLeaderTarget);
+
     private void ToggleRunning()
     {
         _world.SetRunning(!_world.IsRunning);
@@ -196,6 +202,8 @@ public partial class MainController : Node
             if (_helpButton is not null) _helpButton.Pressed -= _help.Toggle;
         }
         if (_controls is null) return;
+        _controls.LeaderAssignmentRequested -= _world.SetSelectedBoidLeader;
+        _world.BoidControlStateChanged -= RefreshLeaderControls;
         _controls.Obstacles.CreateRequested -= _world.BeginObstaclePlacement;
         _controls.Obstacles.CancelPlacementRequested -= _world.CancelObstaclePlacement;
         _controls.Obstacles.DeleteRequested -= _world.DeleteSelectedObstacle;

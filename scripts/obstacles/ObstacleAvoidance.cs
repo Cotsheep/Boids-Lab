@@ -6,7 +6,7 @@ namespace BoidsLab;
 
 /// <summary>
 /// 解析形状上的前瞻转向和接触兜底。矩形膨胀为 AABB，角部的留距较保守。
-/// 障碍物不环绕、不生成周期副本；只处理实际与视野相交的形状。
+/// 无限模式检测全部障碍物；环绕模式在边界处分段，只检测与区域相交的障碍物。
 /// </summary>
 public static class ObstacleAvoidance
 {
@@ -16,7 +16,7 @@ public static class ObstacleAvoidance
     private const int MaxRecoveryPasses = 8;
 
     public static Vector2 Calculate(BoidSnapshot self, IReadOnlyList<Obstacle2D> obstacles,
-        BoidConfig config, Rect2 bounds)
+        BoidConfig config, Rect2? bounds = null)
     {
         if (!config.AvoidanceEnabled || config.MaxSpeed <= 0 || config.MaxForce <= 0)
             return Vector2.Zero;
@@ -25,17 +25,15 @@ public static class ObstacleAvoidance
         float lookDistance = speed * config.AvoidanceLookAhead + speed * speed / (2 * config.MaxForce);
         Vector2 forward = speed > Epsilon ? self.Velocity / speed : Vector2.Zero;
         Vector2 probe = forward * lookDistance;
-        // 对侧入口由运动修正继续检测，前瞻不把屏幕外的形状当作周期副本。
         BoundaryFraction(self.Position, probe, bounds, out float edge, out _, out _);
         probe *= edge;
-
         Vector2 normal = Vector2.Zero;
         float earliest = float.PositiveInfinity;
         float nearestSurface = float.PositiveInfinity;
         float nearDistance = Mathf.Max(2, config.ObstacleClearance * 0.5f);
         foreach (Obstacle2D obstacle in obstacles)
         {
-            if (!Visible(obstacle, bounds)) continue;
+            if (!Participates(obstacle, bounds)) continue;
             Surface(self.Position, obstacle, config.ObstacleClearance, out float distance, out Vector2 outward);
             // 靠近接触面且没有离开时继续引导，静止接触也能恢复运动。
             if (distance < nearDistance && self.Velocity.Dot(outward) <= speed * 0.1f
@@ -65,16 +63,15 @@ public static class ObstacleAvoidance
     }
 
     /// <summary>
-    /// 从 from 到 position 扫描运动轨迹，并在相机边界处分段环绕。
+    /// 从 from 到 position 扫描运动轨迹；环绕模式在出口和对侧入口分别检测。
     /// 接触只消除向内分量；加速度与朝向仍交给个体更新。最多处理 64 段，
     /// 超限时舍弃未完成位移；重叠恢复最多 8 轮，无法解决填满世界的障碍布局。
     /// </summary>
     public static void ResolveMotion(Vector2 from, ref Vector2 position, ref Vector2 velocity,
-        IReadOnlyList<Obstacle2D> obstacles, float clearance, Rect2 bounds)
+        IReadOnlyList<Obstacle2D> obstacles, float clearance, Rect2? bounds = null)
     {
-        if (!bounds.HasArea()) throw new ArgumentOutOfRangeException(nameof(bounds));
         Vector2 remaining = position - from;
-        position = Wrap(from, bounds);
+        position = WorldGeometry2D.Wrap(from, bounds);
         RecoverOverlaps(ref position, ref velocity, obstacles, clearance, bounds);
 
         for (int iteration = 0; iteration < MaxMotionSegments && remaining.LengthSquared() > Epsilon * Epsilon; iteration++)
@@ -85,7 +82,7 @@ public static class ObstacleAvoidance
             Vector2 normal = Vector2.Zero;
             foreach (Obstacle2D obstacle in obstacles)
             {
-                if (!Visible(obstacle, bounds)) continue;
+                if (!Participates(obstacle, bounds)) continue;
                 if (Sweep(position, segment, obstacle, clearance, out float fraction, out Vector2 hitNormal)
                     && fraction < first)
                 {
@@ -100,7 +97,7 @@ public static class ObstacleAvoidance
                 remaining *= 1 - edge * first;
                 RemoveInward(ref remaining, normal);
                 RemoveInward(ref velocity, normal);
-                position = Wrap(position, bounds);
+                position = WorldGeometry2D.Wrap(position, bounds);
                 RecoverOverlaps(ref position, ref velocity, obstacles, clearance, bounds);
                 continue;
             }
@@ -109,20 +106,20 @@ public static class ObstacleAvoidance
             bool towardRight = remaining.X > 0;
             bool towardBottom = remaining.Y > 0;
             remaining *= 1 - edge;
-            if (crossX) position.X = towardRight ? bounds.Position.X : bounds.End.X;
-            if (crossY) position.Y = towardBottom ? bounds.Position.Y : bounds.End.Y;
+            if (bounds is { } rect)
+            {
+                if (crossX) position.X = towardRight ? rect.Position.X : rect.End.X;
+                if (crossY) position.Y = towardBottom ? rect.Position.Y : rect.End.Y;
+            }
             if (crossX || crossY)
                 RecoverOverlaps(ref position, ref velocity, obstacles, clearance, bounds);
         }
-        position = Wrap(position, bounds);
+        position = WorldGeometry2D.Wrap(position, bounds);
         RecoverOverlaps(ref position, ref velocity, obstacles, clearance, bounds);
     }
 
-    private static bool Visible(Obstacle2D obstacle, Rect2 bounds) => obstacle.WorldRect.Intersects(bounds);
-
-    private static Vector2 Wrap(Vector2 point, Rect2 bounds) => bounds.HasPoint(point) ? point : new(
-        Mathf.Wrap(point.X, bounds.Position.X, bounds.End.X),
-        Mathf.Wrap(point.Y, bounds.Position.Y, bounds.End.Y));
+    private static bool Participates(Obstacle2D obstacle, Rect2? bounds) =>
+        bounds is not { } rect || obstacle.WorldRect.Intersects(rect);
 
     private static void RemoveInward(ref Vector2 vector, Vector2 normal)
     {
@@ -131,17 +128,17 @@ public static class ObstacleAvoidance
     }
 
     private static void RecoverOverlaps(ref Vector2 point, ref Vector2 velocity,
-        IReadOnlyList<Obstacle2D> obstacles, float clearance, Rect2 bounds)
+        IReadOnlyList<Obstacle2D> obstacles, float clearance, Rect2? bounds)
     {
         for (int pass = 0; pass < MaxRecoveryPasses; pass++)
         {
             bool moved = false;
             foreach (Obstacle2D obstacle in obstacles)
             {
-                if (!Visible(obstacle, bounds)) continue;
+                if (!Participates(obstacle, bounds)) continue;
                 Surface(point, obstacle, clearance, out float distance, out Vector2 normal);
                 if (distance >= 0) continue;
-                point = Wrap(point + normal * (-distance + Skin), bounds);
+                point = WorldGeometry2D.Wrap(point + normal * (-distance + Skin), bounds);
                 RemoveInward(ref velocity, normal);
                 moved = true;
             }
@@ -232,13 +229,16 @@ public static class ObstacleAvoidance
         return normal != Vector2.Zero && fraction <= 1 && movement.Dot(normal) < -Epsilon;
     }
 
-    private static void BoundaryFraction(Vector2 origin, Vector2 movement, Rect2 bounds,
+    private static void BoundaryFraction(Vector2 origin, Vector2 movement, Rect2? bounds,
         out float fraction, out bool crossX, out bool crossY)
     {
-        float x = movement.X > 0 ? (bounds.End.X - origin.X) / movement.X
-            : movement.X < 0 ? (bounds.Position.X - origin.X) / movement.X : float.PositiveInfinity;
-        float y = movement.Y > 0 ? (bounds.End.Y - origin.Y) / movement.Y
-            : movement.Y < 0 ? (bounds.Position.Y - origin.Y) / movement.Y : float.PositiveInfinity;
+        fraction = 1;
+        crossX = crossY = false;
+        if (bounds is not { } rect) return;
+        float x = movement.X > 0 ? (rect.End.X - origin.X) / movement.X
+            : movement.X < 0 ? (rect.Position.X - origin.X) / movement.X : float.PositiveInfinity;
+        float y = movement.Y > 0 ? (rect.End.Y - origin.Y) / movement.Y
+            : movement.Y < 0 ? (rect.Position.Y - origin.Y) / movement.Y : float.PositiveInfinity;
         fraction = Mathf.Clamp(Mathf.Min(1, Mathf.Min(x, y)), 0, 1);
         crossX = x <= 1 && x <= y;
         crossY = y <= 1 && y <= x;

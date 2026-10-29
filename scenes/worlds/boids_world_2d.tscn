@@ -20,6 +20,7 @@ z_index = 1
 
 [node name="Camera2D" type="Camera2D" parent="."]
 position = Vector2(640, 360)
+limit_enabled = false
 script = ExtResource("4_camera")
 
 [node name="ObstacleEditor" type="Node2D" parent="."]

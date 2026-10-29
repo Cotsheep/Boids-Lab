@@ -14,6 +14,10 @@ public interface ISimulationWorld
     ObstacleSelection? SelectedObstacleInfo { get; }
     ObstacleShape? ObstaclePlacement { get; }
     event Action? ObstacleSelectionChanged;
+    int? SelectedBoidId { get; }
+    int? LeaderId { get; }
+    bool HasLeaderTarget { get; }
+    event Action? BoidControlStateChanged;
 
     void Initialize(BoidConfig config);
     void SetRunning(bool running);
@@ -26,4 +30,5 @@ public interface ISimulationWorld
     void CancelObstaclePlacement();
     void DeleteSelectedObstacle();
     void ResizeSelectedObstacle(float width, float height);
+    void SetSelectedBoidLeader(bool enabled);
 }

@@ -8,7 +8,7 @@ namespace BoidsLab;
 /// <summary>2D 世界管理器：统一调度个体更新、管理实例和相机，不引用 UI。</summary>
 public partial class BoidManager : Node2D, ISimulationWorld
 {
-    // 初始化及 Home 复位的参考尺寸；实际 WorldBounds 来自相机可见区域。
+    // 初始化及 Home 复位的参考尺寸；无领队时，ViewBounds 也作为环绕边界。
     [Export] public Vector2 WorldSize { get; set; } = new(1280, 720);
     [Export] public PackedScene BoidScene { get; set; } = null!;
 
@@ -16,10 +16,17 @@ public partial class BoidManager : Node2D, ISimulationWorld
     public string LengthUnit => "像素";
     public BoidConfig Config => _config
         ?? throw new InvalidOperationException("Initialize the world with a shared configuration first.");
-    public Rect2 WorldBounds { get; private set; }
+    public Rect2 ViewBounds { get; private set; }
+    public Rect2? WrapBounds => Leader is null ? ViewBounds : null;
     public IReadOnlyList<Boid2D> Boids { get; }
     public NeighborSearch2D NeighborSearch { get; } = new();
     public Boid2D? SelectedBoid { get; private set; }
+    public Boid2D? Leader { get; private set; }
+    public Vector2? LeaderTarget { get; private set; }
+    public int? SelectedBoidId => SelectedBoid?.Id;
+    public int? LeaderId => Leader?.Id;
+    public bool HasLeaderTarget => LeaderTarget.HasValue;
+    public event Action? BoidControlStateChanged;
     public SimulationStats Stats { get; private set; }
     public bool IsRunning { get; private set; }
     // 基础运动、邻居搜索与分离/对齐/聚集规则均已可运行。
@@ -38,6 +45,8 @@ public partial class BoidManager : Node2D, ISimulationWorld
     private int _nextBoidId;
     private Vector2[] _steeringAccelerations = Array.Empty<Vector2>();
     private Boid2D? _pressedBoid;
+    private Vector2 _leaderHeading = Vector2.Right;
+    private bool _interactionEnabled = true;
 
     public BoidManager()
     {
@@ -54,7 +63,7 @@ public partial class BoidManager : Node2D, ISimulationWorld
 
         _config = config;
         Config.Normalize();
-        WorldBounds = new Rect2(Vector2.Zero, WorldSize);
+        ViewBounds = new Rect2(Vector2.Zero, WorldSize);
         if (IsNodeReady())
         {
             _view.Bind(Config, this);
@@ -65,6 +74,8 @@ public partial class BoidManager : Node2D, ISimulationWorld
 
     public override void _Ready()
     {
+        GetWindow().FocusEntered += OnFocusEntered;
+        GetWindow().FocusExited += OnFocusExited;
         _boidsRoot = GetNode<Node2D>("Boids");
         _view = GetNode<SimulationView>("SimulationView");
         _camera = GetNode<SimulationCamera2D>("Camera2D");
@@ -73,7 +84,7 @@ public partial class BoidManager : Node2D, ISimulationWorld
         _obstacleEditor.Changed += OnObstaclesChanged;
         _obstacleEditor.GeometryChanged += InvalidateNeighborResults;
         _view.Bind(Config, this);
-        _camera.ViewChanged += UpdateWorldBounds;
+        _camera.ViewChanged += UpdateViewBounds;
         _camera.WorldPressStarted += OnWorldPressStarted;
         _camera.WorldPressEnded += OnWorldPressEnded;
         _camera.Configure(new Rect2(Vector2.Zero, WorldSize));
@@ -85,39 +96,48 @@ public partial class BoidManager : Node2D, ISimulationWorld
         if (IsRunning) Step(delta);
     }
 
-    private void UpdateWorldBounds()
+    // 暂停时也更新目标标记；运动仍只由物理步推进。
+    public override void _Process(double delta) => UpdateCursorTarget();
+
+    private void UpdateCursorTarget()
+    {
+        if (!_interactionEnabled || Leader is null || _obstacleEditor.IsEditing) return;
+        Viewport viewport = GetViewport();
+        if (_camera.CursorViewportPosition is not { } pointer) return;
+        if (!_windowFocused || !viewport.GetVisibleRect().HasPoint(pointer)
+            || viewport.GuiGetHoveredControl() is not null) return;
+        SetLeaderTarget(GetGlobalTransformWithCanvas().AffineInverse() * pointer);
+    }
+
+    private bool _windowFocused = true;
+    private void OnFocusEntered() => _windowFocused = true;
+    private void OnFocusExited() => _windowFocused = false;
+
+    private void UpdateViewBounds()
     {
         Rect2 viewportRect = GetViewport().GetVisibleRect();
         if (!viewportRect.HasArea()) return;
 
-        // 从视口坐标反变换到世界根节点坐标，背景和个体使用同一套边界。
+        // 无领队时，视口变化同时改变环绕世界；有领队时只改变观察范围。
         Rect2 bounds = GetGlobalTransformWithCanvas().AffineInverse() * viewportRect;
         if (!bounds.HasArea() || !bounds.Position.IsFinite() || !bounds.Size.IsFinite()) return;
-        if (bounds == WorldBounds) return;
+        if (bounds == ViewBounds) return;
 
-        WorldBounds = bounds;
-        // 即使暂停也立即同步边界；只环绕位置，不推进运动或重新生成个体。
-        foreach (Boid2D boid in _boids) WrapPosition(boid);
-        InvalidateNeighborResults();
+        ViewBounds = bounds;
+        if (WrapBounds is not null)
+        {
+            WrapPopulation();
+            InvalidateNeighborResults();
+        }
         _view.QueueRedraw();
         _obstacleEditor.RefreshVisuals();
-    }
-
-    private bool WrapPosition(Boid2D boid)
-    {
-        Vector2 position = boid.Position;
-        // 边界内的个体不做取模，避免无意义的浮点误差影响位置。
-        if (WorldBounds.HasPoint(position)) return false;
-        boid.Position = new Vector2(
-            Mathf.Wrap(position.X, WorldBounds.Position.X, WorldBounds.End.X),
-            Mathf.Wrap(position.Y, WorldBounds.Position.Y, WorldBounds.End.Y));
-        return true;
     }
 
     public void SetRunning(bool running) => IsRunning = running;
 
     public void SetInteractionEnabled(bool enabled)
     {
+        _interactionEnabled = enabled;
         _camera.SetInteractionEnabled(enabled);
         _obstacleEditor.SetInteractionEnabled(enabled);
     }
@@ -127,6 +147,45 @@ public partial class BoidManager : Node2D, ISimulationWorld
     public void DeleteSelectedObstacle() => _obstacleEditor.DeleteSelected();
     public void ResizeSelectedObstacle(float width, float height) => _obstacleEditor.ResizeSelected(width, height);
     internal void ClearBoidSelection() => SelectBoid(null);
+
+    public void SetSelectedBoidLeader(bool enabled)
+    {
+        if (!_interactionEnabled || SelectedBoid is null) return;
+        if (enabled) SetLeader(SelectedBoid);
+        else if (Leader == SelectedBoid) SetLeader(null);
+    }
+
+    /// <summary>更换唯一领队；身份不随普通选择变化，目标在更换时清空。</summary>
+    public void SetLeader(Boid2D? boid)
+    {
+        if (boid is not null && !_boids.Contains(boid))
+            throw new ArgumentException("Leader must belong to this world.", nameof(boid));
+        if (Leader == boid) return;
+        bool wasWrapping = Leader is null;
+        Leader?.SetLeader(false);
+        Leader = boid;
+        Leader?.SetLeader(true);
+        LeaderTarget = null;
+        _leaderHeading = boid is null ? Vector2.Right : Vector2.FromAngle(boid.Rotation);
+        if (wasWrapping != (Leader is null))
+        {
+            WrapPopulation();
+            InvalidateNeighborResults();
+        }
+        BoidControlStateChanged?.Invoke();
+        _view.QueueRedraw();
+    }
+
+    public void SetLeaderTarget(Vector2 position)
+    {
+        if (!position.IsFinite()) throw new ArgumentOutOfRangeException(nameof(position));
+        if (!_interactionEnabled || Leader is null) return;
+        if (LeaderTarget == position) return;
+        bool firstTarget = !LeaderTarget.HasValue;
+        LeaderTarget = position;
+        if (firstTarget) BoidControlStateChanged?.Invoke();
+        _view.QueueRedraw();
+    }
 
     private void OnObstaclesChanged()
     {
@@ -161,9 +220,11 @@ public partial class BoidManager : Node2D, ISimulationWorld
 
     private void SelectBoid(Boid2D? boid)
     {
+        if (SelectedBoid == boid) return;
         SelectedBoid?.SetSelected(false);
         SelectedBoid = boid;
         SelectedBoid?.SetSelected(true);
+        BoidControlStateChanged?.Invoke();
         _view.QueueRedraw();
     }
 
@@ -173,6 +234,7 @@ public partial class BoidManager : Node2D, ISimulationWorld
         IsRunning = false;
         _obstacleEditor.CancelGesture();
         _obstacleEditor.CancelPlacement();
+        SetLeader(null);
         SelectBoid(null);
         _pressedBoid = null;
         foreach (Boid2D boid in _boids)
@@ -221,7 +283,7 @@ public partial class BoidManager : Node2D, ISimulationWorld
         }
 
         boid.Name = $"Boid_{_nextBoidId}";
-        boid.Position = position;
+        boid.Position = WorldGeometry2D.Wrap(position, WrapBounds);
         boid.Initialize(Config, _nextBoidId++, velocity);
         _boidsRoot.AddChild(boid);
         _boids.Add(boid);
@@ -234,6 +296,7 @@ public partial class BoidManager : Node2D, ISimulationWorld
     public void RemoveBoid(Boid2D boid)
     {
         if (!_boids.Remove(boid)) return;
+        if (Leader == boid) SetLeader(null);
         if (SelectedBoid == boid) SelectBoid(null);
         _boidsRoot.RemoveChild(boid);
         boid.QueueFree();
@@ -248,20 +311,44 @@ public partial class BoidManager : Node2D, ISimulationWorld
             throw new ArgumentOutOfRangeException(nameof(deltaSeconds));
 
         long started = Stopwatch.GetTimestamp();
-        NeighborSearch.Search(_boids, WorldBounds, Config.PerceptionRadius, Config.NeighborSearchMode);
+        bool changed = WrapPopulation();
+        Rect2? wrapBounds = WrapBounds;
+        NeighborSearch.Search(_boids, Config.PerceptionRadius, Config.NeighborSearchMode, wrapBounds);
         if (_steeringAccelerations.Length != _boids.Count)
             _steeringAccelerations = new Vector2[_boids.Count];
+        // 一次物理步内统一使用领队的步前状态，避免列表顺序改变跟随结果。
+        int leaderIndex = Leader is null ? -1 : _boids.IndexOf(Leader);
+        BoidSnapshot leaderSnapshot = leaderIndex < 0 ? default : NeighborSearch.Snapshots[leaderIndex];
+        if (leaderIndex >= 0 && leaderSnapshot.Velocity.LengthSquared() > 1f)
+            _leaderHeading = leaderSnapshot.Velocity.Normalized();
+        float followRadius = LeaderSteering.FollowRadius(_boids.Count - 1, Config);
+        Vector2 followPoint = leaderIndex < 0 ? default : LeaderSteering.FollowPoint(
+            leaderSnapshot.Position, _leaderHeading, Config.LeaderFollowDistance + followRadius);
         for (int i = 0; i < _boids.Count; i++)
         {
-            Vector2 avoidance = ObstacleAvoidance.Calculate(NeighborSearch.Snapshots[i],
-                _obstacleEditor.Obstacles, Config, WorldBounds);
+            BoidSnapshot self = NeighborSearch.Snapshots[i];
+            Vector2 avoidance = ObstacleAvoidance.Calculate(self,
+                _obstacleEditor.Obstacles, Config, wrapBounds);
             // 优先给避障留出完整的转向能力，避免群集规则抵消避障方向。
-            _steeringAccelerations[i] = avoidance != Vector2.Zero ? avoidance
-                : BoidSteering.Calculate(NeighborSearch, i, Config);
+            if (avoidance != Vector2.Zero) _steeringAccelerations[i] = avoidance;
+            else if (i == leaderIndex)
+            {
+                // 鼠标尚未进入世界时平滑刹停；领队不被跟随者的群集规则拉回。
+                _steeringAccelerations[i] = LeaderSteering.Arrive(self, LeaderTarget ?? self.Position,
+                    Vector2.Zero, Config, (float)deltaSeconds);
+            }
+            else
+            {
+                bool following = leaderIndex >= 0 && Config.LeaderFollowWeight > 0;
+                Vector2 guidance = Vector2.Zero;
+                if (following)
+                    guidance = LeaderSteering.Follow(self, followPoint, leaderSnapshot.Velocity,
+                        Config, (float)deltaSeconds, followRadius);
+                _steeringAccelerations[i] = BoidSteering.Calculate(NeighborSearch, i, Config, guidance, following);
+            }
         }
 
         // 所有规则均已使用同一份快照计算完毕，之后才开始修改节点状态。
-        bool changed = false;
         for (int i = 0; i < _boids.Count; i++)
         {
             Boid2D boid = _boids[i];
@@ -272,10 +359,15 @@ public partial class BoidManager : Node2D, ISimulationWorld
                 Vector2 position = boid.Position;
                 Vector2 velocity = boid.Velocity;
                 ObstacleAvoidance.ResolveMotion(before, ref position, ref velocity,
-                    _obstacleEditor.Obstacles, Config.ObstacleClearance, WorldBounds);
+                    _obstacleEditor.Obstacles, Config.ObstacleClearance, wrapBounds);
                 changed |= boid.ApplyObstacleContact(position, velocity);
             }
-            else changed |= WrapPosition(boid);
+            else
+            {
+                Vector2 position = WorldGeometry2D.Wrap(boid.Position, wrapBounds);
+                changed |= position != boid.Position;
+                boid.Position = position;
+            }
         }
 
         Stats = new SimulationStats(_boids.Count, Stopwatch.GetElapsedTime(started).TotalMilliseconds,
@@ -290,14 +382,27 @@ public partial class BoidManager : Node2D, ISimulationWorld
         Stats = new SimulationStats(_boids.Count, null, null, null);
     }
 
+    private bool WrapPopulation()
+    {
+        if (WrapBounds is not { } bounds) return false;
+        bool changed = false;
+        foreach (Boid2D boid in _boids)
+        {
+            Vector2 position = WorldGeometry2D.Wrap(boid.Position, bounds);
+            changed |= position != boid.Position;
+            boid.Position = position;
+        }
+        return changed;
+    }
+
     private void InitializePopulation()
     {
         using var random = new RandomNumberGenerator { Seed = (ulong)Config.RandomSeed };
         for (int i = 0; i < Config.BoidCount; i++)
         {
             Vector2 position = new(
-                random.RandfRange(WorldBounds.Position.X, WorldBounds.End.X),
-                random.RandfRange(WorldBounds.Position.Y, WorldBounds.End.Y));
+                random.RandfRange(ViewBounds.Position.X, ViewBounds.End.X),
+                random.RandfRange(ViewBounds.Position.Y, ViewBounds.End.Y));
             Vector2 velocity = Vector2.FromAngle(random.RandfRange(-Mathf.Pi, Mathf.Pi)) * Config.MaxSpeed;
             SpawnBoid(position, velocity);
         }
@@ -305,6 +410,8 @@ public partial class BoidManager : Node2D, ISimulationWorld
 
     public override void _ExitTree()
     {
+        GetWindow().FocusEntered -= OnFocusEntered;
+        GetWindow().FocusExited -= OnFocusExited;
         if (_obstacleEditor is not null)
         {
             _obstacleEditor.Changed -= OnObstaclesChanged;
@@ -312,7 +419,7 @@ public partial class BoidManager : Node2D, ISimulationWorld
         }
         if (_camera is not null)
         {
-            _camera.ViewChanged -= UpdateWorldBounds;
+            _camera.ViewChanged -= UpdateViewBounds;
             _camera.WorldPressStarted -= OnWorldPressStarted;
             _camera.WorldPressEnded -= OnWorldPressEnded;
         }

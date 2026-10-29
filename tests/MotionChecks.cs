@@ -178,14 +178,14 @@ public partial class MotionChecks : Node
         config.MaxSpeed = 1000;
         manager.Reset();
         Check(manager.Stats.BoidCount == 0 && manager.Stats.UpdateMilliseconds is null, "Empty population reports a real zero");
-        Rect2 bounds = manager.WorldBounds;
+        Rect2 bounds = manager.ViewBounds;
         Boid2D wrapped = manager.SpawnBoid(bounds.End - Vector2.One, new Vector2(50, 50));
         manager.Step(1);
-        Near(wrapped.Position, bounds.Position + new Vector2(49, 49), 0.001f, "Wrap keeps overshoot across positive edges");
+        Near(wrapped.Position, bounds.Position + new Vector2(49, 49), 0.001f, "Without Leader positive exits wrap with overshoot");
         manager.RemoveBoid(wrapped);
         Boid2D negative = manager.SpawnBoid(bounds.Position, new Vector2(-50, -50));
         manager.Step(1);
-        Near(negative.Position, bounds.End - new Vector2(50, 50), 0.001f, "Wrap works across negative edges");
+        Near(negative.Position, bounds.End - new Vector2(50, 50), 0.001f, "Without Leader negative exits wrap with overshoot");
         CheckCameraBounds(manager);
         manager.QueueFree();
     }
@@ -193,7 +193,7 @@ public partial class MotionChecks : Node
     private void CheckCameraBounds(BoidManager manager)
     {
         var camera = manager.GetNode<SimulationCamera2D>("Camera2D");
-        Rect2 home = manager.WorldBounds;
+        Rect2 home = manager.ViewBounds;
         Rect2 viewport = GetViewport().GetVisibleRect();
         Rect2 screenBounds = manager.GetGlobalTransformWithCanvas() * home;
         Near(screenBounds.Position, viewport.Position, 0.01f, "Boundary starts at the visible viewport corner");
@@ -205,38 +205,51 @@ public partial class MotionChecks : Node
         Vector2 velocity = boid.Velocity;
         float rotation = boid.Rotation;
         camera._UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.WheelUp, Pressed = true });
-        Near(manager.WorldBounds.Size, home.Size / 1.15f, 0.01f, "Zoom-in shrinks the simulation area once");
-        Check(!manager.WorldBounds.HasPoint(originalPosition), "Probe starts outside the new zoomed area");
-        Check(manager.WorldBounds.HasPoint(boid.Position), "Zoom immediately wraps outside Boids even while paused");
-        Near(boid.Position, new Vector2(
-            Mathf.Wrap(originalPosition.X, manager.WorldBounds.Position.X, manager.WorldBounds.End.X),
-            Mathf.Wrap(originalPosition.Y, manager.WorldBounds.Position.Y, manager.WorldBounds.End.Y)),
-            0.01f, "Wrap uses the final cursor-anchored view, without intermediate relocation");
+        Near(manager.ViewBounds.Size, home.Size / 1.15f, 0.01f, "Zoom-in shrinks the visible area once");
+        Check(!manager.ViewBounds.HasPoint(originalPosition), "Probe starts outside the new zoomed area");
+        Check(manager.ViewBounds.HasPoint(boid.Position) && boid.Position != originalPosition, "Without Leader zoom immediately wraps outside Boids while paused");
         Near(boid.Velocity, velocity, 0, "Changing bounds preserves velocity");
         Check(boid.Rotation == rotation && !manager.IsRunning && manager.Boids[0] == boid,
             "View changes preserve heading, pause state and individual identity");
 
-        Rect2 beforePan = manager.WorldBounds;
+        Rect2 beforePan = manager.ViewBounds;
         Vector2 drag = new(120, 60);
         camera._UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = true });
         camera._Input(new InputEventMouseMotion { Relative = drag, ButtonMask = MouseButtonMask.Left });
         camera._Input(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = false });
-        Near(manager.WorldBounds.Position, beforePan.Position - drag / camera.Zoom, 0.01f, "Panning translates boundaries with the view");
-        Near(manager.WorldBounds.Size, beforePan.Size, 0.01f, "Panning keeps the area size");
-        Check(manager.WorldBounds.HasPoint(boid.Position), "Panning also keeps Boids inside the active area");
+        Near(manager.ViewBounds.Position, beforePan.Position - drag / camera.Zoom, 0.01f, "Panning translates boundaries with the view");
+        Near(manager.ViewBounds.Size, beforePan.Size, 0.01f, "Panning keeps the area size");
+        Check(manager.ViewBounds.HasPoint(boid.Position), "Without Leader panning keeps Boids in the current view");
 
         manager.Config.BoidCount = 25;
         manager.Reset();
-        Check(manager.Boids.All(b => manager.WorldBounds.HasPoint(b.Position)), "Reset generates population in current view");
+        Check(manager.Boids.All(b => manager.ViewBounds.HasPoint(b.Position)), "Reset generates population in current view");
+        manager.SetLeader(manager.Boids[0]);
+        var positionsBeforeHome = manager.Boids.Select(b => b.Position).ToArray();
         camera.FitWorld();
-        Near(manager.WorldBounds.Position, home.Position, 0.01f, "Home restores the original center");
-        Near(manager.WorldBounds.Size, home.Size, 0.01f, "Dynamic bounds cannot feed back into Home zoom");
-        Check(manager.Boids.All(b => manager.WorldBounds.HasPoint(b.Position)), "Home keeps all individual centers inside bounds");
+        Near(manager.ViewBounds.Position, home.Position, 0.01f, "Home restores the original center");
+        Near(manager.ViewBounds.Size, home.Size, 0.01f, "Dynamic bounds cannot feed back into Home zoom");
+        Check(manager.Boids.Select(b => b.Position).SequenceEqual(positionsBeforeHome), "With Leader Home never relocates the population");
         camera._UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.WheelDown, Pressed = true });
-        Near(manager.WorldBounds.Size, home.Size * 1.15f, 0.01f, "Zoom-out expands the simulation area");
-        screenBounds = manager.GetGlobalTransformWithCanvas() * manager.WorldBounds;
+        Near(manager.ViewBounds.Size, home.Size * 1.15f, 0.01f, "Zoom-out expands the visible area");
+        screenBounds = manager.GetGlobalTransformWithCanvas() * manager.ViewBounds;
         Near(screenBounds.Position, viewport.Position, 0.01f, "Zoomed background starts at the screen edge");
         Near(screenBounds.Size, viewport.Size, 0.01f, "Zoomed background still covers the whole viewport");
+        for (int i = 0; i < 100; i++)
+            camera._UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.WheelUp, Pressed = true });
+        Check(camera.ZoomFactor == 8f, "Maximum zoom remains 8x");
+        for (int i = 0; i < 100; i++)
+            camera._UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.WheelDown, Pressed = true });
+        Check(camera.ZoomFactor == 0.25f, "Minimum zoom remains 0.25x");
+        Vector2 farDrag = new(5000000, -5000000);
+        Vector2 cameraBefore = camera.Position;
+        camera._UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = true });
+        camera._Input(new InputEventMouseMotion { Relative = farDrag, ButtonMask = MouseButtonMask.Left });
+        camera._Input(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = false });
+        Near(camera.Position, cameraBefore - farDrag / camera.Zoom, 4f, "Panning is unrestricted beyond the initial map");
+        Check(!camera.LimitEnabled, "Native Camera2D limits are disabled");
+        Near(manager.ViewBounds.GetCenter(), camera.Position, 4f, "Visible camera can move beyond Godot's default ten-million-unit limits");
+        Check(manager.Boids.Select(b => b.Position).SequenceEqual(positionsBeforeHome), "Far pan and zoom limits leave world state intact");
     }
 
     private void CheckConfiguration()
