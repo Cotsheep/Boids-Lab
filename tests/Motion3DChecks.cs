@@ -190,7 +190,8 @@ public partial class Motion3DChecks : Node
         Check(initial.Save(testPath) == Error.Ok, "Test configuration saved outside real user preferences");
         var app = GD.Load<PackedScene>("res://scenes/main_3d.tscn").Instantiate<MainController>();
         Check(app.ConfigurationPath == "user://boids_lab_3d.cfg", "3D uses its own persistent settings file");
-        app.ConfigurationPath = testPath;
+        app.World3D = (SimulationWorldDefinition)app.World3D.Duplicate();
+        app.World3D.ConfigurationPath = testPath;
         AddChild(app);
         var world = app.GetNode<BoidManager3D>("World/BoidsWorld3D");
         var controls = app.GetNode<ControlPanel>("%ControlPanel");

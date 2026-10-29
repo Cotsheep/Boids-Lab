@@ -21,7 +21,16 @@ public partial class ControlPanel : VBoxContainer
 
     public void Bind(BoidConfig config, string lengthUnit, SimulationFeatures features = SimulationFeatures.All)
     {
-        // 主控制器在 _Ready 中调用一次；控件的值、范围均来自共享配置。
+        // 切换世界时重新构建控件；主控制器先解除旧世界的事件绑定。
+        foreach (Node child in GetChildren())
+        {
+            RemoveChild(child);
+            child.QueueFree();
+        }
+        Obstacles = null;
+        _leaderToggle = null;
+        _leaderStatus = null;
+        _selectionStatus = null;
         AddHeading("模拟控制");
         var buttons = new HBoxContainer();
         AddChild(buttons);
@@ -138,6 +147,13 @@ public partial class ControlPanel : VBoxContainer
     {
         _startPause.Text = running ? "暂停" : "开始";
         _step.Disabled = !canStep;
+    }
+
+    public void CommitPendingEdits()
+    {
+        // 只提交正在编辑的文本。未聚焦输入框的文字可能尚未追上本帧更新的 Value。
+        if (GetViewport().GuiGetFocusOwner() is LineEdit edit
+            && edit.GetParent() is SpinBox spin && IsAncestorOf(spin)) spin.Apply();
     }
 
     public void RefreshLeaderState(int? selectedId, int? leaderId, bool hasTarget)

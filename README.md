@@ -10,7 +10,7 @@
 
 现已支持单领队指定、持续跟随鼠标、紫色身份标记，以及全体个体对领队身后区域的跟随。
 
-项目采用普通全窗口游戏的结构：`Game (Node)` 下分别放置 `World (Node)` 与 `UI (CanvasLayer)`。Node2D / Node3D 世界直接显示在根视口中，Control 面板作为 HUD 覆盖在世界画面上。`main_3d.tscn` 继承主场景、替换世界插槽，复用相同 UI；默认 F5 入口仍为 2D。
+项目采用普通全窗口游戏的结构：`Game (Node)` 下分别放置 `World (Node)` 与 `UI (CanvasLayer)`。Node2D / Node3D 世界直接显示在根视口中，Control 面板作为 HUD 覆盖在世界画面上。`main_3d.tscn` 继承主场景，只改变默认进入的世界。两个入口均可通过顶部选择器在运行时切换 2D / 3D；默认 F5 仍进入 2D。
 
 ## 打开和运行
 
@@ -19,6 +19,12 @@
 3. 也可以先在本目录运行 `dotnet build BoidsLab.csproj`，再由编辑器启动。
 
 初始窗口为 1360 × 860，最小为 960 × 640。这里的“全窗口”指游戏世界使用整个根视口，不切换操作系统的独占全屏模式，也没有修改原生窗口模式。HUD 顶部显示标题和状态，左侧参数面板可滚动，底部统计项可换行。空白 UI 和提示文字不拦截鼠标，有交互的面板与控件正常接收输入；参数面板内滚动不会同时缩放相机。使用 Compatibility 渲染器，无第三方插件或素材依赖；原有 Godot 图标保留。
+
+## 运行时世界切换
+
+顶部「二维（2D）/ 三维（3D）」选择器可直接切换。目标世界按自身的数量和种子重新生成，并保持暂停；两种模式分别保存参数与显示开关。切换会清除个体运动状态、选择、领队、障碍物布局和相机视角，HUD 显隐状态保留，旧帮助弹窗关闭。
+
+世界场景、配置文件路径和对应操作说明分别集中在 `scenes/worlds/world_2d.tres`、`world_3d.tres`。详见 [世界切换说明](docs/world-switching.md)。
 
 ## 3D 基础版本
 
@@ -214,7 +220,7 @@ boids/
 └── docs/architecture.md
 ```
 
-参数控件在 `ControlPanel.Bind()` 中生成；HUD 布局在 `main.tscn` 的 `UI/UIRoot` 分支中编辑，操作说明内容在 `scenes/ui/help_overlay.tscn` 中编辑，世界与相机在 `boids_world_2d.tscn` 中编辑。`BoidManager` 是世界根节点，负责生成、统一更新、障碍物接触和计时；`Boid2D` 保存自身运动状态并完成积分，`boid_2d.tscn` 中的 Polygon2D 跟随节点变换显示三角形。`SimulationView` 负责背景、网格和调试绘制入口；`SimulationCamera2D` 处理拖动、缩放、全景复位和视口适配。主控制器通过 `ISimulationWorld` 操作 2D 或 3D 世界；`SimulationFeatures` 声明已实现能力，控制面板据此创建可用控件。三维说明由 `main_3d.tscn` 的 `HelpTextOverride` 配置。详见 [架构说明](docs/architecture.md)。
+参数控件在 `ControlPanel.Bind()` 中生成；HUD 布局在 `main.tscn` 的 `UI/UIRoot` 分支中编辑，操作说明正文在两份 `scenes/worlds/world_*.tres` 中编辑，弹层布局在 `scenes/ui/help_overlay.tscn` 中编辑，世界与相机在 `boids_world_2d.tscn` 中编辑。`BoidManager` 是世界根节点，负责生成、统一更新、障碍物接触和计时；`Boid2D` 保存自身运动状态并完成积分，`boid_2d.tscn` 中的 Polygon2D 跟随节点变换显示三角形。`SimulationView` 负责背景、网格和调试绘制入口；`SimulationCamera2D` 处理拖动、缩放、全景复位和视口适配。主控制器通过 `ISimulationWorld` 操作 2D 或 3D 世界；`SimulationFeatures` 声明已实现能力，控制面板据此创建可用控件。主控制器按 `SimulationWorldDefinition` 资源切换世界、独立配置和说明。详见 [架构说明](docs/architecture.md)。
 
 ## 本机构建说明
 
@@ -235,6 +241,7 @@ dotnet build BoidsLab.csproj --source D:/app/Godot4.7.2/GodotSharp/Tools/nupkgs
 先构建 C# 项目，再使用 Godot .NET 可执行文件运行：
 
 ```text
+godot --headless --path . res://tests/world_switch_checks.tscn --quit-after 600
 godot --headless --path . res://tests/spatial_3d_checks.tscn --quit-after 600
 godot --headless --path . res://tests/observation_3d_checks.tscn --quit-after 600
 godot --headless --path . res://tests/motion_3d_checks.tscn --quit-after 600

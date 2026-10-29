@@ -26,7 +26,8 @@ public partial class Observation3DChecks : Node
             const string path = "res://.godot/validation/observation-3d.cfg";
             Check(new BoidConfig { BoidCount = 0 }.Save(path) == Error.Ok, "Test config is isolated");
             _app = GD.Load<PackedScene>("res://scenes/main_3d.tscn").Instantiate<MainController>();
-            _app.ConfigurationPath = path;
+            _app.World3D = (SimulationWorldDefinition)_app.World3D.Duplicate();
+            _app.World3D.ConfigurationPath = path;
             AddChild(_app);
             _world = _app.GetNode<BoidManager3D>("World/BoidsWorld3D");
             _camera = _world.GetNode<SimulationCamera3D>("SimulationView/Camera3D");

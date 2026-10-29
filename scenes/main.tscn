@@ -2,14 +2,16 @@
 
 [ext_resource type="Script" uid="uid://byh1e31j0m7gx" path="res://scripts/app/MainController.cs" id="1_app"]
 [ext_resource type="Script" uid="uid://b8o4bat6tlsqp" path="res://scripts/ui/ControlPanel.cs" id="2_controls"]
-[ext_resource type="PackedScene" path="res://scenes/worlds/boids_world_2d.tscn" id="3_world"]
+[ext_resource type="Resource" path="res://scenes/worlds/world_2d.tres" id="3_world"]
+[ext_resource type="Resource" path="res://scenes/worlds/world_3d.tres" id="7_world_3d"]
 [ext_resource type="Script" uid="uid://dj48aa7clgw3r" path="res://scripts/ui/StatsPanel.cs" id="4_stats"]
 [ext_resource type="Theme" uid="uid://ch548a574i185" path="res://scenes/lab_theme.tres" id="5_theme"]
 [ext_resource type="PackedScene" path="res://scenes/ui/help_overlay.tscn" id="6_help"]
 
 [node name="Game" type="Node" unique_id=2044987096]
 script = ExtResource("1_app")
-SimulationScene = ExtResource("3_world")
+World2D = ExtResource("3_world")
+World3D = ExtResource("7_world_3d")
 
 [node name="World" type="Node" parent="." unique_id=556578890]
 unique_name_in_owner = true
@@ -74,6 +76,14 @@ layout_mode = 2
 theme_override_colors/font_color = Color(0.92, 0.73, 0.4, 1)
 theme_override_font_sizes/font_size = 13
 text = "已暂停"
+
+[node name="WorldSelector" type="OptionButton" parent="UI/UIRoot/Layout/Column/Header"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(132, 0)
+layout_mode = 2
+size_flags_vertical = 4
+mouse_force_pass_scroll_events = false
+tooltip_text = "切换二维 / 三维世界；按该模式的参数重新生成并暂停，不保留个体、障碍物布局或视角。"
 
 [node name="HelpButton" type="Button" parent="UI/UIRoot/Layout/Column/Header"]
 unique_name_in_owner = true

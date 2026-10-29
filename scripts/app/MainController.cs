@@ -5,12 +5,25 @@ namespace BoidsLab;
 
 public partial class MainController : Node
 {
-    // 2D / 3D 入口复用同一套 HUD，通过世界接口控制不同的模拟场景。
-    [Export] public PackedScene SimulationScene { get; set; } = null!;
-    [Export] public string ConfigurationPath { get; set; } = BoidConfig.SavePath;
-    [Export(PropertyHint.MultilineText)] public string HelpTextOverride { get; set; } = "";
+    [Export] public SimulationWorldDefinition World2D { get; set; } = null!;
+    [Export] public SimulationWorldDefinition World3D { get; set; } = null!;
+    [Export] public bool StartIn3D { get; set; }
 
-    private readonly BoidConfig _config = new();
+    public int CurrentWorldIndex => _activeIndex >= 0 ? _activeIndex : StartIn3D ? 1 : 0;
+    public string ConfigurationPath => DefinitionAt(CurrentWorldIndex).ConfigurationPath;
+    public bool IsSwitchingWorld => _switchPending;
+    private readonly BoidConfig?[] _configurations = new BoidConfig?[2];
+    private readonly string?[] _storageWarnings = new string?[2];
+    private BoidConfig _config => _configurations[CurrentWorldIndex]!;
+    private string? _storageWarning
+    {
+        get => _storageWarnings[CurrentWorldIndex];
+        set => _storageWarnings[CurrentWorldIndex] = value;
+    }
+    private int _activeIndex = -1;
+    private bool _switchPending;
+    private Node? _worldNode;
+    private OptionButton _worldSelector = null!;
     private ISimulationWorld _world = null!;
     private ControlPanel _controls = null!;
     private StatsPanel _stats = null!;
@@ -23,17 +36,10 @@ public partial class MainController : Node
     private HelpOverlay _help = null!;
     private Control? _focusBeforeHelp;
     private double _statsElapsed;
-    private string? _storageWarning;
 
     public override void _Ready()
     {
         GetWindow().MinSize = new Vector2I(960, 640);
-        Error loadError = _config.Load(ConfigurationPath);
-        if (loadError != Error.Ok && loadError != Error.FileNotFound)
-        {
-            _storageWarning = $"配置加载失败（错误代码：{(int)loadError}）";
-            GD.PushWarning(_storageWarning);
-        }
         _controls = GetNode<ControlPanel>("%ControlPanel");
         _stats = GetNode<StatsPanel>("%StatsPanel");
         _status = GetNode<Label>("%RunStatus");
@@ -44,31 +50,111 @@ public partial class MainController : Node
         _hideUiButton.Pressed += ToggleUi;
         _helpButton = GetNode<Button>("%HelpButton");
         _help = GetNode<HelpOverlay>("%HelpOverlay");
-        if (!string.IsNullOrWhiteSpace(HelpTextOverride)) _help.SetInstructions(HelpTextOverride);
         _helpButton.Pressed += _help.Toggle;
+        _help.OpenChanged += OnHelpOpenChanged;
+        _worldSelector = GetNode<OptionButton>("%WorldSelector");
+        _worldSelector.AddItem(World2D.Title, 0);
+        _worldSelector.AddItem(World3D.Title, 1);
+        _worldSelector.ItemSelected += OnWorldSelected;
+        ActivateWorld(CurrentWorldIndex);
+    }
 
-        if (SimulationScene is null)
-            throw new InvalidOperationException("Assign a simulation scene in MainController.SimulationScene.");
-        Node worldNode = SimulationScene.Instantiate();
-        if (worldNode is not ISimulationWorld world)
+    private SimulationWorldDefinition DefinitionAt(int index) => index == 0 ? World2D : World3D;
+
+    private BoidConfig ConfigurationAt(int index)
+    {
+        if (_configurations[index] is { } existing) return existing;
+        var config = new BoidConfig();
+        Error error = config.Load(DefinitionAt(index).ConfigurationPath);
+        if (error != Error.Ok && error != Error.FileNotFound)
         {
-            worldNode.Free();
-            throw new InvalidOperationException("The simulation scene root must implement ISimulationWorld.");
+            _storageWarnings[index] = $"配置加载失败（错误代码：{(int)error}）；当前使用默认参数。";
+            GD.PushWarning(_storageWarnings[index]);
         }
-        _world = world;
-        _world.Initialize(_config);
-        GetNode<Node>("%World").AddChild(worldNode);
-        GetNode<Label>("%WorldTitle").Text = _world.DisplayName;
-        GetNode<Label>("%WorldCoordinates").Text = $"世界坐标 / {_world.LengthUnit}";
+        _configurations[index] = config;
+        return config;
+    }
 
-        _controls.Bind(_config, _world.LengthUnit, _world.Features);
+    private void OnWorldSelected(long index) => RequestWorldSwitch((int)index);
+
+    public void RequestWorldSwitch(int index)
+    {
+        if (index is < 0 or > 1) throw new ArgumentOutOfRangeException(nameof(index));
+        if (_switchPending || index == CurrentWorldIndex) return;
+        _switchPending = true;
+        _worldSelector.Disabled = true;
+        // 等当前输入/信号派发结束，再拆除旧世界和参数控件。
+        Callable.From(() =>
+        {
+            if (GodotObject.IsInstanceValid(this) && IsInsideTree()) ActivateWorld(index);
+        }).CallDeferred();
+    }
+
+    private void ActivateWorld(int index)
+    {
+        Node? candidate = null;
+        try
+        {
+            SimulationWorldDefinition definition = DefinitionAt(index);
+            candidate = definition.Scene.Instantiate();
+            if (candidate is not ISimulationWorld next)
+                throw new InvalidOperationException("世界场景根节点必须实现 ISimulationWorld。");
+            next.Initialize(ConfigurationAt(index)); // 验证目标世界后，才拆除旧世界。
+
+            if (_worldNode is not null)
+            {
+                _controls.CommitPendingEdits();
+                SaveConfiguration();
+                _focusBeforeHelp = null;
+                _help.Close();
+                _world.SetRunning(false);
+                _world.SetInteractionEnabled(false);
+                _world.CancelObstaclePlacement();
+                UnbindWorld();
+                GetViewport().GuiGetFocusOwner()?.ReleaseFocus();
+                _worldNode.ProcessMode = ProcessModeEnum.Disabled;
+                _worldNode.GetParent().RemoveChild(_worldNode);
+                _worldNode.Free();
+            }
+
+            _activeIndex = index;
+            _world = next;
+            _worldNode = candidate;
+            candidate = null;
+            GetNode<Node>("%World").AddChild(_worldNode);
+            _world.SetRunning(false);
+            _controls.Bind(_config, _world.LengthUnit, _world.Features);
+            BindWorld();
+            _controls.GetParent<ScrollContainer>().ScrollVertical = 0;
+            _help.SetInstructions(definition.Instructions);
+            _worldSelector.Select(index);
+            GetNode<Label>("%WorldTitle").Text = _world.DisplayName;
+            GetNode<Label>("%WorldCoordinates").Text = $"世界坐标 / {_world.LengthUnit}";
+            _statsElapsed = 0;
+            RefreshInterface();
+        }
+        catch (Exception error)
+        {
+            candidate?.Free();
+            _worldSelector.Select(CurrentWorldIndex);
+            _debug.Text = $"世界切换失败：{error.Message}";
+            GD.PushError(_debug.Text);
+        }
+        finally
+        {
+            _switchPending = false;
+            _worldSelector.Disabled = false;
+        }
+    }
+
+    private void BindWorld()
+    {
         _controls.ToggleRunningRequested += ToggleRunning;
         _controls.ResetRequested += ResetSimulation;
         _controls.StepRequested += StepSimulation;
         _controls.ConfigurationChanged += ApplyConfiguration;
         _controls.LeaderAssignmentRequested += _world.SetSelectedBoidLeader;
         _world.BoidControlStateChanged += RefreshLeaderControls;
-        RefreshLeaderControls();
         if (_controls.Obstacles is { } obstacles)
         {
             obstacles.CreateRequested += _world.BeginObstaclePlacement;
@@ -77,13 +163,31 @@ public partial class MainController : Node
             obstacles.ResizeRequested += _world.ResizeSelectedObstacle;
         }
         _world.ObstacleSelectionChanged += RefreshObstacleControls;
+        RefreshLeaderControls();
         RefreshObstacleControls();
-        _help.OpenChanged += OnHelpOpenChanged;
-        RefreshInterface();
+    }
+
+    private void UnbindWorld()
+    {
+        _controls.ToggleRunningRequested -= ToggleRunning;
+        _controls.ResetRequested -= ResetSimulation;
+        _controls.StepRequested -= StepSimulation;
+        _controls.ConfigurationChanged -= ApplyConfiguration;
+        _controls.LeaderAssignmentRequested -= _world.SetSelectedBoidLeader;
+        _world.BoidControlStateChanged -= RefreshLeaderControls;
+        if (_controls.Obstacles is { } obstacles)
+        {
+            obstacles.CreateRequested -= _world.BeginObstaclePlacement;
+            obstacles.CancelPlacementRequested -= _world.CancelObstaclePlacement;
+            obstacles.DeleteRequested -= _world.DeleteSelectedObstacle;
+            obstacles.ResizeRequested -= _world.ResizeSelectedObstacle;
+        }
+        _world.ObstacleSelectionChanged -= RefreshObstacleControls;
     }
 
     public override void _Process(double delta)
     {
+        if (_worldNode is null || _switchPending) return;
         _statsElapsed += delta;
         if (_statsElapsed < 0.25) return;
         _statsElapsed = 0;
@@ -92,6 +196,11 @@ public partial class MainController : Node
 
     public override void _Input(InputEvent @event)
     {
+        if (_switchPending || _worldNode is null)
+        {
+            GetViewport().SetInputAsHandled();
+            return;
+        }
         // 空格优先于 GUI：按下切换一次，重复事件与松开也消费，防止触发 ui_accept。
         if (@event.IsAction("toggle_pause"))
         {
@@ -132,7 +241,7 @@ public partial class MainController : Node
         _uiRoot.FocusBehaviorRecursive = open
             ? Control.FocusBehaviorRecursiveEnum.Disabled
             : Control.FocusBehaviorRecursiveEnum.Inherited;
-        _world.SetInteractionEnabled(!open);
+        if (_worldNode is not null) _world.SetInteractionEnabled(!open);
         if (!open)
         {
             if (GodotObject.IsInstanceValid(_focusBeforeHelp) && _focusBeforeHelp!.IsVisibleInTree())
@@ -180,11 +289,16 @@ public partial class MainController : Node
     private void ApplyConfiguration()
     {
         _config.Normalize();
-        Error error = _config.Save(ConfigurationPath);
-        _storageWarning = error == Error.Ok ? null : $"配置保存失败（错误代码：{(int)error}）";
-        if (_storageWarning is not null) GD.PushWarning(_storageWarning);
         _world.ConfigurationChanged();
+        SaveConfiguration();
         RefreshInterface();
+    }
+
+    private void SaveConfiguration()
+    {
+        Error error = _config.Save(ConfigurationPath);
+        _storageWarning = error == Error.Ok ? null : $"配置保存失败（错误代码：{(int)error}）；本次运行仍保留参数。";
+        if (_storageWarning is not null) GD.PushWarning(_storageWarning);
     }
 
     private void RefreshInterface()
@@ -201,26 +315,13 @@ public partial class MainController : Node
 
     public override void _ExitTree()
     {
+        if (_worldSelector is not null) _worldSelector.ItemSelected -= OnWorldSelected;
         if (_hideUiButton is not null) _hideUiButton.Pressed -= ToggleUi;
         if (_help is not null)
         {
             _help.OpenChanged -= OnHelpOpenChanged;
             if (_helpButton is not null) _helpButton.Pressed -= _help.Toggle;
         }
-        if (_controls is null) return;
-        _controls.LeaderAssignmentRequested -= _world.SetSelectedBoidLeader;
-        _world.BoidControlStateChanged -= RefreshLeaderControls;
-        if (_controls.Obstacles is { } obstacles)
-        {
-            obstacles.CreateRequested -= _world.BeginObstaclePlacement;
-            obstacles.CancelPlacementRequested -= _world.CancelObstaclePlacement;
-            obstacles.DeleteRequested -= _world.DeleteSelectedObstacle;
-            obstacles.ResizeRequested -= _world.ResizeSelectedObstacle;
-        }
-        _world.ObstacleSelectionChanged -= RefreshObstacleControls;
-        _controls.ToggleRunningRequested -= ToggleRunning;
-        _controls.ResetRequested -= ResetSimulation;
-        _controls.StepRequested -= StepSimulation;
-        _controls.ConfigurationChanged -= ApplyConfiguration;
+        if (_worldNode is not null) UnbindWorld();
     }
 }
