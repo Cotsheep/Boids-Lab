@@ -69,9 +69,11 @@ public partial class SimulationView3D : Node3D
         float unitsPerPixel = camera.Size / Mathf.Max(1, GetViewport().GetVisibleRect().Size.Y);
         DebugGeometry.Build(_manager.Boids, _manager.SelectedBoid, _config, _manager.WorldBounds, unitsPerPixel);
         _debugMesh.ClearSurfaces();
-        if (DebugGeometry.RangePoints.Count + DebugGeometry.NeighborPoints.Count + DebugGeometry.VelocityPoints.Count == 0) return;
+        if (DebugGeometry.RangePoints.Count + DebugGeometry.SeparationRangePoints.Count
+            + DebugGeometry.NeighborPoints.Count + DebugGeometry.VelocityPoints.Count == 0) return;
         _debugMesh.SurfaceBegin(Mesh.PrimitiveType.Lines, _debugMaterial);
         AddPoints(DebugGeometry.RangePoints, new Color("78dcca"));
+        AddPoints(DebugGeometry.SeparationRangePoints, new Color("ff9866"));
         AddPoints(DebugGeometry.NeighborPoints, new Color("ffc75a"));
         AddPoints(DebugGeometry.VelocityPoints, new Color("6baeff"));
         _debugMesh.SurfaceEnd();

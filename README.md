@@ -2,7 +2,7 @@
 
 > 开发机曾在 Godot 图形操作时蓝屏。2026-10-27 用户更新显卡驱动后，简单测试暂未复现；长期稳定性尚未验证。详细诊断记录保存在本地，不随源码上传。
 
-用于团队技术分享和个人学习的 Boids 实验项目，包含功能较完整的 2D 世界与已接入观察操作和朴素邻居搜索的 3D 世界。运行环境为 **Godot 4.7.2 .NET + .NET 8 SDK**，语言为 C#。
+用于团队技术分享和个人学习的 Boids 实验项目，包含可在运行时切换的 2D / 3D 世界；两者均已实现朴素/网格邻居搜索与三条群集规则。运行环境为 **Godot 4.7.2 .NET + .NET 8 SDK**，语言为 C#。
 
 2D 当前已实现 UI、配置、按数量与种子生成个体、速度/加速度积分、受角速度和角加速度限制的朝向跟随、随领队状态切换的无限/环绕世界、可切换的朴素/均匀网格邻居搜索与实测统计，以及**分离、对齐、聚集三条群集规则**。支持单选高亮、选中个体的感知范围与邻居连线、全体运动方向调试绘制，以及可编辑的矩形、圆形障碍物与避障。
 
@@ -26,20 +26,21 @@
 
 世界场景、配置文件路径和对应操作说明分别集中在 `scenes/worlds/world_2d.tres`、`world_3d.tres`。详见 [世界切换说明](docs/world-switching.md)。
 
-## 3D 基础版本
+## 3D 群集模拟
 
 运行入口为 `scenes/main_3d.tscn`。初始暂停，点击「开始」或按空格后移动；修改数量、种子后点击「重置」。F1 隐藏 HUD，F2 打开三维专用说明，单步暂不开放。
 
 - 每个个体是 `Boid3D (Node3D)`，子节点 `MeshInstance3D` 使用原生六棱锥体网格，尖端朝本地 -Z。
-- `BoidManager3D._PhysicsProcess()` 统一调度，按速度移动、按加速度改变速度，并用受角速度与角加速度限制的四元数旋转跟随速度方向。当前无转向输入，默认保持匀速直线运动。
+- `BoidManager3D._PhysicsProcess()` 统一调度：快照与搜索 → 算完全体群集转向 → 统一积分。按速度移动、按加速度改变速度，并用受角速度与角加速度限制的四元数旋转跟随速度方向。
 - 采用中心位于原点的 1280 × 720 × 720 固定盒状空间，三个坐标轴越界均环绕；正交相机支持右键旋转、中键平移、鼠标位置滚轮缩放和 Home 复位；边框与底面参考线帮助观察深度。
 - 与 2D 共用 `BoidConfig` 的范围和默认值；3D 使用世界单位，例如默认速度为 120 世界单位/秒，不做隐式比例转换。设置单独保存至 `user://boids_lab_3d.cfg`。
-- 已实现三维朴素邻居搜索，使用每步开始时的位置/速度快照和最短环绕距离；每步检查 N × (N − 1) 个候选，尚未实现三维网格。
+- 可切换朴素/均匀网格邻居搜索，两者使用相同的步前快照、最短环绕距离和精确半径判断。网格最多检查周围 27 格，避免小网格环绕时重复计数；详见 [三维搜索说明](docs/neighbor-search-3d.md)。
+- 分离、对齐、聚集可独立开关与调节权重。实际分离半径不超过感知半径；规则分别生成受限加速度，合并后再次限幅。没有邻居或关闭所有规则时保持惯性运动；不强制最小速度。
 - 左键单选并金色高亮；再次点击或点击空白取消。重叠投影优先命中前方个体，暂停和运行时都可选择。
-- 感知球和邻居连线只显示选中个体，跨边界从对侧接续；速度箭头开关作用于全体，网格开关控制底面参考线。
+- 感知球、分离球和邻居连线只显示选中个体，跨边界从对侧接续；速度箭头开关作用于全体，网格开关控制底面参考线，不代表搜索格子。
 - 数量、FPS、更新/搜索耗时、候选检查次数和平均邻居数来自真实运行。尚未测量或旧结果失效时显示 `--`；暂停时仍能观察当前关系，但不会把调试查询当作一次物理步测量。
 
-当前是运动积分基础，不使用 RigidBody3D 或物理碰撞。三维网格搜索、分离/对齐/聚集、领队和避障留到后续，UI 不展示这些尚未实现的功能。架构与运动输入示例见 [架构说明](docs/architecture.md#三维基础世界与共享-ui)。
+当前使用自身运动积分，不使用 RigidBody3D 或物理碰撞。三维领队和避障留到后续，UI 不展示这些尚未实现的功能。架构与运动输入示例见 [架构说明](docs/architecture.md#三维基础世界与共享-ui)。
 
 ## 2D 当前可用操作
 
@@ -179,7 +180,7 @@ boids/
 │   ├── simulation/Boid2D.cs, Boid3D.cs
 │   ├── simulation/BoidConfig.cs
 │   ├── simulation/BoidManager.cs, BoidManager3D.cs
-│   ├── simulation/BoidSteering.cs
+│   ├── simulation/BoidSteering.cs, BoidSteering3D.cs
 │   ├── simulation/LeaderSteering.cs
 │   ├── simulation/NeighborSearch2D.cs, NeighborSearch3D.cs
 │   ├── simulation/WorldGeometry3D.cs
@@ -197,6 +198,7 @@ boids/
 │   ├── Motion3DChecks.cs, motion_3d_checks.tscn
 │   ├── Observation3DChecks.cs, observation_3d_checks.tscn
 │   ├── Spatial3DChecks.cs, spatial_3d_checks.tscn
+│   ├── Steering3DChecks.cs, steering_3d_checks.tscn
 │   ├── MotionChecks.cs
 │   ├── motion_checks.tscn
 │   ├── NeighborChecks.cs
@@ -243,6 +245,7 @@ dotnet build BoidsLab.csproj --source D:/app/Godot4.7.2/GodotSharp/Tools/nupkgs
 ```text
 godot --headless --path . res://tests/world_switch_checks.tscn --quit-after 600
 godot --headless --path . res://tests/spatial_3d_checks.tscn --quit-after 600
+godot --headless --path . res://tests/steering_3d_checks.tscn --quit-after 600
 godot --headless --path . res://tests/observation_3d_checks.tscn --quit-after 600
 godot --headless --path . res://tests/motion_3d_checks.tscn --quit-after 600
 godot --headless --path . res://tests/motion_checks.tscn --quit-after 120
@@ -281,7 +284,11 @@ godot --headless --path . res://tests/boundary_mode_checks.tscn --quit-after 600
 
 `observation_3d_checks` 通过真实主场景输入验证右键旋转、中键平移、滚轮锚点与倍率上下限、Home、文本焦点、UI 与帮助隔离、失焦和丢失按键状态时终止拖动，以及无窗口视口尺寸变化。相机操作不改变模拟盒、个体或模拟统计。
 
-`spatial_3d_checks` 以独立的 27 幅周期图像距离为参照，验证面/边/角落邻居、半径边缘、重合位置、非连续 ID、随机分布、空群体、快照冻结和统计失效。还检查跨边界线段总长度、范围线框裁剪、大半径与全域感知，以及调试查询不改写模拟统计。三维观察检查补充运行/暂停选择、前后遮挡、取消/转移/删除/重置、独立高亮材质、调试控件保存和帮助输入隔离。均使用无图形模式。
+`spatial_3d_checks` 以独立的 27 幅周期图像距离为参照，对照两种搜索在面/边/角落、半径边缘、单轴少量格子、非整除边长、重合位置、随机分布、空群体下的结果；验证快照冻结、统计失效和稀疏分布的候选减少。还检查跨边界线长、感知/分离范围裁剪、实际分离半径、大半径与全域感知，以及调试查询不改写模拟统计。三维观察检查覆盖运行/暂停选择、前后遮挡、取消/转移/删除/重置、独立高亮材质和帮助输入隔离。
+
+`steering_3d_checks` 验证单条规则方向、权重与开关、环绕位移、完全重合、对称抵消、分离距离权重、速度/加速度限制、共同快照及外部输入。朴素与网格驱动相同初始群体连续运行 240 步，中途增删个体并修改半径，逐步对照位置、速度和加速度一致性。上述检查仅验证逻辑，不代表人工图形验收或桌面性能基准。
+
+2026-10-29 环境检查：本机 SDK 为 8.0.400，命令行构建零警告、零错误，世界切换、四组三维检查及八组相关二维检查通过。额外运行无图形编辑器导入时，Godot 报告 `.NET Sdk not found. The required version is '10.0.11'`，随后无法加载 `Microsoft.Build`。因此不能把本轮结果视为编辑器内构建验证通过；未改动系统 SDK，也未打开图形运行窗口。
 
 ## 初版框架的历史验证
 

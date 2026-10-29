@@ -5,7 +5,7 @@ using Godot;
 
 namespace BoidsLab;
 
-/// <summary>三维基础世界：管理实例、固定物理步、盒状环绕与真实统计，不依赖 UI。</summary>
+/// <summary>三维世界：管理实例、邻居搜索、群集转向、固定物理步与盒状环绕，不依赖 UI。</summary>
 public partial class BoidManager3D : Node3D, ISimulationWorld
 {
     [Export] public Vector3 WorldSize { get; set; } = new(1280, 720, 720);
@@ -13,7 +13,8 @@ public partial class BoidManager3D : Node3D, ISimulationWorld
 
     public string DisplayName => "三维世界";
     public string LengthUnit => "世界单位";
-    public SimulationFeatures Features => SimulationFeatures.NeighborSearch | SimulationFeatures.DebugDrawing | SimulationFeatures.UniformGridSearch;
+    public SimulationFeatures Features => SimulationFeatures.NeighborSearch | SimulationFeatures.DebugDrawing
+        | SimulationFeatures.UniformGridSearch | SimulationFeatures.Flocking;
     public bool CoreImplemented => true; // 基础运动可运行；可选能力由 Features 明确声明。
     public bool CanStep => false;
     public bool IsRunning { get; private set; }
@@ -27,6 +28,7 @@ public partial class BoidManager3D : Node3D, ISimulationWorld
     public BoidConfig Config => _config ?? throw new InvalidOperationException("Initialize the world first.");
 
     private readonly List<Boid3D> _boids = new();
+    private Vector3[] _steeringAccelerations = Array.Empty<Vector3>();
     private BoidConfig? _config;
     private Node3D _boidsRoot = null!;
     private SimulationView3D _view = null!;
@@ -133,7 +135,7 @@ public partial class BoidManager3D : Node3D, ISimulationWorld
         RefreshDebug();
     }
 
-    /// <summary>每个物理帧先快照并搜索邻居，再统一推进；未来在这两个阶段之间计算全体转向。</summary>
+    /// <summary>快照并搜索邻居 → 算完全体转向 → 统一推进，保证个体更新顺序不影响本步输入。</summary>
     public void Step(double deltaSeconds)
     {
         float dt = (float)deltaSeconds;
@@ -141,10 +143,13 @@ public partial class BoidManager3D : Node3D, ISimulationWorld
         long started = Stopwatch.GetTimestamp();
         foreach (Boid3D boid in _boids) boid.Position = WorldGeometry3D.Wrap(boid.Position, WorldBounds);
         NeighborSearch.Search(Boids, Config.PerceptionRadius, WorldBounds, Config.NeighborSearchMode);
-        foreach (Boid3D boid in _boids)
+        if (_steeringAccelerations.Length != _boids.Count) _steeringAccelerations = new Vector3[_boids.Count];
+        for (int i = 0; i < _boids.Count; i++)
+            _steeringAccelerations[i] = BoidSteering3D.Calculate(NeighborSearch, i, Config);
+        for (int i = 0; i < _boids.Count; i++)
         {
-            // TODO: 后续先从共同快照计算全体群集转向，再传入对应个体。本阶段搜索不改变运动。
-            boid.UpdateBoid(deltaSeconds);
+            Boid3D boid = _boids[i];
+            boid.UpdateBoid(deltaSeconds, _steeringAccelerations[i]);
             boid.Position = WorldGeometry3D.Wrap(boid.Position, WorldBounds);
         }
         Stats = new SimulationStats(_boids.Count, Stopwatch.GetElapsedTime(started).TotalMilliseconds,

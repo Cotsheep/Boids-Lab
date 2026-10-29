@@ -77,7 +77,7 @@ public partial class Boid3D : Node3D
         }
     }
 
-    /// <summary>持续施加的外部加速度；传入零撤销。未来规则可通过 UpdateBoid 的参数提供当步转向。</summary>
+    /// <summary>持续施加的外部加速度；传入零撤销。群集规则通过 UpdateBoid 的参数提供当步转向。</summary>
     public void SetAcceleration(Vector3 acceleration)
     {
         if (!acceleration.IsFinite()) throw new ArgumentOutOfRangeException(nameof(acceleration));

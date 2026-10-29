@@ -97,10 +97,13 @@ public partial class ControlPanel : VBoxContainer
         if (features.HasFlag(SimulationFeatures.Flocking))
         {
             AddHeading("转向规则");
-            AddNumber("LeaderFollowDistance", "领队后方距离", BoidConfig.LeaderFollowDistanceRange, config.LeaderFollowDistance,
-                value => config.LeaderFollowDistance = (float)value, $"单位：{lengthUnit}；领队到身后跟随区域前缘的间隔；区域随跟随数量扩大，不受发现领队的感知半径限制。");
-            AddNumber("LeaderFollowWeight", "领队跟随权重", BoidConfig.LeaderFollowWeightRange, config.LeaderFollowWeight,
-                value => config.LeaderFollowWeight = (float)value, "跟随与原有群集规则共同作用；设为零关闭跟随贡献，避障仍优先。");
+            if (features.HasFlag(SimulationFeatures.Leader))
+            {
+                AddNumber("LeaderFollowDistance", "领队后方距离", BoidConfig.LeaderFollowDistanceRange, config.LeaderFollowDistance,
+                    value => config.LeaderFollowDistance = (float)value, $"单位：{lengthUnit}；领队到身后跟随区域前缘的间隔；区域随跟随数量扩大，不受发现领队的感知半径限制。");
+                AddNumber("LeaderFollowWeight", "领队跟随权重", BoidConfig.LeaderFollowWeightRange, config.LeaderFollowWeight,
+                    value => config.LeaderFollowWeight = (float)value, "跟随与原有群集规则共同作用；设为零关闭跟随贡献，避障仍优先。");
+            }
             AddNumber("SeparationRadius", "分离半径", BoidConfig.SeparationRadiusRange, config.SeparationRadius,
                 value => config.SeparationRadius = (float)value, $"单位：{lengthUnit}；仅避开此范围内的邻居，实际范围不超过感知半径。");
             AddToggle("SeparationEnabled", "启用分离规则", config.SeparationEnabled, value => config.SeparationEnabled = value);
@@ -138,7 +141,7 @@ public partial class ControlPanel : VBoxContainer
                 Text = features.HasFlag(SimulationFeatures.NeighborSearch)
                     ? features.HasFlag(SimulationFeatures.UniformGridSearch)
                         ? "已实现基础运动、观察以及朴素 / 网格邻居搜索。群体规则、领队和避障尚未实现；邻居关系暂不改变运动。"
-                        : "已实现基础运动、观察与朴素邻居搜索。三维网格、群体规则、领队和避障尚未实现；邻居关系暂不改变运动。"
+                        : "已实现基础运动、观察与朴素邻居搜索。当前世界未开放网格、群体规则、领队和避障；邻居关系暂不改变运动。"
                     : "仅实现个体创建与基础运动。邻居搜索、群体规则、领队、避障及调试绘制尚未实现。",
                 AutowrapMode = TextServer.AutowrapMode.WordSmart,
             });
@@ -185,7 +188,7 @@ public partial class ControlPanel : VBoxContainer
             Name = "NeighborSearchMode",
             TooltipText = supportsGrid
                 ? "朴素遍历检查所有其他个体；均匀网格只检查相邻格内的候选。搜索耗时包含快照、建格和结果写入。"
-                : "当前三维版本仅实现朴素遍历，逐一检查其他个体。均匀网格将在下一阶段实现。",
+                : "当前世界只开放朴素遍历，逐一检查其他个体。",
             Disabled = !supportsGrid,
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
         };

@@ -163,8 +163,23 @@ public partial class Spatial3DChecks : Node
         config.PerceptionRadius = 100;
         geometry.Build(boids, a, config, Bounds, 1);
         Check(geometry.RangePoints.Count == 24, "All-world perception is represented by the twelve box edges");
+        config.ShowSeparationRadius = true;
+        config.PerceptionRadius = 8;
+        config.SeparationRadius = 20;
+        geometry.Build(boids, a, config, Bounds, 1);
+        Check(geometry.SeparationCount == 1 && geometry.SeparationRangePoints.SequenceEqual(geometry.RangePoints),
+            "Separation range is capped by perception and shares periodic clipping");
+        config.ShowPerceptionRadius = false;
+        config.SeparationRadius = 3;
+        geometry.Build(boids, a, config, Bounds, 1);
+        Check(geometry.RangePoints.Count == 0 && geometry.SeparationRangePoints.Count > 0, "Separation sphere is independently switchable");
+        CheckPointsInside(geometry.SeparationRangePoints);
+        foreach (Vector3 point in geometry.SeparationRangePoints)
+            Check(Math.Abs(Math.Sqrt(ReferenceDistanceSquared(a.Position, point, Bounds)) - 3) < 0.01,
+                "Separation sphere represents the configured smaller radius");
         geometry.Build(boids, null, config, Bounds, 1);
         Check(geometry.PerceptionCount == 0 && geometry.RangePoints.Count == 0 && geometry.NeighborCount == 0
+            && geometry.SeparationCount == 0 && geometry.SeparationRangePoints.Count == 0
             && geometry.VelocityCount == 2, "Deselection clears local overlays and keeps all velocity arrows");
         config.ShowVelocity = false;
         geometry.Build(boids, null, config, Bounds, 1);
@@ -182,7 +197,8 @@ public partial class Spatial3DChecks : Node
 
     private void CheckWorld()
     {
-        var config = new BoidConfig { BoidCount = 0, PerceptionRadius = 50, NeighborSearchMode = NeighborSearchMode.UniformGrid };
+        var config = new BoidConfig { BoidCount = 0, PerceptionRadius = 50, NeighborSearchMode = NeighborSearchMode.UniformGrid,
+            SeparationEnabled = false, AlignmentEnabled = false, CohesionEnabled = false }; // 本用例隔离搜索和运动阶段。
         var world = GD.Load<PackedScene>("res://scenes/worlds/boids_world_3d.tscn").Instantiate<BoidManager3D>();
         world.Initialize(config);
         AddChild(world);

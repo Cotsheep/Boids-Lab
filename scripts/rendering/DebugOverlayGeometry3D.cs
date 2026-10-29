@@ -8,9 +8,11 @@ namespace BoidsLab;
 public sealed class DebugOverlayGeometry3D
 {
     public List<Vector3> RangePoints { get; } = new();
+    public List<Vector3> SeparationRangePoints { get; } = new();
     public List<Vector3> NeighborPoints { get; } = new();
     public List<Vector3> VelocityPoints { get; } = new();
     public int PerceptionCount { get; private set; }
+    public int SeparationCount { get; private set; }
     public int NeighborCount { get; private set; }
     public int VelocityCount { get; private set; }
     private static readonly Vector3[] UnitSphereLines = BuildUnitSphereLines();
@@ -18,16 +20,22 @@ public sealed class DebugOverlayGeometry3D
     public void Build(IReadOnlyList<Boid3D> boids, Boid3D? selected, BoidConfig config, Aabb bounds, float unitsPerPixel)
     {
         RangePoints.Clear();
+        SeparationRangePoints.Clear();
         NeighborPoints.Clear();
         VelocityPoints.Clear();
-        PerceptionCount = NeighborCount = VelocityCount = 0;
+        PerceptionCount = SeparationCount = NeighborCount = VelocityCount = 0;
         if (selected is not null)
         {
             Vector3 center = WorldGeometry3D.Wrap(selected.Position, bounds);
             if (config.ShowPerceptionRadius)
             {
                 PerceptionCount = 1;
-                AddRange(center, config.PerceptionRadius, bounds);
+                AddRange(RangePoints, center, config.PerceptionRadius, bounds);
+            }
+            if (config.ShowSeparationRadius)
+            {
+                SeparationCount = 1;
+                AddRange(SeparationRangePoints, center, MathF.Min(config.SeparationRadius, config.PerceptionRadius), bounds);
             }
             if (config.ShowNeighbors)
                 foreach (Boid3D other in boids)
@@ -59,7 +67,7 @@ public sealed class DebugOverlayGeometry3D
         }
     }
 
-    private void AddRange(Vector3 center, float radius, Aabb bounds)
+    private static void AddRange(List<Vector3> output, Vector3 center, float radius, Aabb bounds)
     {
         if (radius >= bounds.Size.Length() * 0.5f)
         {
@@ -68,8 +76,8 @@ public sealed class DebugOverlayGeometry3D
                 foreach (int bit in new[] { 1, 2, 4 })
                     if ((i & bit) == 0)
                     {
-                        RangePoints.Add(Corner(bounds, i));
-                        RangePoints.Add(Corner(bounds, i | bit));
+                        output.Add(Corner(bounds, i));
+                        output.Add(Corner(bounds, i | bit));
                     }
             return;
         }
@@ -84,7 +92,7 @@ public sealed class DebugOverlayGeometry3D
                     if (min.X >= max.X || min.Y >= max.Y || min.Z >= max.Z) continue;
                     var clip = new Aabb(min, max - min);
                     for (int i = 0; i < UnitSphereLines.Length; i += 2)
-                        AddClippedLine(RangePoints, imageCenter + UnitSphereLines[i] * radius,
+                        AddClippedLine(output, imageCenter + UnitSphereLines[i] * radius,
                             imageCenter + UnitSphereLines[i + 1] * radius, clip);
                 }
     }

@@ -126,7 +126,8 @@ public partial class Motion3DChecks : Node
 
     private void CheckWorld()
     {
-        var config = new BoidConfig { BoidCount = 24, RandomSeed = 1234 };
+        var config = new BoidConfig { BoidCount = 24, RandomSeed = 1234,
+            SeparationEnabled = false, AlignmentEnabled = false, CohesionEnabled = false }; // 单独验证运动与边界。
         var world = GD.Load<PackedScene>("res://scenes/worlds/boids_world_3d.tscn").Instantiate<BoidManager3D>();
         world.Initialize(config);
         AddChild(world);
@@ -197,8 +198,18 @@ public partial class Motion3DChecks : Node
         var controls = app.GetNode<ControlPanel>("%ControlPanel");
         Check(world.Boids.Count == 8 && world.Config.RandomSeed == 314, "Inherited main scene loads configuration and instantiates the 3D world");
         Check(controls.Obstacles is null && controls.FindChild("IsLeader", true, false) is null
-            && controls.FindChild("SeparationEnabled", true, false) is null
-            && controls.FindChild("ShowSeparationRadius", true, false) is null, "Unsupported 3D features have no misleading controls");
+            && controls.FindChild("LeaderFollowDistance", true, false) is null
+            && controls.FindChild("LeaderFollowWeight", true, false) is null, "Unsupported 3D leader and obstacle controls remain hidden");
+        Check(controls.FindChild("SeparationEnabled", true, false) is CheckBox
+            && controls.FindChild("AlignmentEnabled", true, false) is CheckBox
+            && controls.FindChild("CohesionEnabled", true, false) is CheckBox, "All three implemented rules have controls");
+        ((CheckBox)controls.FindChild("ShowSeparationRadius", true, false)).ButtonPressed = true;
+        ((SpinBox)controls.FindChild("SeparationWeight", true, false)).Value = 2.3;
+        ((CheckBox)controls.FindChild("AlignmentEnabled", true, false)).ButtonPressed = false;
+        var rulesSaved = new BoidConfig();
+        Check(rulesSaved.Load(testPath) == Error.Ok && rulesSaved.ShowSeparationRadius && !rulesSaved.AlignmentEnabled
+            && Mathf.IsEqualApprox(rulesSaved.SeparationWeight, 2.3f) && world.Config.ShowSeparationRadius,
+            "3D rule controls and separation display update the shared configuration and persist");
         var searchMode = (OptionButton)controls.FindChild("NeighborSearchMode", true, false);
         Check(!searchMode.Disabled && searchMode.ItemCount == 2 && searchMode.GetItemId(1) == (int)NeighborSearchMode.UniformGrid,
             "3D offers both implemented search methods");
