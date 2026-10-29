@@ -17,6 +17,7 @@ public partial class ControlPanel : VBoxContainer
     private Button _step = null!;
     private CheckBox? _leaderToggle;
     private Label? _leaderStatus;
+    private Label? _selectionStatus;
 
     public void Bind(BoidConfig config, string lengthUnit, SimulationFeatures features = SimulationFeatures.All)
     {
@@ -69,9 +70,9 @@ public partial class ControlPanel : VBoxContainer
         if (features.HasFlag(SimulationFeatures.NeighborSearch))
         {
             AddHeading("邻居搜索");
-            AddSearchMode(config);
+            AddSearchMode(config, features.HasFlag(SimulationFeatures.UniformGridSearch));
             AddNumber("PerceptionRadius", "感知半径", BoidConfig.RadiusRange, config.PerceptionRadius,
-                value => config.PerceptionRadius = (float)value, $"单位：{lengthUnit}；有领队时按直接距离、无领队时按最短环绕距离查找邻居，包含半径边缘，不包含自身。");
+                value => config.PerceptionRadius = (float)value, $"单位：{lengthUnit}；环绕世界使用最短环绕距离，无限世界使用直接距离。包含半径边缘和重合的其他个体，不包含自身。");
         }
 
         AddHeading("运动参数");
@@ -107,19 +108,27 @@ public partial class ControlPanel : VBoxContainer
         if (features.HasFlag(SimulationFeatures.DebugDrawing))
         {
             AddHeading("调试可视化");
+            if (!features.HasFlag(SimulationFeatures.Leader))
+            {
+                _selectionStatus = new Label { Name = "SelectedBoidStatus", Text = "未选择个体" };
+                AddChild(_selectionStatus);
+            }
             AddToggle("ShowGrid", "显示网格", config.ShowGrid, value => config.ShowGrid = value);
             AddToggle("ShowNeighbors", "显示选中个体的邻居连线", config.ShowNeighbors, value => config.ShowNeighbors = value);
             AddToggle("ShowPerceptionRadius", "显示选中个体的感知范围", config.ShowPerceptionRadius, value => config.ShowPerceptionRadius = value);
-            AddToggle("ShowSeparationRadius", "显示选中个体的分离半径", config.ShowSeparationRadius, value => config.ShowSeparationRadius = value);
+            if (features.HasFlag(SimulationFeatures.Flocking))
+                AddToggle("ShowSeparationRadius", "显示选中个体的分离半径", config.ShowSeparationRadius, value => config.ShowSeparationRadius = value);
             AddToggle("ShowVelocity", "显示全体运动方向", config.ShowVelocity, value => config.ShowVelocity = value);
         }
 
-        if (features == SimulationFeatures.None)
+        if (!features.HasFlag(SimulationFeatures.Flocking))
         {
             AddHeading("当前阶段");
             AddChild(new Label
             {
-                Text = "仅实现三维个体创建与基础运动。邻居搜索、群体规则、领队、避障及调试绘制尚未实现。",
+                Text = features.HasFlag(SimulationFeatures.NeighborSearch)
+                    ? "已实现基础运动、观察与朴素邻居搜索。三维网格、群体规则、领队和避障尚未实现；邻居关系暂不改变运动。"
+                    : "仅实现个体创建与基础运动。邻居搜索、群体规则、领队、避障及调试绘制尚未实现。",
                 AutowrapMode = TextServer.AutowrapMode.WordSmart,
             });
         }
@@ -133,6 +142,7 @@ public partial class ControlPanel : VBoxContainer
 
     public void RefreshLeaderState(int? selectedId, int? leaderId, bool hasTarget)
     {
+        if (_selectionStatus is not null) _selectionStatus.Text = selectedId.HasValue ? $"已选择个体：#{selectedId}" : "未选择个体";
         if (_leaderToggle is null || _leaderStatus is null) return;
         _leaderToggle.Disabled = !selectedId.HasValue;
         _leaderToggle.SetPressedNoSignal(selectedId.HasValue && selectedId == leaderId);
@@ -148,19 +158,22 @@ public partial class ControlPanel : VBoxContainer
         return button;
     }
 
-    private void AddSearchMode(BoidConfig config)
+    private void AddSearchMode(BoidConfig config, bool supportsGrid)
     {
         var row = new VBoxContainer();
         row.AddChild(new Label { Text = "搜索方式" });
         var input = new OptionButton
         {
             Name = "NeighborSearchMode",
-            TooltipText = "朴素遍历检查所有其他个体；均匀网格只检查相邻格内的候选。搜索耗时包含快照、建格和结果写入。",
+            TooltipText = supportsGrid
+                ? "朴素遍历检查所有其他个体；均匀网格只检查相邻格内的候选。搜索耗时包含快照、建格和结果写入。"
+                : "当前三维版本仅实现朴素遍历，逐一检查其他个体。均匀网格将在下一阶段实现。",
+            Disabled = !supportsGrid,
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
         };
         input.AddItem("朴素遍历", (int)NeighborSearchMode.Naive);
-        input.AddItem("均匀网格", (int)NeighborSearchMode.UniformGrid);
-        input.Select((int)config.NeighborSearchMode);
+        if (supportsGrid) input.AddItem("均匀网格", (int)NeighborSearchMode.UniformGrid);
+        input.Select(supportsGrid ? (int)config.NeighborSearchMode : 0);
         input.ItemSelected += index =>
         {
             config.NeighborSearchMode = (NeighborSearchMode)input.GetItemId((int)index);

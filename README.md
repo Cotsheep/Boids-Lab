@@ -2,7 +2,7 @@
 
 > 开发机曾在 Godot 图形操作时蓝屏。2026-10-27 用户更新显卡驱动后，简单测试暂未复现；长期稳定性尚未验证。详细诊断记录保存在本地，不随源码上传。
 
-用于团队技术分享和个人学习的 Boids 实验项目，包含功能较完整的 2D 世界与基础运动阶段的 3D 世界。运行环境为 **Godot 4.7.2 .NET + .NET 8 SDK**，语言为 C#。
+用于团队技术分享和个人学习的 Boids 实验项目，包含功能较完整的 2D 世界与已接入观察操作和朴素邻居搜索的 3D 世界。运行环境为 **Godot 4.7.2 .NET + .NET 8 SDK**，语言为 C#。
 
 2D 当前已实现 UI、配置、按数量与种子生成个体、速度/加速度积分、受角速度和角加速度限制的朝向跟随、随领队状态切换的无限/环绕世界、可切换的朴素/均匀网格邻居搜索与实测统计，以及**分离、对齐、聚集三条群集规则**。支持单选高亮、选中个体的感知范围与邻居连线、全体运动方向调试绘制，以及可编辑的矩形、圆形障碍物与避障。
 
@@ -28,9 +28,12 @@
 - `BoidManager3D._PhysicsProcess()` 统一调度，按速度移动、按加速度改变速度，并用受角速度与角加速度限制的四元数旋转跟随速度方向。当前无转向输入，默认保持匀速直线运动。
 - 采用中心位于原点的 1280 × 720 × 720 固定盒状空间，三个坐标轴越界均环绕；正交相机支持右键旋转、中键平移、鼠标位置滚轮缩放和 Home 复位；边框与底面参考线帮助观察深度。
 - 与 2D 共用 `BoidConfig` 的范围和默认值；3D 使用世界单位，例如默认速度为 120 世界单位/秒，不做隐式比例转换。设置单独保存至 `user://boids_lab_3d.cfg`。
-- 数量、FPS 和更新耗时来自真实运行。邻居搜索与相关指标尚未实现，保持 `--`。
+- 已实现三维朴素邻居搜索，使用每步开始时的位置/速度快照和最短环绕距离；每步检查 N × (N − 1) 个候选，尚未实现三维网格。
+- 左键单选并金色高亮；再次点击或点击空白取消。重叠投影优先命中前方个体，暂停和运行时都可选择。
+- 感知球和邻居连线只显示选中个体，跨边界从对侧接续；速度箭头开关作用于全体，网格开关控制底面参考线。
+- 数量、FPS、更新/搜索耗时、候选检查次数和平均邻居数来自真实运行。尚未测量或旧结果失效时显示 `--`；暂停时仍能观察当前关系，但不会把调试查询当作一次物理步测量。
 
-当前是运动积分基础，不使用 RigidBody3D 或物理碰撞。三维邻居搜索、分离/对齐/聚集、领队、避障、个体选择、调试叠加留到后续，UI 不展示这些尚未实现的功能。架构与运动输入示例见 [架构说明](docs/architecture.md#三维基础世界与共享-ui)。
+当前是运动积分基础，不使用 RigidBody3D 或物理碰撞。三维网格搜索、分离/对齐/聚集、领队和避障留到后续，UI 不展示这些尚未实现的功能。架构与运动输入示例见 [架构说明](docs/architecture.md#三维基础世界与共享-ui)。
 
 ## 2D 当前可用操作
 
@@ -172,11 +175,12 @@ boids/
 │   ├── simulation/BoidManager.cs, BoidManager3D.cs
 │   ├── simulation/BoidSteering.cs
 │   ├── simulation/LeaderSteering.cs
-│   ├── simulation/NeighborSearch2D.cs
+│   ├── simulation/NeighborSearch2D.cs, NeighborSearch3D.cs
+│   ├── simulation/WorldGeometry3D.cs
 │   ├── simulation/SimulationStats.cs
 │   ├── rendering/SimulationCamera2D.cs, SimulationCamera3D.cs
 │   ├── rendering/SimulationView.cs, SimulationView3D.cs
-│   ├── rendering/DebugOverlayGeometry.cs
+│   ├── rendering/DebugOverlayGeometry.cs, DebugOverlayGeometry3D.cs
 │   ├── obstacles/ObstacleShape.cs
 │   ├── obstacles/Obstacle2D.cs
 │   ├── obstacles/ObstacleAvoidance.cs
@@ -185,6 +189,8 @@ boids/
 │   └── ui/ControlPanel.cs, ObstaclePanel.cs, StatsPanel.cs, HelpOverlay.cs
 ├── tests/
 │   ├── Motion3DChecks.cs, motion_3d_checks.tscn
+│   ├── Observation3DChecks.cs, observation_3d_checks.tscn
+│   ├── Spatial3DChecks.cs, spatial_3d_checks.tscn
 │   ├── MotionChecks.cs
 │   ├── motion_checks.tscn
 │   ├── NeighborChecks.cs
@@ -229,6 +235,7 @@ dotnet build BoidsLab.csproj --source D:/app/Godot4.7.2/GodotSharp/Tools/nupkgs
 先构建 C# 项目，再使用 Godot .NET 可执行文件运行：
 
 ```text
+godot --headless --path . res://tests/spatial_3d_checks.tscn --quit-after 600
 godot --headless --path . res://tests/observation_3d_checks.tscn --quit-after 600
 godot --headless --path . res://tests/motion_3d_checks.tscn --quit-after 600
 godot --headless --path . res://tests/motion_checks.tscn --quit-after 120
@@ -266,6 +273,8 @@ godot --headless --path . res://tests/boundary_mode_checks.tscn --quit-after 600
 `motion_3d_checks` 验证三维匀速/加速、60/120 步积分一致性、线性与角运动限幅、竖直和 180° 朝向收敛、三个坐标轴的正负越界、动态创建/移除、种子复现、相机包围整个空间，以及实际物理回调中的暂停/继续。真实 3D 主场景还验证共享 UI、独立配置保存、重置、F1/F2、未实现控件隐藏和原生网格朝向。全部通过，并通过 2D 空格、弹层、障碍物交互、领队交互和边界切换回归。仅进行了无图形验证，尚未人工验收三维画面。
 
 `observation_3d_checks` 通过真实主场景输入验证右键旋转、中键平移、滚轮锚点与倍率上下限、Home、文本焦点、UI 与帮助隔离、失焦和丢失按键状态时终止拖动，以及无窗口视口尺寸变化。相机操作不改变模拟盒、个体或模拟统计。
+
+`spatial_3d_checks` 以独立的 27 幅周期图像距离为参照，验证面/边/角落邻居、半径边缘、重合位置、非连续 ID、随机分布、空群体、快照冻结和统计失效。还检查跨边界线段总长度、范围线框裁剪、大半径与全域感知，以及调试查询不改写模拟统计。三维观察检查补充运行/暂停选择、前后遮挡、取消/转移/删除/重置、独立高亮材质、调试控件保存和帮助输入隔离。均使用无图形模式。
 
 ## 初版框架的历史验证
 

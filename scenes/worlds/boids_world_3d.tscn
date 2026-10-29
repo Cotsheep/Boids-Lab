@@ -24,6 +24,12 @@ script = ExtResource("3_view")
 [node name="ReferenceFrame" type="MeshInstance3D" parent="SimulationView"]
 cast_shadow = 0
 
+[node name="Grid" type="MeshInstance3D" parent="SimulationView"]
+cast_shadow = 0
+
+[node name="DebugOverlay" type="MeshInstance3D" parent="SimulationView"]
+cast_shadow = 0
+
 [node name="Camera3D" type="Camera3D" parent="SimulationView"]
 current = true
 script = ExtResource("4_camera")

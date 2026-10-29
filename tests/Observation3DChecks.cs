@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using Godot;
 
@@ -32,6 +33,7 @@ public partial class Observation3DChecks : Node
             await Frame();
             await CheckCamera();
             await CheckUiIsolation();
+            await CheckSelectionAndDebug();
             GD.Print($"PASS: {_checks} 3D observation/input assertions (headless).");
             GetTree().Quit();
         }
@@ -158,6 +160,122 @@ public partial class Observation3DChecks : Node
     {
         await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
         await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+    }
+
+    private async Task CheckSelectionAndDebug()
+    {
+        ActionKey("toggle_ui"); // 隐藏 HUD 后，在真实主场景中验证三维命中与绘制。
+        ActionKey("reset_camera");
+        foreach (Boid3D boid in _world.Boids.ToArray()) _world.RemoveBoid(boid);
+        var view = _world.GetNode<SimulationView3D>("SimulationView");
+        var panel = _app.GetNode<ControlPanel>("%ControlPanel");
+        BoidConfig config = _world.Config;
+        ((SpinBox)panel.FindChild("PerceptionRadius", true, false)).Value = 80;
+        foreach (string name in new[] { "ShowNeighbors", "ShowPerceptionRadius", "ShowVelocity" })
+            ((CheckBox)panel.FindChild(name, true, false)).ButtonPressed = true;
+        Boid3D a = _world.SpawnBoid(Vector3.Zero, _camera.Basis.X * 120);
+        Boid3D b = _world.SpawnBoid(_camera.Basis.X * 40, _camera.Basis.Y * 20);
+        _world.SpawnBoid(-_camera.Basis.Y * 100, Vector3.Zero);
+        await Click(Screen(a));
+        Check(_world.SelectedBoid == a && a.IsSelected && !b.IsSelected, "Paused left click selects exactly one individual");
+        Check(a.GetNode<MeshInstance3D>("Body").MaterialOverride == a.SelectionMaterial
+            && b.GetNode<MeshInstance3D>("Body").MaterialOverride is null, "Highlight does not change the shared normal material");
+        Check(view.DebugGeometry.PerceptionCount == 1 && view.DebugGeometry.NeighborCount == 1
+            && view.DebugGeometry.VelocityCount == 2, "Local range/links and all moving velocity arrows are independent");
+        Check(((Label)panel.FindChild("SelectedBoidStatus", true, false)).Text.Contains($"#{a.Id}"), "Shared UI shows the selected ID");
+        await Click(Screen(a));
+        Check(_world.SelectedBoid is null && !a.IsSelected && a.GetNode<MeshInstance3D>("Body").MaterialOverride is null,
+            "Repeated click deselects and restores the original appearance");
+        Check(view.DebugGeometry.RangePoints.Count == 0 && view.DebugGeometry.NeighborPoints.Count == 0
+            && view.DebugGeometry.VelocityCount == 2, "Deselection removes only local debug overlays");
+        await Click(Screen(b));
+        Check(_world.SelectedBoid == b && !a.IsSelected, "Selection can transfer to another individual");
+        await Click(new Vector2(1100, 300));
+        Check(_world.SelectedBoid is null, "Clicking empty world clears selection");
+
+        Vector2 press = Screen(a);
+        Pointer(press);
+        Button(press, MouseButton.Left, true);
+        _world.SetRunning(true);
+        _world.Step(0.5);
+        Check(Screen(a).DistanceTo(press) > 10, "Moving individual leaves the press position");
+        Button(press, MouseButton.Left, false);
+        _world.SetRunning(false);
+        Check(_world.SelectedBoid == a, "A running click retains the identity hit on press");
+        var stats = _world.Stats;
+        ((CheckBox)panel.FindChild("ShowPerceptionRadius", true, false)).ButtonPressed = false;
+        ((CheckBox)panel.FindChild("ShowNeighbors", true, false)).ButtonPressed = false;
+        ((CheckBox)panel.FindChild("ShowGrid", true, false)).ButtonPressed = false;
+        Check(view.DebugGeometry.RangePoints.Count == 0 && view.DebugGeometry.NeighborPoints.Count == 0
+            && !view.GetNode<MeshInstance3D>("Grid").Visible && view.GetNode<MeshInstance3D>("ReferenceFrame").Visible,
+            "Paused UI toggles update real overlay geometry and reference grid");
+        Check(_world.Stats == stats && _world.SelectedBoid == a, "Debug toggles preserve selection and measured statistics");
+        ((CheckBox)panel.FindChild("ShowPerceptionRadius", true, false)).ButtonPressed = true;
+        ((CheckBox)panel.FindChild("ShowNeighbors", true, false)).ButtonPressed = true;
+        ((SpinBox)panel.FindChild("PerceptionRadius", true, false)).Value = 1;
+        Check(_world.Stats.NeighborCandidateChecks is null && view.DebugGeometry.NeighborCount == 0
+            && view.DebugGeometry.PerceptionCount == 1, "Paused radius update redraws immediately and invalidates old statistics");
+        var saved = new BoidConfig();
+        Check(saved.Load(_app.ConfigurationPath) == Error.Ok && saved.PerceptionRadius == 1 && !saved.ShowGrid
+            && saved.ShowNeighbors && saved.ShowPerceptionRadius, "Implemented debug choices persist to the separate 3D config");
+
+        Transform3D cameraBefore = _camera.Transform;
+        Drag(Screen(b), new Vector2(30, 0), MouseButton.Left);
+        Check(_world.SelectedBoid == a && _camera.Transform.IsEqualApprox(cameraBefore), "Left drag neither selects nor moves the camera");
+        Drag(Screen(a), new Vector2(20, 15), MouseButton.Right);
+        Check(_world.SelectedBoid == a, "Orbit over a boid does not change selection");
+        ActionKey("reset_camera");
+        ActionKey("toggle_ui");
+        await Frame();
+        // 顶部帮助按钮始终可见；参数区可能因先前的数字焦点而已经滚动。
+        var helpButton = _app.GetNode<Button>("%HelpButton");
+        await Click(helpButton.GetGlobalRect().GetCenter());
+        Check(_world.SelectedBoid == a, "UI click does not select a background boid");
+        ActionKey("close_help");
+        _world.SetRunning(false);
+        press = Screen(b);
+        Pointer(press);
+        Button(press, MouseButton.Left, true);
+        ActionKey("toggle_help");
+        Button(press, MouseButton.Left, false);
+        ActionKey("close_help");
+        Check(_world.SelectedBoid == a, "Opening help cancels an unfinished selection gesture");
+
+        ActionKey("toggle_ui");
+        foreach (Boid3D boid in _world.Boids.ToArray()) _world.RemoveBoid(boid);
+        Check(_world.SelectedBoid is null && view.DebugGeometry.RangePoints.Count == 0, "Deleting the selected individual clears its overlays");
+        Boid3D back = _world.SpawnBoid(-_camera.Basis.Z * 80, Vector3.Zero);
+        Boid3D front = _world.SpawnBoid(_camera.Basis.Z * 80, Vector3.Zero);
+        await Click(Screen(back));
+        Check(_world.SelectedBoid == front, "Overlapping projections select the nearest ray hit");
+        await Click(Screen(front));
+        Check(_world.SelectedBoid is null, "Nearest overlapping individual can be deselected");
+        Pointer(Screen(front));
+        Button(Screen(front), MouseButton.Left, true);
+        _world.RemoveBoid(front);
+        Button(Screen(back), MouseButton.Left, false);
+        Check(_world.SelectedBoid is null, "Removing a pressed individual does not select a replacement");
+        await Click(Screen(back));
+        Check(_world.SelectedBoid == back, "Remaining individual is selectable");
+        press = Screen(back);
+        Button(press, MouseButton.Left, true);
+        _world.Reset();
+        Button(press, MouseButton.Left, false);
+        Check(_world.SelectedBoid is null && _world.Boids.Count == 0 && view.DebugGeometry.NeighborPoints.Count == 0,
+            "Reset clears selection, pending gesture and local debug data");
+        Boid3D behind = _world.SpawnBoid(Vector3.Zero, Vector3.Zero);
+        behind.Position = _camera.Position + _camera.Basis.Z * 50;
+        await Click(_camera.GetViewport().GetVisibleRect().GetCenter());
+        Check(_world.SelectedBoid is null, "Objects behind the camera are not selectable");
+    }
+
+    private Vector2 Screen(Boid3D boid) => _camera.UnprojectPosition(boid.GlobalPosition);
+    private async Task Click(Vector2 point)
+    {
+        Pointer(point);
+        Button(point, MouseButton.Left, true);
+        Button(point, MouseButton.Left, false);
+        await Frame();
     }
 
     private void ActionKey(string action) => GetViewport().PushInput(new InputEventAction { Action = action, Pressed = true }, true);

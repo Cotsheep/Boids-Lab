@@ -2,7 +2,7 @@
 
 ## 更新方式与职责划分
 
-项目参考 [SebLague/Boids 的管理器](https://github.com/SebLague/Boids/blob/fdda4db1368df92fbacd8a644bbe6dc61d705441/Assets/Scripts/BoidManager.cs)与[个体脚本](https://github.com/SebLague/Boids/blob/fdda4db1368df92fbacd8a644bbe6dc61d705441/Assets/Scripts/Boid.cs)，采用“管理器统一调度、个体更新自身、独立场景显示外观”的组织方式。2D 已实现基础运动、朝向跟随、两种 CPU 邻居搜索，以及分离、对齐、聚集规则；3D 目前仅实现创建与基础运动。均没有 GPU 计算。
+项目参考 [SebLague/Boids 的管理器](https://github.com/SebLague/Boids/blob/fdda4db1368df92fbacd8a644bbe6dc61d705441/Assets/Scripts/BoidManager.cs)与[个体脚本](https://github.com/SebLague/Boids/blob/fdda4db1368df92fbacd8a644bbe6dc61d705441/Assets/Scripts/Boid.cs)，采用“管理器统一调度、个体更新自身、独立场景显示外观”的组织方式。2D 已实现基础运动、朝向跟随、两种 CPU 邻居搜索，以及分离、对齐、聚集规则；3D 已实现创建与基础运动、观察相机、单选调试和朴素邻居搜索。均没有 GPU 计算。
 
 `BoidManager` 是 2D 世界根节点，也是该 2D 世界唯一驱动 Boid 模拟的 Godot 回调入口。`Boid2D.UpdateBoid(deltaSeconds)` 是普通 C# 方法，由管理器显式调用；个体没有自己的 `_Process()` 或 `_PhysicsProcess()`。
 
@@ -278,7 +278,9 @@ Game3D (MainController)
 │       │   └── Boid_0 ... (Boid3D)
 │       │       └── Body (MeshInstance3D / CylinderMesh 六棱锥)
 │       └── SimulationView (Node3D / SimulationView3D)
-│           ├── ReferenceFrame (MeshInstance3D / ImmediateMesh 参考线)
+│           ├── ReferenceFrame (MeshInstance3D / ImmediateMesh 盒状边框)
+│           ├── Grid (MeshInstance3D / 可切换底面网格)
+│           ├── DebugOverlay (MeshInstance3D / 合批调试线段)
 │           ├── Camera3D (SimulationCamera3D，环绕、平移、缩放与复位)
 │           ├── WorldEnvironment
 │           └── Sun (DirectionalLight3D)
@@ -294,12 +296,15 @@ Game3D (MainController)
 ```text
 Godot → BoidManager3D._PhysicsProcess(delta)
         └── IsRunning → Step(delta)
-                       └── 遍历个体
-                           ├── Boid3D.UpdateBoid(delta)
-                           │   ├── 合并外部 / 当步转向加速度，限制模长
-                           │   ├── 更新速度并限速，再按新速度更新 Position
-                           │   └── 计算方向误差，积分角速度并更新 Quaternion
-                           └── X、Y、Z 分别环绕到固定 WorldBounds
+                       ├── 规范化位置，NeighborSearch3D 复制快照并朴素搜索
+                       ├── 遍历个体
+                       │   ├── Boid3D.UpdateBoid(delta)
+                       │   │   ├── 合并外部 / 当步转向加速度，限制模长
+                       │   │   ├── 更新速度并限速，再按新速度更新 Position
+                       │   │   └── 计算方向误差，积分角速度并更新 Quaternion
+                       │   └── X、Y、Z 分别环绕到固定 WorldBounds
+                       ├── 发布真实搜索与整步统计
+                       └── 从更新后的位置重建调试线段（不计入模拟耗时）
 ```
 
 `Boid3D` 没有自身的物理帧回调，使用原生 Node3D 的 Position / Quaternion，并保存 Vector3 速度、加速度、角速度和角加速度。它负责运动积分，不使用 RigidBody3D、重力或接触求解。未来的三维群集规则应在管理器内先读取全体步前状态、计算每只个体的转向，再统一推进，避免前后遍历顺序改变结果。
@@ -323,22 +328,38 @@ boid.SetAcceleration(new Vector3(0, 20, -10)); // 持续输入，受共享 MaxFo
 
 两个世界共用 BoidConfig 的默认值和范围；三维的长度、速度、加速度使用世界单位，例如默认速度 120 世界单位/秒，不隐式换算成米。MainController 通过导出的 ConfigurationPath 分别读写 `user://boids_lab.cfg` 与 `user://boids_lab_3d.cfg`。三维暂时不使用的配置字段不参与运动计算。
 
-`SimulationFeatures` 声明可选能力：2D 为 All，3D 为 None。ControlPanel 始终构建运行、数量/种子和运动控制，仅按能力创建领队、障碍物、邻居搜索、群集规则和调试控件。三维仅显示基础阶段说明；没有把空接口或缺失功能标成已生效。现有世界接口中的三维可选操作保留 TODO 空实现，后续启用能力时再接入，当前无需抽象新的模拟基类。
+`SimulationFeatures` 声明可选能力：2D 为 All，3D 为 NeighborSearch | DebugDrawing。新增 UniformGridSearch 能力独立控制搜索方式选项，因此三维只显示禁用切换的朴素遍历项，初始化、重置和配置变化时会统一约束为 Naive。三维没有启用 Flocking、Leader 或 Obstacles，相应规则、领队、障碍物与分离范围控件保持隐藏；操作说明明确搜索暂不改变运动。共享 UI 继续复用同一配置与事件接口。
 
-ControlPanel / StatsPanel 不接触 Vector2、Vector3 或相机。三维统计仅报告实际数量和最近一步更新计时；邻居指标为 null，显示 `--`。MainController 的 0.25 秒计时仍只刷新统计 UI，模拟每个物理帧持续推进。
+ControlPanel / StatsPanel 不接触 Vector2、Vector3 或相机。三维统计报告实际数量、最近一步更新/搜索耗时、候选次数与平均邻居数。MainController 的 0.25 秒计时仍只刷新统计 UI，模拟每个物理帧持续推进。
+
+`NeighborSearch3D` 在物理步开始时复制 ID、位置与速度。结果中的整数是快照下标，不是可能不连续的 ID；数组与列表在数量不变时复用，结果只在下一次搜索或失效前有效。朴素搜索对每个个体检查全部其他个体，有向候选次数为 N × (N − 1)，包含恰在半径上的邻居和位置重合的其他个体。平均邻居数为有向邻居总数除以个体数；空群体完成搜索后为 0。搜索计时包含快照、距离判定和结果写入，整步计时还包含运动与环绕，不包含调试绘制。
+
+`WorldGeometry3D` 统一位置规范化、最短三轴环绕位移与半径判定。相隔半边长的两个点保留原位移方向，其他跨界位移选取更短一侧。摄像机操作、普通选择和绘制开关不使搜索结果失效；感知半径变化、Reset、增删个体会清除旧结果，统计显示 `--`，直到下一个物理步重新测量。
+
+左键选择沿 Camera3D 的投影射线检查网格包围球，保留至少 10 个屏幕像素的点击容差。取最近命中，完全重合时优先保留已选对象以便再次点击取消；不选相机后方或视锥之外的对象。按下时记录对象，松开且未拖动才提交选择，因此运行中的个体移动不会改变这次点击的身份。右键、中键与超过阈值的左键拖动不改变选择。删除选中对象、重置和输入隔离负责清理对象或手势引用。
+
+`Boid3D.SetSelected()` 仅替换自身 Body 的 MaterialOverride，选中材质来自个体场景中的共享只读资源，不修改普通网格材质。取消时恢复原覆盖材质。ControlPanel 在没有领队控件时显示普通选择的 ID。
+
+`DebugOverlayGeometry3D` 从当前节点位置生成线段，邻居查询只针对选中个体，复杂度 O(N)，不复用旧物理快照，也不改写它。感知范围仅生成选中对象的球面经纬线；线段按周期图像裁剪到模拟盒内，在对侧接续。球半径超过某轴半边长时，还按最近周期球心的区域裁剪，避免显示重叠球面的内部边界；半径覆盖整个环绕世界时用十二条盒边表示全域。邻居线使用相同的最短位移；速度箭头作用于全体非静止个体，在小盒中限制箭头长度，避免一支箭头绕行多圈。
+
+`SimulationView3D.RefreshDebug()` 在物理更新后、选择/参数变化和相机变化时重建一份 ImmediateMesh，将感知范围、邻居线、速度箭头按颜色一起提交。暂停时仍可立即观察新的半径与选择。底面网格单独控制可见性，盒状边框始终保留。三维分离规则未实现，因此分离范围暂不绘制。
 
 ## 后续实现顺序
 
 以下内容仍未实现：
 
-1. 3D：根据需求接入邻居搜索与统计，再加入三条群集规则、调试选择和避障。
+1. 3D：接入均匀网格，并与朴素基准比较结果；随后逐条实现分离、对齐、聚集，再推进障碍物与领队。
 2. 两个版本：根据后续需求加入数量即时增减与 UI 单步控制。
 
 当前空间划分只使用简单均匀网格；没有引入 Compute Shader、碰撞节点、ECS、多线程或对象池。后续根据测量结果决定是否继续优化。
 
 ## 验证边界
 
-`motion_3d_checks.tscn` 通过真实 Godot 三维节点验证线性积分、步长一致性、受限角运动、竖直和掉头方向、三轴正负环绕、多圈越界、种子复现、动态增删和统计。实例化真实三维入口，检查共享 UI、独立设置路径、暂停/继续的实际物理回调、未实现控件隐藏、帮助内容、原生网格朝向及相机视锥覆盖。构建零警告、零错误；三维测试和受共享 UI 影响的五组二维回归均通过。仅无图形验证，未进行图形窗口视觉验收。
+`spatial_3d_checks` 使用独立的 27 幅周期图像距离验证三维朴素搜索，覆盖边/面/角落、半径边缘、重合、随机分布、空/单个体、非连续 ID、数组重建、快照冻结和统计生命周期。调试几何检查覆盖跨界线长、盒内裁剪、大半径、全域感知和不改写模拟统计。
+
+`observation_3d_checks` 通过真实三维主场景和视口输入验证相机旋转、平移、缩放上下限与锚点、Home、UI/帮助隔离、视口适配、失焦及手势取消；同时检查暂停/运行单选、按下身份保持、前后遮挡、取消/转移/删除/重置、材质隔离、调试控件保存和即时更新。仅无图形验证，尚未人工验收画面。
+
+`motion_3d_checks.tscn` 通过真实 Godot 三维节点验证线性积分、步长一致性、受限角运动、竖直和掉头方向、三轴正负环绕、多圈越界、种子复现、动态增删和统计。实例化真实三维入口，检查共享 UI、独立设置路径、暂停/继续的实际物理回调、未实现控件隐藏、帮助内容、原生网格朝向及相机视锥覆盖。构建零警告、零错误；三组三维测试和受共享 UI 影响的八组二维回归均通过。仅无图形验证，未进行图形窗口视觉验收。
 
 `boundary_mode_checks.tscn` 覆盖有/无领队反复切换、暂停时立即传送、领队转移不传送、删除和 Reset、视角变化、速度朝向保持，以及朴素/网格搜索与调试显示的一致性。邻居测试以独立的周期图像距离验证小网格、边缘、随机分布和重复候选；避障检查验证双向传送入口的连续扫描。
 

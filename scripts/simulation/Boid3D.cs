@@ -6,7 +6,11 @@ namespace BoidsLab;
 /// <summary>三维个体：原生 Node3D 保存位姿，由管理器统一推进；本地 -Z 是前方。</summary>
 public partial class Boid3D : Node3D
 {
+    [Export] public Material? SelectionMaterial { get; set; }
     public int Id { get; private set; }
+    public bool IsSelected { get; private set; }
+    private MeshInstance3D? _body;
+    private Material? _normalOverride;
     // 所有矢量都属于 Boids 容器坐标系，时间单位为秒，角量使用弧度。
     public Vector3 Velocity { get; private set; }
     public Vector3 Acceleration { get; private set; }
@@ -17,6 +21,44 @@ public partial class Boid3D : Node3D
     private const float DirectionSpeedSquared = 0.0001f;
     private BoidConfig? _config;
     private Vector3 _accelerationInput;
+
+    public override void _Ready()
+    {
+        _body = GetNodeOrNull<MeshInstance3D>("Body");
+        _normalOverride = _body?.MaterialOverride;
+        RefreshAppearance();
+    }
+
+    internal void SetSelected(bool selected)
+    {
+        IsSelected = selected;
+        RefreshAppearance();
+    }
+
+    private void RefreshAppearance()
+    {
+        if (_body is not null) _body.MaterialOverride = IsSelected ? SelectionMaterial : _normalOverride;
+    }
+
+    // 用网格包围球进行轻量拾取，无需给每只个体添加碰撞体。保留最小屏幕点击容差。
+    internal float? HitDistance(Vector3 rayOrigin, Vector3 rayDirection, float minimumRadius)
+    {
+        Vector3 center = _body is null ? GlobalPosition : _body.ToGlobal(_body.GetAabb().GetCenter());
+        float radius = 14f;
+        if (_body is not null)
+        {
+            Basis basis = _body.GlobalBasis;
+            float scale = Mathf.Max(basis.X.Length(), Mathf.Max(basis.Y.Length(), basis.Z.Length()));
+            radius = _body.GetAabb().Size.Length() * 0.5f * scale;
+        }
+        radius = Mathf.Max(radius, minimumRadius);
+        Vector3 toCenter = center - rayOrigin;
+        float along = toCenter.Dot(rayDirection);
+        if (along < 0) return null;
+        float perpendicularSquared = (toCenter - rayDirection * along).LengthSquared();
+        if (perpendicularSquared > radius * radius) return null;
+        return Mathf.Max(0, along - Mathf.Sqrt(Mathf.Max(0, radius * radius - perpendicularSquared)));
+    }
 
     public void Initialize(BoidConfig config, int id, Vector3 velocity)
     {

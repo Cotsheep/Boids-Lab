@@ -144,9 +144,9 @@ public partial class Motion3DChecks : Node
         world.Reset();
         Check(world.Boids.Count == 0 && world.Stats.BoidCount == 0, "Zero population reset is valid");
         world.Step(1.0 / 60);
-        Check(world.Stats.UpdateMilliseconds.HasValue && world.Stats.NeighborCandidateChecks is null
-            && world.Stats.AverageNeighbors is null && world.Stats.NeighborSearchMilliseconds is null,
-            "Only actual measurements are reported");
+        Check(world.Stats.UpdateMilliseconds.HasValue && world.Stats.NeighborCandidateChecks == 0
+            && world.Stats.AverageNeighbors == 0 && world.Stats.NeighborSearchMilliseconds.HasValue,
+            "Empty-world neighbor measurements are actual zero values after a step");
 
         Boid3D spawned = world.SpawnBoid(world.WorldBounds.End - Vector3.One, new Vector3(10, 20, 30));
         var readOnlyView = world.Boids;
@@ -196,9 +196,12 @@ public partial class Motion3DChecks : Node
         var controls = app.GetNode<ControlPanel>("%ControlPanel");
         Check(world.Boids.Count == 8 && world.Config.RandomSeed == 314, "Inherited main scene loads configuration and instantiates the 3D world");
         Check(controls.Obstacles is null && controls.FindChild("IsLeader", true, false) is null
-            && controls.FindChild("NeighborSearchMode", true, false) is null
             && controls.FindChild("SeparationEnabled", true, false) is null
-            && controls.FindChild("ShowNeighbors", true, false) is null, "Unsupported 3D features have no misleading controls");
+            && controls.FindChild("ShowSeparationRadius", true, false) is null, "Unsupported 3D features have no misleading controls");
+        var searchMode = (OptionButton)controls.FindChild("NeighborSearchMode", true, false);
+        Check(searchMode.Disabled && searchMode.ItemCount == 1 && searchMode.GetItemId(0) == (int)NeighborSearchMode.Naive,
+            "3D offers only the implemented naive search");
+        Check(controls.FindChild("ShowNeighbors", true, false) is CheckBox, "Implemented debug controls are available");
         var count = (SpinBox)controls.FindChild("BoidCount", true, false);
         count.Value = 12;
         Check(world.Config.BoidCount == 12 && world.Boids.Count == 8, "Shared UI updates the configuration before reset");
