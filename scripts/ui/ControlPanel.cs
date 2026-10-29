@@ -11,14 +11,14 @@ public partial class ControlPanel : VBoxContainer
     public event Action? ConfigurationChanged;
     public event Action<bool>? LeaderAssignmentRequested;
 
-    public ObstaclePanel Obstacles { get; private set; } = null!;
+    public ObstaclePanel? Obstacles { get; private set; }
 
     private Button _startPause = null!;
     private Button _step = null!;
-    private CheckBox _leaderToggle = null!;
-    private Label _leaderStatus = null!;
+    private CheckBox? _leaderToggle;
+    private Label? _leaderStatus;
 
-    public void Bind(BoidConfig config, string lengthUnit)
+    public void Bind(BoidConfig config, string lengthUnit, SimulationFeatures features = SimulationFeatures.All)
     {
         // 主控制器在 _Ready 中调用一次；控件的值、范围均来自共享配置。
         AddHeading("模拟控制");
@@ -32,27 +32,33 @@ public partial class ControlPanel : VBoxContainer
         _step.Disabled = true;
         _step.TooltipText = "单步功能暂未开放。";
 
-        AddHeading("领队");
-        _leaderToggle = new CheckBox
+        if (features.HasFlag(SimulationFeatures.Leader))
         {
-            Name = "IsLeader", Text = "设为领队", Disabled = true,
-            TooltipText = "先选中一个个体再勾选；勾选其他个体会转移唯一领队，取消普通选择不会清除领队。有领队时地图无限，解除身份后恢复视口环绕。",
-        };
-        _leaderToggle.Toggled += enabled => LeaderAssignmentRequested?.Invoke(enabled);
-        AddChild(_leaderToggle);
-        _leaderStatus = new Label { Name = "LeaderStatus", Text = "未指定领队", AutowrapMode = TextServer.AutowrapMode.WordSmart };
-        _leaderStatus.AddThemeColorOverride("font_color", new Color("d69cff"));
-        _leaderStatus.AddThemeFontSizeOverride("font_size", 13);
-        AddChild(_leaderStatus);
+            AddHeading("领队");
+            _leaderToggle = new CheckBox
+            {
+                Name = "IsLeader", Text = "设为领队", Disabled = true,
+                TooltipText = "先选中一个个体再勾选；勾选其他个体会转移唯一领队，取消普通选择不会清除领队。有领队时地图无限，解除身份后恢复视口环绕。",
+            };
+            _leaderToggle.Toggled += enabled => LeaderAssignmentRequested?.Invoke(enabled);
+            AddChild(_leaderToggle);
+            _leaderStatus = new Label { Name = "LeaderStatus", Text = "未指定领队", AutowrapMode = TextServer.AutowrapMode.WordSmart };
+            _leaderStatus.AddThemeColorOverride("font_color", new Color("d69cff"));
+            _leaderStatus.AddThemeFontSizeOverride("font_size", 13);
+            AddChild(_leaderStatus);
+        }
 
-        AddHeading("障碍物");
-        Obstacles = new ObstaclePanel { Name = "ObstaclePanel", LengthUnit = lengthUnit };
-        AddChild(Obstacles);
-        AddToggle("AvoidanceEnabled", "启用避障", config.AvoidanceEnabled, value => config.AvoidanceEnabled = value);
-        AddNumber("AvoidanceLookAhead", "前瞻时间", BoidConfig.AvoidanceLookAheadRange, config.AvoidanceLookAhead,
-            value => config.AvoidanceLookAhead = (float)value, "单位：秒；沿当前运动方向提前观察障碍物。数值越大，越早开始避让。");
-        AddNumber("ObstacleClearance", "避障间距", BoidConfig.ObstacleClearanceRange, config.ObstacleClearance,
-            value => config.ObstacleClearance = (float)value, $"单位：{lengthUnit}；个体中心与障碍物之间预留的距离。");
+        if (features.HasFlag(SimulationFeatures.Obstacles))
+        {
+            AddHeading("障碍物");
+            Obstacles = new ObstaclePanel { Name = "ObstaclePanel", LengthUnit = lengthUnit };
+            AddChild(Obstacles);
+            AddToggle("AvoidanceEnabled", "启用避障", config.AvoidanceEnabled, value => config.AvoidanceEnabled = value);
+            AddNumber("AvoidanceLookAhead", "前瞻时间", BoidConfig.AvoidanceLookAheadRange, config.AvoidanceLookAhead,
+                value => config.AvoidanceLookAhead = (float)value, "单位：秒；沿当前运动方向提前观察障碍物。数值越大，越早开始避让。");
+            AddNumber("ObstacleClearance", "避障间距", BoidConfig.ObstacleClearanceRange, config.ObstacleClearance,
+                value => config.ObstacleClearance = (float)value, $"单位：{lengthUnit}；个体中心与障碍物之间预留的距离。");
+        }
 
         AddHeading("群体设置");
         AddNumber("BoidCount", "个体数量", BoidConfig.CountRange, config.BoidCount,
@@ -60,44 +66,63 @@ public partial class ControlPanel : VBoxContainer
         AddNumber("RandomSeed", "随机种子", BoidConfig.SeedRange, config.RandomSeed,
             value => config.RandomSeed = (int)value, "点击重置后生效；相同种子和参数可复现初始位置与速度。");
 
-        AddHeading("邻居搜索");
-        AddSearchMode(config);
-        AddNumber("PerceptionRadius", "感知半径", BoidConfig.RadiusRange, config.PerceptionRadius,
-            value => config.PerceptionRadius = (float)value, $"单位：{lengthUnit}；有领队时按直接距离、无领队时按最短环绕距离查找邻居，包含半径边缘，不包含自身。");
+        if (features.HasFlag(SimulationFeatures.NeighborSearch))
+        {
+            AddHeading("邻居搜索");
+            AddSearchMode(config);
+            AddNumber("PerceptionRadius", "感知半径", BoidConfig.RadiusRange, config.PerceptionRadius,
+                value => config.PerceptionRadius = (float)value, $"单位：{lengthUnit}；有领队时按直接距离、无领队时按最短环绕距离查找邻居，包含半径边缘，不包含自身。");
+        }
 
         AddHeading("运动参数");
         AddNumber("MaxSpeed", "最大速度", BoidConfig.SpeedRange, config.MaxSpeed,
             value => config.MaxSpeed = (float)value, $"速度上限，单位：{lengthUnit}/秒；也用作重置时的初始速率和有转向目标时的目标速率。");
         AddNumber("MaxForce", "最大加速度", BoidConfig.ForceRange, config.MaxForce,
-            value => config.MaxForce = (float)value, $"线性加速度模长上限，单位：{lengthUnit}/秒²；限制各规则及合成后的总加速度。");
+            value => config.MaxForce = (float)value, $"线性加速度模长上限，单位：{lengthUnit}/秒²；限制外部输入与转向输入合成后的总加速度；当前没有加速度输入时不会主动改变速度。");
         AddNumber("MaxAngularSpeed", "最大角速度", BoidConfig.AngularSpeedRange, config.MaxAngularSpeedDegrees,
             value => config.MaxAngularSpeedDegrees = (float)value, "朝向旋转速度上限，单位：度/秒。");
         AddNumber("MaxAngularAcceleration", "最大角加速度", BoidConfig.AngularAccelerationRange, config.MaxAngularAccelerationDegrees,
             value => config.MaxAngularAccelerationDegrees = (float)value, "角速度变化率上限，单位：度/秒²；控制朝向平滑跟随运动方向。");
 
-        AddHeading("转向规则");
-        AddNumber("LeaderFollowDistance", "领队后方距离", BoidConfig.LeaderFollowDistanceRange, config.LeaderFollowDistance,
-            value => config.LeaderFollowDistance = (float)value, $"单位：{lengthUnit}；领队到身后跟随区域前缘的间隔；区域随跟随数量扩大，不受发现领队的感知半径限制。");
-        AddNumber("LeaderFollowWeight", "领队跟随权重", BoidConfig.LeaderFollowWeightRange, config.LeaderFollowWeight,
-            value => config.LeaderFollowWeight = (float)value, "跟随与原有群集规则共同作用；设为零关闭跟随贡献，避障仍优先。");
-        AddNumber("SeparationRadius", "分离半径", BoidConfig.SeparationRadiusRange, config.SeparationRadius,
-            value => config.SeparationRadius = (float)value, $"单位：{lengthUnit}；仅避开此范围内的邻居，实际范围不超过感知半径。");
-        AddToggle("SeparationEnabled", "启用分离规则", config.SeparationEnabled, value => config.SeparationEnabled = value);
-        AddNumber("SeparationWeight", "分离权重", BoidConfig.SeparationRange, config.SeparationWeight,
-            value => config.SeparationWeight = (float)value, "避开近邻；越近的邻居对分离方向影响越大，权重为零时不贡献加速度。");
-        AddToggle("AlignmentEnabled", "启用对齐规则", config.AlignmentEnabled, value => config.AlignmentEnabled = value);
-        AddNumber("AlignmentWeight", "对齐权重", BoidConfig.AlignmentRange, config.AlignmentWeight,
-            value => config.AlignmentWeight = (float)value, "朝邻居的平均速度方向转向，目标速率为最大速度。");
-        AddToggle("CohesionEnabled", "启用聚集规则", config.CohesionEnabled, value => config.CohesionEnabled = value);
-        AddNumber("CohesionWeight", "聚集权重", BoidConfig.CohesionRange, config.CohesionWeight,
-            value => config.CohesionWeight = (float)value, "朝邻居中心靠拢，按当前地图模式的位移计算中心方向。");
+        if (features.HasFlag(SimulationFeatures.Flocking))
+        {
+            AddHeading("转向规则");
+            AddNumber("LeaderFollowDistance", "领队后方距离", BoidConfig.LeaderFollowDistanceRange, config.LeaderFollowDistance,
+                value => config.LeaderFollowDistance = (float)value, $"单位：{lengthUnit}；领队到身后跟随区域前缘的间隔；区域随跟随数量扩大，不受发现领队的感知半径限制。");
+            AddNumber("LeaderFollowWeight", "领队跟随权重", BoidConfig.LeaderFollowWeightRange, config.LeaderFollowWeight,
+                value => config.LeaderFollowWeight = (float)value, "跟随与原有群集规则共同作用；设为零关闭跟随贡献，避障仍优先。");
+            AddNumber("SeparationRadius", "分离半径", BoidConfig.SeparationRadiusRange, config.SeparationRadius,
+                value => config.SeparationRadius = (float)value, $"单位：{lengthUnit}；仅避开此范围内的邻居，实际范围不超过感知半径。");
+            AddToggle("SeparationEnabled", "启用分离规则", config.SeparationEnabled, value => config.SeparationEnabled = value);
+            AddNumber("SeparationWeight", "分离权重", BoidConfig.SeparationRange, config.SeparationWeight,
+                value => config.SeparationWeight = (float)value, "避开近邻；越近的邻居对分离方向影响越大，权重为零时不贡献加速度。");
+            AddToggle("AlignmentEnabled", "启用对齐规则", config.AlignmentEnabled, value => config.AlignmentEnabled = value);
+            AddNumber("AlignmentWeight", "对齐权重", BoidConfig.AlignmentRange, config.AlignmentWeight,
+                value => config.AlignmentWeight = (float)value, "朝邻居的平均速度方向转向，目标速率为最大速度。");
+            AddToggle("CohesionEnabled", "启用聚集规则", config.CohesionEnabled, value => config.CohesionEnabled = value);
+            AddNumber("CohesionWeight", "聚集权重", BoidConfig.CohesionRange, config.CohesionWeight,
+                value => config.CohesionWeight = (float)value, "朝邻居中心靠拢，按当前地图模式的位移计算中心方向。");
+        }
 
-        AddHeading("调试可视化");
-        AddToggle("ShowGrid", "显示网格", config.ShowGrid, value => config.ShowGrid = value);
-        AddToggle("ShowNeighbors", "显示选中个体的邻居连线", config.ShowNeighbors, value => config.ShowNeighbors = value);
-        AddToggle("ShowPerceptionRadius", "显示选中个体的感知范围", config.ShowPerceptionRadius, value => config.ShowPerceptionRadius = value);
-        AddToggle("ShowSeparationRadius", "显示选中个体的分离半径", config.ShowSeparationRadius, value => config.ShowSeparationRadius = value);
-        AddToggle("ShowVelocity", "显示全体运动方向", config.ShowVelocity, value => config.ShowVelocity = value);
+        if (features.HasFlag(SimulationFeatures.DebugDrawing))
+        {
+            AddHeading("调试可视化");
+            AddToggle("ShowGrid", "显示网格", config.ShowGrid, value => config.ShowGrid = value);
+            AddToggle("ShowNeighbors", "显示选中个体的邻居连线", config.ShowNeighbors, value => config.ShowNeighbors = value);
+            AddToggle("ShowPerceptionRadius", "显示选中个体的感知范围", config.ShowPerceptionRadius, value => config.ShowPerceptionRadius = value);
+            AddToggle("ShowSeparationRadius", "显示选中个体的分离半径", config.ShowSeparationRadius, value => config.ShowSeparationRadius = value);
+            AddToggle("ShowVelocity", "显示全体运动方向", config.ShowVelocity, value => config.ShowVelocity = value);
+        }
+
+        if (features == SimulationFeatures.None)
+        {
+            AddHeading("当前阶段");
+            AddChild(new Label
+            {
+                Text = "仅实现三维个体创建与基础运动。邻居搜索、群体规则、领队、避障及调试绘制尚未实现。",
+                AutowrapMode = TextServer.AutowrapMode.WordSmart,
+            });
+        }
     }
 
     public void RefreshRunState(bool running, bool canStep)
@@ -108,6 +133,7 @@ public partial class ControlPanel : VBoxContainer
 
     public void RefreshLeaderState(int? selectedId, int? leaderId, bool hasTarget)
     {
+        if (_leaderToggle is null || _leaderStatus is null) return;
         _leaderToggle.Disabled = !selectedId.HasValue;
         _leaderToggle.SetPressedNoSignal(selectedId.HasValue && selectedId == leaderId);
         _leaderStatus.Text = leaderId.HasValue

@@ -14,6 +14,7 @@ public partial class BoidManager : Node2D, ISimulationWorld
 
     public string DisplayName => "二维世界";
     public string LengthUnit => "像素";
+    public SimulationFeatures Features => SimulationFeatures.All;
     public BoidConfig Config => _config
         ?? throw new InvalidOperationException("Initialize the world with a shared configuration first.");
     public Rect2 ViewBounds { get; private set; }

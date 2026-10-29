@@ -17,7 +17,7 @@ public partial class StatsPanel : HFlowContainer
         _count = AddMetric("BoidCount", "实际个体数量");
         _fps = AddMetric("Fps", "帧率（帧/秒）");
         _time = AddMetric("UpdateTime", "模拟更新耗时（毫秒）");
-        _time.TooltipText = "最近一次物理步的邻居搜索、三条规则、运动积分及边界处理总耗时；不含绘制与界面刷新。";
+        _time.TooltipText = "最近一次物理步中当前世界已实现的模拟计算总耗时；不含绘制与界面刷新。未实现或尚未测量的指标显示为 --。";
         _searchTime = AddMetric("SearchTime", "邻居搜索耗时（毫秒）");
         _searchTime.TooltipText = "最近一次搜索的实测耗时，包含状态快照、网格构建（网格模式）、距离判定和结果写入。";
         _checks = AddMetric("NeighborChecks", "邻居候选检查次数");

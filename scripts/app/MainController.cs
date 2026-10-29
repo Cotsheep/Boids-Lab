@@ -5,8 +5,10 @@ namespace BoidsLab;
 
 public partial class MainController : Node
 {
-    // 同一套 UI 的模拟场景，未来可指定实现 ISimulationWorld 的 Node3D 场景。
+    // 2D / 3D 入口复用同一套 HUD，通过世界接口控制不同的模拟场景。
     [Export] public PackedScene SimulationScene { get; set; } = null!;
+    [Export] public string ConfigurationPath { get; set; } = BoidConfig.SavePath;
+    [Export(PropertyHint.MultilineText)] public string HelpTextOverride { get; set; } = "";
 
     private readonly BoidConfig _config = new();
     private ISimulationWorld _world = null!;
@@ -26,7 +28,7 @@ public partial class MainController : Node
     public override void _Ready()
     {
         GetWindow().MinSize = new Vector2I(960, 640);
-        Error loadError = _config.Load();
+        Error loadError = _config.Load(ConfigurationPath);
         if (loadError != Error.Ok && loadError != Error.FileNotFound)
         {
             _storageWarning = $"配置加载失败（错误代码：{(int)loadError}）";
@@ -42,6 +44,7 @@ public partial class MainController : Node
         _hideUiButton.Pressed += ToggleUi;
         _helpButton = GetNode<Button>("%HelpButton");
         _help = GetNode<HelpOverlay>("%HelpOverlay");
+        if (!string.IsNullOrWhiteSpace(HelpTextOverride)) _help.SetInstructions(HelpTextOverride);
         _helpButton.Pressed += _help.Toggle;
 
         if (SimulationScene is null)
@@ -58,7 +61,7 @@ public partial class MainController : Node
         GetNode<Label>("%WorldTitle").Text = _world.DisplayName;
         GetNode<Label>("%WorldCoordinates").Text = $"世界坐标 / {_world.LengthUnit}";
 
-        _controls.Bind(_config, _world.LengthUnit);
+        _controls.Bind(_config, _world.LengthUnit, _world.Features);
         _controls.ToggleRunningRequested += ToggleRunning;
         _controls.ResetRequested += ResetSimulation;
         _controls.StepRequested += StepSimulation;
@@ -66,10 +69,13 @@ public partial class MainController : Node
         _controls.LeaderAssignmentRequested += _world.SetSelectedBoidLeader;
         _world.BoidControlStateChanged += RefreshLeaderControls;
         RefreshLeaderControls();
-        _controls.Obstacles.CreateRequested += _world.BeginObstaclePlacement;
-        _controls.Obstacles.CancelPlacementRequested += _world.CancelObstaclePlacement;
-        _controls.Obstacles.DeleteRequested += _world.DeleteSelectedObstacle;
-        _controls.Obstacles.ResizeRequested += _world.ResizeSelectedObstacle;
+        if (_controls.Obstacles is { } obstacles)
+        {
+            obstacles.CreateRequested += _world.BeginObstaclePlacement;
+            obstacles.CancelPlacementRequested += _world.CancelObstaclePlacement;
+            obstacles.DeleteRequested += _world.DeleteSelectedObstacle;
+            obstacles.ResizeRequested += _world.ResizeSelectedObstacle;
+        }
         _world.ObstacleSelectionChanged += RefreshObstacleControls;
         RefreshObstacleControls();
         _help.OpenChanged += OnHelpOpenChanged;
@@ -147,7 +153,7 @@ public partial class MainController : Node
     }
 
     private void RefreshObstacleControls() =>
-        _controls.Obstacles.Refresh(_world.SelectedObstacleInfo, _world.ObstaclePlacement);
+        _controls.Obstacles?.Refresh(_world.SelectedObstacleInfo, _world.ObstaclePlacement);
 
     private void RefreshLeaderControls() =>
         _controls.RefreshLeaderState(_world.SelectedBoidId, _world.LeaderId, _world.HasLeaderTarget);
@@ -174,7 +180,7 @@ public partial class MainController : Node
     private void ApplyConfiguration()
     {
         _config.Normalize();
-        Error error = _config.Save();
+        Error error = _config.Save(ConfigurationPath);
         _storageWarning = error == Error.Ok ? null : $"配置保存失败（错误代码：{(int)error}）";
         if (_storageWarning is not null) GD.PushWarning(_storageWarning);
         _world.ConfigurationChanged();
@@ -204,10 +210,13 @@ public partial class MainController : Node
         if (_controls is null) return;
         _controls.LeaderAssignmentRequested -= _world.SetSelectedBoidLeader;
         _world.BoidControlStateChanged -= RefreshLeaderControls;
-        _controls.Obstacles.CreateRequested -= _world.BeginObstaclePlacement;
-        _controls.Obstacles.CancelPlacementRequested -= _world.CancelObstaclePlacement;
-        _controls.Obstacles.DeleteRequested -= _world.DeleteSelectedObstacle;
-        _controls.Obstacles.ResizeRequested -= _world.ResizeSelectedObstacle;
+        if (_controls.Obstacles is { } obstacles)
+        {
+            obstacles.CreateRequested -= _world.BeginObstaclePlacement;
+            obstacles.CancelPlacementRequested -= _world.CancelObstaclePlacement;
+            obstacles.DeleteRequested -= _world.DeleteSelectedObstacle;
+            obstacles.ResizeRequested -= _world.ResizeSelectedObstacle;
+        }
         _world.ObstacleSelectionChanged -= RefreshObstacleControls;
         _controls.ToggleRunningRequested -= ToggleRunning;
         _controls.ResetRequested -= ResetSimulation;

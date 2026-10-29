@@ -2,25 +2,37 @@
 
 > 开发机曾在 Godot 图形操作时蓝屏。2026-10-27 用户更新显卡驱动后，简单测试暂未复现；长期稳定性尚未验证。详细诊断记录保存在本地，不随源码上传。
 
-用于团队技术分享和个人学习的 2D Boids 实验框架。运行环境为 **Godot 4.7.2 .NET + .NET 8 SDK**，语言为 C#。
+用于团队技术分享和个人学习的 Boids 实验项目，包含功能较完整的 2D 世界与基础运动阶段的 3D 世界。运行环境为 **Godot 4.7.2 .NET + .NET 8 SDK**，语言为 C#。
 
-当前已实现 UI、配置、按数量与种子生成个体、速度/加速度积分、受角速度和角加速度限制的朝向跟随、随领队状态切换的无限/环绕世界、可切换的朴素/均匀网格邻居搜索与实测统计，以及**分离、对齐、聚集三条群集规则**。支持单选高亮、选中个体的感知范围与邻居连线、全体运动方向调试绘制，以及可编辑的矩形、圆形障碍物与避障。
+2D 当前已实现 UI、配置、按数量与种子生成个体、速度/加速度积分、受角速度和角加速度限制的朝向跟随、随领队状态切换的无限/环绕世界、可切换的朴素/均匀网格邻居搜索与实测统计，以及**分离、对齐、聚集三条群集规则**。支持单选高亮、选中个体的感知范围与邻居连线、全体运动方向调试绘制，以及可编辑的矩形、圆形障碍物与避障。
 
 结构参考 [SebLague/Boids 的管理器](https://github.com/SebLague/Boids/blob/fdda4db1368df92fbacd8a644bbe6dc61d705441/Assets/Scripts/BoidManager.cs)与[个体脚本](https://github.com/SebLague/Boids/blob/fdda4db1368df92fbacd8a644bbe6dc61d705441/Assets/Scripts/Boid.cs)：`BoidManager` 统一调度，每只 `Boid2D` 保存自身状态并提供普通更新方法，外观由各自场景中的 `Polygon2D` 显示。当前没有引入 GPU 计算。
 
 现已支持单领队指定、持续跟随鼠标、紫色身份标记，以及全体个体对领队身后区域的跟随。
 
-项目采用普通全窗口游戏的结构：`Game (Node)` 下分别放置 `World (Node)` 与 `UI (CanvasLayer)`。Node2D 世界直接显示在根视口中，Control 面板作为 HUD 覆盖在世界画面上；未来可以在同一个 World 容器中接入 Node3D 场景，复用 UI。当前尚无 3D 场景或算法。
+项目采用普通全窗口游戏的结构：`Game (Node)` 下分别放置 `World (Node)` 与 `UI (CanvasLayer)`。Node2D / Node3D 世界直接显示在根视口中，Control 面板作为 HUD 覆盖在世界画面上。`main_3d.tscn` 继承主场景、替换世界插槽，复用相同 UI；默认 F5 入口仍为 2D。
 
 ## 打开和运行
 
 1. 使用 Godot **4.7.2 .NET 版**导入本目录的 `project.godot`。已有项目目录仍为 `boids`，应用和程序集名称为 `BoidsLab`。
-2. 在编辑器中构建 C# 项目，然后按 F6 运行 `scenes/main.tscn`，或按 F5 运行主场景。
+2. 在编辑器中构建 C# 项目。2D：打开 `scenes/main.tscn` 后按 F6，或直接按 F5。3D：打开 `scenes/main_3d.tscn` 后按 F6。
 3. 也可以先在本目录运行 `dotnet build BoidsLab.csproj`，再由编辑器启动。
 
 初始窗口为 1360 × 860，最小为 960 × 640。这里的“全窗口”指游戏世界使用整个根视口，不切换操作系统的独占全屏模式，也没有修改原生窗口模式。HUD 顶部显示标题和状态，左侧参数面板可滚动，底部统计项可换行。空白 UI 和提示文字不拦截鼠标，有交互的面板与控件正常接收输入；参数面板内滚动不会同时缩放相机。使用 Compatibility 渲染器，无第三方插件或素材依赖；原有 Godot 图标保留。
 
-## 当前可用操作
+## 3D 基础版本
+
+运行入口为 `scenes/main_3d.tscn`。初始暂停，点击「开始」或按空格后移动；修改数量、种子后点击「重置」。F1 隐藏 HUD，F2 打开三维专用说明，单步暂不开放。
+
+- 每个个体是 `Boid3D (Node3D)`，子节点 `MeshInstance3D` 使用原生六棱锥体网格，尖端朝本地 -Z。
+- `BoidManager3D._PhysicsProcess()` 统一调度，按速度移动、按加速度改变速度，并用受角速度与角加速度限制的四元数旋转跟随速度方向。当前无转向输入，默认保持匀速直线运动。
+- 采用中心位于原点的 1280 × 720 × 720 固定盒状空间，三个坐标轴越界均环绕；相机固定斜视，边框与底面参考线帮助观察深度。
+- 与 2D 共用 `BoidConfig` 的范围和默认值；3D 使用世界单位，例如默认速度为 120 世界单位/秒，不做隐式比例转换。设置单独保存至 `user://boids_lab_3d.cfg`。
+- 数量、FPS 和更新耗时来自真实运行。邻居搜索与相关指标尚未实现，保持 `--`。
+
+当前是运动积分基础，不使用 RigidBody3D 或物理碰撞。三维邻居搜索、分离/对齐/聚集、领队、避障、个体选择、调试叠加及相机交互留到后续，UI 不展示这些尚未实现的功能。架构与运动输入示例见 [架构说明](docs/architecture.md#三维基础世界与共享-ui)。
+
+## 2D 当前可用操作
 
 | 操作 | 当前行为 |
 | --- | --- |
@@ -148,30 +160,31 @@ boids/
 ├── BoidsLab.csproj
 ├── BoidsLab.sln
 ├── scenes/
-│   ├── main.tscn
+│   ├── main.tscn, main_3d.tscn
 │   ├── lab_theme.tres
-│   ├── boids/boid_2d.tscn
+│   ├── boids/boid_2d.tscn, boid_3d.tscn
 │   ├── ui/help_overlay.tscn
-│   └── worlds/boids_world_2d.tscn
+│   └── worlds/boids_world_2d.tscn, boids_world_3d.tscn
 ├── scripts/
 │   ├── app/MainController.cs
-│   ├── simulation/Boid2D.cs
+│   ├── simulation/Boid2D.cs, Boid3D.cs
 │   ├── simulation/BoidConfig.cs
-│   ├── simulation/BoidManager.cs
+│   ├── simulation/BoidManager.cs, BoidManager3D.cs
 │   ├── simulation/BoidSteering.cs
 │   ├── simulation/LeaderSteering.cs
 │   ├── simulation/NeighborSearch2D.cs
 │   ├── simulation/SimulationStats.cs
 │   ├── rendering/SimulationCamera2D.cs
-│   ├── rendering/SimulationView.cs
+│   ├── rendering/SimulationView.cs, SimulationView3D.cs
 │   ├── rendering/DebugOverlayGeometry.cs
 │   ├── obstacles/ObstacleShape.cs
 │   ├── obstacles/Obstacle2D.cs
 │   ├── obstacles/ObstacleAvoidance.cs
 │   ├── obstacles/ObstacleEditor2D.cs
-│   ├── worlds/ISimulationWorld.cs
+│   ├── worlds/ISimulationWorld.cs, SimulationFeatures.cs
 │   └── ui/ControlPanel.cs, ObstaclePanel.cs, StatsPanel.cs, HelpOverlay.cs
 ├── tests/
+│   ├── Motion3DChecks.cs, motion_3d_checks.tscn
 │   ├── MotionChecks.cs
 │   ├── motion_checks.tscn
 │   ├── NeighborChecks.cs
@@ -195,7 +208,7 @@ boids/
 └── docs/architecture.md
 ```
 
-参数控件在 `ControlPanel.Bind()` 中生成；HUD 布局在 `main.tscn` 的 `UI/UIRoot` 分支中编辑，操作说明内容在 `scenes/ui/help_overlay.tscn` 中编辑，世界与相机在 `boids_world_2d.tscn` 中编辑。`BoidManager` 是世界根节点，负责生成、统一更新、障碍物接触和计时；`Boid2D` 保存自身运动状态并完成积分，`boid_2d.tscn` 中的 Polygon2D 跟随节点变换显示三角形。`SimulationView` 负责背景、网格和调试绘制入口；`SimulationCamera2D` 处理拖动、缩放、全景复位和视口适配。主控制器通过 `ISimulationWorld` 操作世界，未来可接入实现该接口的 Node3D 场景。详见 [架构说明](docs/architecture.md)。
+参数控件在 `ControlPanel.Bind()` 中生成；HUD 布局在 `main.tscn` 的 `UI/UIRoot` 分支中编辑，操作说明内容在 `scenes/ui/help_overlay.tscn` 中编辑，世界与相机在 `boids_world_2d.tscn` 中编辑。`BoidManager` 是世界根节点，负责生成、统一更新、障碍物接触和计时；`Boid2D` 保存自身运动状态并完成积分，`boid_2d.tscn` 中的 Polygon2D 跟随节点变换显示三角形。`SimulationView` 负责背景、网格和调试绘制入口；`SimulationCamera2D` 处理拖动、缩放、全景复位和视口适配。主控制器通过 `ISimulationWorld` 操作 2D 或 3D 世界；`SimulationFeatures` 声明已实现能力，控制面板据此创建可用控件。三维说明由 `main_3d.tscn` 的 `HelpTextOverride` 配置。详见 [架构说明](docs/architecture.md)。
 
 ## 本机构建说明
 
@@ -216,6 +229,7 @@ dotnet build BoidsLab.csproj --source D:/app/Godot4.7.2/GodotSharp/Tools/nupkgs
 先构建 C# 项目，再使用 Godot .NET 可执行文件运行：
 
 ```text
+godot --headless --path . res://tests/motion_3d_checks.tscn --quit-after 600
 godot --headless --path . res://tests/motion_checks.tscn --quit-after 120
 godot --headless --path . res://tests/neighbor_checks.tscn --quit-after 120
 godot --headless --path . res://tests/steering_checks.tscn --quit-after 120
@@ -247,6 +261,8 @@ godot --headless --path . res://tests/boundary_mode_checks.tscn --quit-after 600
 `leader_spacing_checks` 使用真实管理器检查 40/200 个追随者、默认和高跟随权重下的静止及持续转弯场景，验证近邻间距，并确认群体仍跟随领队而非散离。
 
 `boundary_mode_checks` 检查有无领队切换、转移/删除/重置、暂停与运行状态保持、立即回收视口外个体、视角变化，以及两种搜索和调试连线在重复切换后的结果一致性。
+
+`motion_3d_checks` 验证三维匀速/加速、60/120 步积分一致性、线性与角运动限幅、竖直和 180° 朝向收敛、三个坐标轴的正负越界、动态创建/移除、种子复现、相机包围整个空间，以及实际物理回调中的暂停/继续。真实 3D 主场景还验证共享 UI、独立配置保存、重置、F1/F2、未实现控件隐藏和原生网格朝向。全部通过，并通过 2D 空格、弹层、障碍物交互、领队交互和边界切换回归。仅进行了无图形验证，尚未人工验收三维画面。
 
 ## 初版框架的历史验证
 

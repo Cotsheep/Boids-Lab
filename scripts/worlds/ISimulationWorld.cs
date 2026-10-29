@@ -7,6 +7,7 @@ public interface ISimulationWorld
 {
     string DisplayName { get; }
     string LengthUnit { get; }
+    SimulationFeatures Features { get; }
     bool IsRunning { get; }
     bool CoreImplemented { get; }
     bool CanStep { get; }

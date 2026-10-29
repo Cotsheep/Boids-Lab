@@ -33,11 +33,11 @@ public partial class ObstacleInteractionChecks : Node
             var panel = game.GetNode<ControlPanel>("%ControlPanel");
             var help = game.GetNode<HelpOverlay>("%HelpOverlay");
             var hud = game.GetNode<Control>("%UIRoot");
-            var addRectangle = (Button)panel.Obstacles.FindChild("AddRectangle", true, false);
-            var addCircle = (Button)panel.Obstacles.FindChild("AddCircle", true, false);
-            var delete = (Button)panel.Obstacles.FindChild("DeleteObstacle", true, false);
-            var width = (SpinBox)panel.Obstacles.FindChild("ObstacleWidth", true, false);
-            var height = (SpinBox)panel.Obstacles.FindChild("ObstacleHeight", true, false);
+            var addRectangle = (Button)panel.Obstacles!.FindChild("AddRectangle", true, false);
+            var addCircle = (Button)panel.Obstacles!.FindChild("AddCircle", true, false);
+            var delete = (Button)panel.Obstacles!.FindChild("DeleteObstacle", true, false);
+            var width = (SpinBox)panel.Obstacles!.FindChild("ObstacleWidth", true, false);
+            var height = (SpinBox)panel.Obstacles!.FindChild("ObstacleHeight", true, false);
             int configChanges = 0;
             panel.ConfigurationChanged += () => configChanges++;
             foreach (Boid2D boid in _world.Boids.ToArray()) _world.RemoveBoid(boid);

@@ -12,6 +12,9 @@ public partial class HelpOverlay : Control
     private Button _closeButton = null!;
     private bool _outsidePress;
 
+    public void SetInstructions(string text) =>
+        GetNode<RichTextLabel>("Card/Column/Instructions").Text = text;
+
     public override void _Ready()
     {
         _card = GetNode<PanelContainer>("Card");
