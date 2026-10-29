@@ -2,7 +2,7 @@ using Godot;
 
 namespace BoidsLab;
 
-/// <summary>基础观察环境：静态空间边框、底面参考线和固定正交相机，不参与运动计算。</summary>
+/// <summary>三维观察环境：空间边框、底面参考线与独立相机，不参与运动计算。</summary>
 public partial class SimulationView3D : Node3D
 {
     public void Configure(Aabb bounds)
@@ -36,14 +36,7 @@ public partial class SimulationView3D : Node3D
         mesh.SurfaceEnd();
         GetNode<MeshInstance3D>("ReferenceFrame").Mesh = mesh;
 
-        Camera3D camera = GetNode<Camera3D>("Camera3D");
-        Vector3 center = bounds.GetCenter();
-        float diagonal = bounds.Size.Length();
-        camera.Position = center + new Vector3(1f, 0.75f, 1.2f).Normalized() * diagonal * 1.5f;
-        camera.LookAt(ToGlobal(center), Vector3.Up);
-        camera.Projection = Camera3D.ProjectionType.Orthogonal;
-        camera.Size = diagonal * 1.1f;
-        camera.Far = diagonal * 4f;
+        GetNode<SimulationCamera3D>("Camera3D").Configure(bounds);
     }
 
     private static void AddLine(ImmediateMesh mesh, Vector3 a, Vector3 b)

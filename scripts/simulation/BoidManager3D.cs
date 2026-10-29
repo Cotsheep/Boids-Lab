@@ -139,7 +139,8 @@ public partial class BoidManager3D : Node3D, ISimulationWorld
 
     // TODO: 按需逐项实现三维交互。Features 为 None，共享 UI 不会展示这些功能。
     public void StepOnce() { }
-    public void SetInteractionEnabled(bool enabled) { } // 当前为固定观察相机，无世界输入。
+    public void SetInteractionEnabled(bool enabled) =>
+        GetNode<SimulationCamera3D>("SimulationView/Camera3D").SetInteractionEnabled(enabled);
     public ObstacleSelection? SelectedObstacleInfo => null;
     public ObstacleShape? ObstaclePlacement => null;
     public int? SelectedBoidId => null;

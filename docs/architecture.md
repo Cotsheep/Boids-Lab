@@ -57,7 +57,7 @@ F1 和顶部“隐藏界面”按钮切换整个 `UIRoot.Visible`，包含占位
 
 操作指引集中在 `scenes/ui/help_overlay.tscn` 的 RichTextLabel 中。`HelpOverlay` 与 `UIRoot` 并列，所以 F1 隐藏 HUD 后仍可由 F2 打开。F2（`toggle_help`）、Esc（`close_help`）与空格都由主控制器处理；弹层不会自动修改 `IsRunning`。弹层最大为 760 × 680，随可用视口缩小，正文在内部滚动，不创建原生 Window。
 
-`HelpOverlay` 负责显示、关闭、居中及遮罩点击。遮罩消费按下和松开，松开后再关闭，避免关闭点击穿透；点击卡片不会关闭。`MainController.OnHelpOpenChanged()` 暂时禁用 HUD 的递归键盘焦点，并通过 `ISimulationWorld.SetInteractionEnabled(false)` 禁用世界交互。2D 世界把该请求交给相机，取消未结束的点击/拖动并关闭手势处理，仍记录原始光标位置供恢复使用，物理更新照常执行。关闭后恢复世界输入和仍可见的原控件焦点。3D 世界保留同一交互开关，目前固定相机没有输入需要屏蔽；后续接入相机交互时仍无需让弹层依赖 Camera2D。
+`HelpOverlay` 负责显示、关闭、居中及遮罩点击。遮罩消费按下和松开，松开后再关闭，避免关闭点击穿透；点击卡片不会关闭。`MainController.OnHelpOpenChanged()` 暂时禁用 HUD 的递归键盘焦点，并通过 `ISimulationWorld.SetInteractionEnabled(false)` 禁用世界交互。2D 世界把该请求交给相机，取消未结束的点击/拖动并关闭手势处理，仍记录原始光标位置供恢复使用，物理更新照常执行。关闭后恢复世界输入和仍可见的原控件焦点。3D 世界把同一交互开关交给 SimulationCamera3D，取消选择手势和相机拖动；弹层无需依赖具体相机类型。
 
 相机只在 `_UnhandledInput()` 收到左键按下时开始一个待定手势，确保参数控件优先处理点击。通过 `WorldPressStarted(viewportPosition)` 让管理器记录按下时命中的个体；累计位移不足 5 个视口像素时不移动相机，越过阈值后按完整累计位移开始拖动。`_Input()` 接收后续移动与松开，跨入 UI 后也能结束拖动。未拖动且在世界内松开时发出 `WorldPressEnded(true)`，其余情况发出 false。失焦、丢失左键按住状态、Home、滚轮缩放或视口变化会取消待定手势，避免误选择或粘住相机。
 
@@ -279,7 +279,7 @@ Game3D (MainController)
 │       │       └── Body (MeshInstance3D / CylinderMesh 六棱锥)
 │       └── SimulationView (Node3D / SimulationView3D)
 │           ├── ReferenceFrame (MeshInstance3D / ImmediateMesh 参考线)
-│           ├── Camera3D (固定正交相机)
+│           ├── Camera3D (SimulationCamera3D，环绕、平移、缩放与复位)
 │           ├── WorldEnvironment
 │           └── Sun (DirectionalLight3D)
 └── UI (CanvasLayer)
@@ -317,7 +317,9 @@ boid.SetAcceleration(new Vector3(0, 20, -10)); // 持续输入，受共享 MaxFo
 
 加速度的代码入口已实现，UI 的“最大加速度”只是上限，不会凭空产生加速度。上调最大速度不会给慢速个体主动加速；重置重新生成时才使用新的最大速度作为初始速率。
 
-`WorldSize` 默认 1280 × 720 × 720，以原点为中心。`WorldBounds` 是固定 Aabb，与相机视口独立。三个轴各自取模回到半开区间，保留速度和旋转，能处理一次跨越多个盒子宽度的情况。当前没有三维领队和障碍物，因此不应用二维的领队模式切换或接触处理。`SimulationView3D` 只创建静态空间参考线并配置能覆盖整个空间的斜视正交相机；平移、缩放和环绕相机交互尚未实现。
+`WorldSize` 默认 1280 × 720 × 720，以原点为中心。`WorldBounds` 是固定 Aabb，与相机视口独立。三个轴各自取模回到半开区间，保留速度和旋转，能处理一次跨越多个盒子宽度的情况。当前没有三维领队和障碍物，因此不应用二维的领队模式切换或接触处理。`SimulationView3D` 创建空间参考线，并将参考盒传给 SimulationCamera3D。相机右键绕观察中心旋转，中键沿观察平面平移，滚轮以鼠标投影位置为锚点缩放，Home 重置中心、角度及倍率。倍率限制为 0.25～8，俯仰限制为 ±85°，避免翻越极点。相机配置与模拟边界相互独立。
+
+相机仅在 `_UnhandledInput` 开始手势，让 UI 优先处理输入；开始后由 `_Input` 接管移动与松开，因此可以在 UI 上结束世界拖动。失焦、鼠标离窗、丢失按键状态、视口变化、Home、缩放或帮助弹窗会取消待定手势。视口适配保留观察中心和用户倍率，三维相机不修改个体、共享配置或统计。
 
 两个世界共用 BoidConfig 的默认值和范围；三维的长度、速度、加速度使用世界单位，例如默认速度 120 世界单位/秒，不隐式换算成米。MainController 通过导出的 ConfigurationPath 分别读写 `user://boids_lab.cfg` 与 `user://boids_lab_3d.cfg`。三维暂时不使用的配置字段不参与运动计算。
 
@@ -329,7 +331,7 @@ ControlPanel / StatsPanel 不接触 Vector2、Vector3 或相机。三维统计�
 
 以下内容仍未实现：
 
-1. 3D：根据需求接入相机交互、邻居搜索与统计，再加入三条群集规则、调试选择和避障。
+1. 3D：根据需求接入邻居搜索与统计，再加入三条群集规则、调试选择和避障。
 2. 两个版本：根据后续需求加入数量即时增减与 UI 单步控制。
 
 当前空间划分只使用简单均匀网格；没有引入 Compute Shader、碰撞节点、ECS、多线程或对象池。后续根据测量结果决定是否继续优化。
