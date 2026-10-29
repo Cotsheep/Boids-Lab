@@ -84,6 +84,13 @@ public partial class Boid3D : Node3D
         _accelerationInput = acceleration;
     }
 
+    /// <summary>接触修正只更新位置和受限速度；下个物理步继续平滑跟随新的运动方向。</summary>
+    internal void ApplyObstacleContact(Vector3 position, Vector3 velocity)
+    {
+        Position = position;
+        Velocity = velocity.LimitLength(_config!.MaxSpeed);
+    }
+
     // 普通方法，不注册个体 _Process / _PhysicsProcess，避免重复积分。
     public void UpdateBoid(double deltaSeconds, Vector3 steeringAcceleration = default)
     {

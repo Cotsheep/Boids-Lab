@@ -19,7 +19,7 @@ public partial class ControlPanel : VBoxContainer
     private Label? _leaderStatus;
     private Label? _selectionStatus;
 
-    public void Bind(BoidConfig config, string lengthUnit, SimulationFeatures features = SimulationFeatures.All)
+    public void Bind(BoidConfig config, string lengthUnit, SimulationFeatures features = SimulationFeatures.All, bool threeDimensional = false)
     {
         // 切换世界时重新构建控件；主控制器先解除旧世界的事件绑定。
         foreach (Node child in GetChildren())
@@ -61,7 +61,7 @@ public partial class ControlPanel : VBoxContainer
         if (features.HasFlag(SimulationFeatures.Obstacles))
         {
             AddHeading("障碍物");
-            Obstacles = new ObstaclePanel { Name = "ObstaclePanel", LengthUnit = lengthUnit };
+            Obstacles = new ObstaclePanel { Name = "ObstaclePanel", LengthUnit = lengthUnit, ThreeDimensional = threeDimensional };
             AddChild(Obstacles);
             AddToggle("AvoidanceEnabled", "启用避障", config.AvoidanceEnabled, value => config.AvoidanceEnabled = value);
             AddNumber("AvoidanceLookAhead", "前瞻时间", BoidConfig.AvoidanceLookAheadRange, config.AvoidanceLookAhead,

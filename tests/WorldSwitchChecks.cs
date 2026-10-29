@@ -48,7 +48,9 @@ public partial class WorldSwitchChecks : Node
             var world3D = _app.GetNode<BoidManager3D>("World/BoidsWorld3D");
             Check(!GodotObject.IsInstanceValid(old2D), "Old 2D world is actually freed");
             Check(!world3D.IsRunning && world3D.Boids.Count == 9 && world3D.Config.PerceptionRadius == 40, "3D uses its own settings and starts paused");
-            Check(_panel.Obstacles is null && _panel.FindChild("IsLeader", true, false) is null, "2D-only controls are removed");
+            Check(_panel.Obstacles is not null && _panel.Obstacles.FindChild("AddBox", true, false) is Button
+                && _panel.Obstacles.FindChild("AddRectangle", true, false) is null
+                && _panel.FindChild("IsLeader", true, false) is null, "Obstacle controls switch dimensions; 2D leader controls are removed");
             Check(GetViewport().GetCamera2D() is null && GetViewport().GetCamera3D() is not null, "Only the new camera remains active");
             Check(HelpText().Contains("三维基础运动") && world3D.Stats.UpdateMilliseconds is null, "Help and fresh statistics match the new world");
             Check(_app.GetNode<StatsPanel>("%StatsPanel").FindChild("NeighborChecks", true, false) is Label { Text: "--" }, "Old measurements do not leak into the new HUD");

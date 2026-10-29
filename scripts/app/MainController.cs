@@ -123,7 +123,7 @@ public partial class MainController : Node
             candidate = null;
             GetNode<Node>("%World").AddChild(_worldNode);
             _world.SetRunning(false);
-            _controls.Bind(_config, _world.LengthUnit, _world.Features);
+            _controls.Bind(_config, _world.LengthUnit, _world.Features, _worldNode is Node3D);
             BindWorld();
             _controls.GetParent<ScrollContainer>().ScrollVertical = 0;
             _help.SetInstructions(definition.Instructions);

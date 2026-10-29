@@ -14,7 +14,7 @@ public partial class BoidManager3D : Node3D, ISimulationWorld
     public string DisplayName => "三维世界";
     public string LengthUnit => "世界单位";
     public SimulationFeatures Features => SimulationFeatures.NeighborSearch | SimulationFeatures.DebugDrawing
-        | SimulationFeatures.UniformGridSearch | SimulationFeatures.Flocking;
+        | SimulationFeatures.UniformGridSearch | SimulationFeatures.Flocking | SimulationFeatures.Obstacles;
     public bool CoreImplemented => true; // 基础运动可运行；可选能力由 Features 明确声明。
     public bool CanStep => false;
     public bool IsRunning { get; private set; }
@@ -33,6 +33,7 @@ public partial class BoidManager3D : Node3D, ISimulationWorld
     private Node3D _boidsRoot = null!;
     private SimulationView3D _view = null!;
     private SimulationCamera3D _camera = null!;
+    private ObstacleEditor3D _obstacleEditor = null!;
     private Boid3D? _pressedBoid;
     private int _nextBoidId;
 
@@ -59,6 +60,10 @@ public partial class BoidManager3D : Node3D, ISimulationWorld
         _boidsRoot = GetNode<Node3D>("Boids");
         _view = GetNode<SimulationView3D>("SimulationView");
         _camera = _view.GetNode<SimulationCamera3D>("Camera3D");
+        _obstacleEditor = GetNode<ObstacleEditor3D>("ObstacleEditor");
+        _obstacleEditor.Initialize(this, _camera, GetNode<Node3D>("Obstacles"));
+        _obstacleEditor.Changed += OnObstaclesChanged;
+        _obstacleEditor.GeometryChanged += InvalidateStats;
         _view.Bind(Config, this);
         _camera.WorldPressStarted += OnWorldPressStarted;
         _camera.WorldPressEnded += OnWorldPressEnded;
@@ -78,6 +83,8 @@ public partial class BoidManager3D : Node3D, ISimulationWorld
     {
         IsRunning = false;
         _camera.CancelGesture();
+        _obstacleEditor.CancelGesture();
+        _obstacleEditor.CancelPlacement();
         SelectBoid(null);
         NormalizeConfiguration();
         foreach (Boid3D boid in _boids)
@@ -145,12 +152,24 @@ public partial class BoidManager3D : Node3D, ISimulationWorld
         NeighborSearch.Search(Boids, Config.PerceptionRadius, WorldBounds, Config.NeighborSearchMode);
         if (_steeringAccelerations.Length != _boids.Count) _steeringAccelerations = new Vector3[_boids.Count];
         for (int i = 0; i < _boids.Count; i++)
-            _steeringAccelerations[i] = BoidSteering3D.Calculate(NeighborSearch, i, Config);
+        {
+            Vector3 avoidance = ObstacleAvoidance3D.Calculate(NeighborSearch.Snapshots[i], _obstacleEditor.Obstacles, Config, WorldBounds);
+            // 与二维一致：发现危险时优先避障，避免群集力抵消避让方向。
+            _steeringAccelerations[i] = avoidance != Vector3.Zero ? avoidance : BoidSteering3D.Calculate(NeighborSearch, i, Config);
+        }
         for (int i = 0; i < _boids.Count; i++)
         {
             Boid3D boid = _boids[i];
+            Vector3 before = boid.Position;
             boid.UpdateBoid(deltaSeconds, _steeringAccelerations[i]);
-            boid.Position = WorldGeometry3D.Wrap(boid.Position, WorldBounds);
+            if (Config.AvoidanceEnabled && _obstacleEditor.Obstacles.Count > 0)
+            {
+                Vector3 position = boid.Position, velocity = boid.Velocity;
+                ObstacleAvoidance3D.ResolveMotion(before, ref position, ref velocity,
+                    _obstacleEditor.Obstacles, Config.ObstacleClearance, WorldBounds);
+                boid.ApplyObstacleContact(position, velocity);
+            }
+            else boid.Position = WorldGeometry3D.Wrap(boid.Position, WorldBounds);
         }
         Stats = new SimulationStats(_boids.Count, Stopwatch.GetElapsedTime(started).TotalMilliseconds,
             NeighborSearch.CandidateChecks, NeighborSearch.AverageNeighbors, NeighborSearch.SearchMilliseconds);
@@ -159,20 +178,26 @@ public partial class BoidManager3D : Node3D, ISimulationWorld
 
     private void OnWorldPressStarted(Vector2 pointer)
     {
-        _pressedBoid = null;
+        _pressedBoid = PickBoid(pointer, out _);
+    }
+
+    internal Boid3D? PickBoid(Vector2 pointer, out float closest)
+    {
+        Boid3D? target = null;
         Vector3 origin = _camera.ProjectRayOrigin(pointer);
         Vector3 direction = _camera.ProjectRayNormal(pointer).Normalized();
         float minimumRadius = _camera.ProjectPosition(pointer + Vector2.Right * 10, 1)
             .DistanceTo(_camera.ProjectPosition(pointer, 1));
-        float closest = float.PositiveInfinity;
+        closest = float.PositiveInfinity;
         foreach (Boid3D boid in _boids)
         {
             if (!_camera.IsPositionInFrustum(boid.GlobalPosition)) continue;
             if (boid.HitDistance(origin, direction, minimumRadius) is not { } distance) continue;
             if (distance > closest || (distance == closest && boid != SelectedBoid)) continue;
             closest = distance;
-            _pressedBoid = boid;
+            target = boid;
         }
+        return target;
     }
 
     private void OnWorldPressEnded(bool clicked)
@@ -180,6 +205,7 @@ public partial class BoidManager3D : Node3D, ISimulationWorld
         Boid3D? target = _pressedBoid;
         _pressedBoid = null;
         if (!clicked || (target is not null && !_boids.Contains(target))) return;
+        _obstacleEditor.ClearSelection();
         SelectBoid(target == SelectedBoid ? null : target);
     }
 
@@ -192,6 +218,9 @@ public partial class BoidManager3D : Node3D, ISimulationWorld
         BoidControlStateChanged?.Invoke();
         RefreshDebug();
     }
+
+    internal void ClearBoidSelection() { _pressedBoid = null; SelectBoid(null); }
+    private void OnObstaclesChanged() => ObstacleSelectionChanged?.Invoke();
 
     private void RefreshDebug() => _view.RefreshDebug();
 
@@ -214,19 +243,22 @@ public partial class BoidManager3D : Node3D, ISimulationWorld
         Config.Normalize();
     }
 
-    // TODO: 后续实现三维单步、领队与障碍物；对应 UI 仍不开放。
+    // TODO: 后续实现三维单步与领队；对应 UI 仍不开放。
     public void StepOnce() { }
-    public void SetInteractionEnabled(bool enabled) =>
-        GetNode<SimulationCamera3D>("SimulationView/Camera3D").SetInteractionEnabled(enabled);
-    public ObstacleSelection? SelectedObstacleInfo => null;
-    public ObstacleShape? ObstaclePlacement => null;
+    public void SetInteractionEnabled(bool enabled)
+    {
+        _camera.SetInteractionEnabled(enabled);
+        _obstacleEditor.SetInteractionEnabled(enabled);
+    }
+    public ObstacleSelection? SelectedObstacleInfo => _obstacleEditor.SelectionInfo;
+    public ObstacleShape? ObstaclePlacement => _obstacleEditor.PlacementShape;
     public int? LeaderId => null;
     public bool HasLeaderTarget => false;
-    public event Action? ObstacleSelectionChanged { add { } remove { } }
-    public void BeginObstaclePlacement(ObstacleShape shape) { }
-    public void CancelObstaclePlacement() { }
-    public void DeleteSelectedObstacle() { }
-    public void ResizeSelectedObstacle(float width, float height) { }
+    public event Action? ObstacleSelectionChanged;
+    public void BeginObstaclePlacement(ObstacleShape shape) => _obstacleEditor.BeginPlacement(shape);
+    public void CancelObstaclePlacement() => _obstacleEditor.CancelPlacement();
+    public void DeleteSelectedObstacle() => _obstacleEditor.DeleteSelected();
+    public void ResizeSelectedObstacle(float width, float height, float depth = 0) => _obstacleEditor.ResizeSelected(width, height, depth);
     public void SetSelectedBoidLeader(bool enabled) { }
 
     public override void _ExitTree()
@@ -235,5 +267,7 @@ public partial class BoidManager3D : Node3D, ISimulationWorld
         _camera.WorldPressStarted -= OnWorldPressStarted;
         _camera.WorldPressEnded -= OnWorldPressEnded;
         _camera.ViewChanged -= RefreshDebug;
+        _obstacleEditor.Changed -= OnObstaclesChanged;
+        _obstacleEditor.GeometryChanged -= InvalidateStats;
     }
 }

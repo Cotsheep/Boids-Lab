@@ -57,7 +57,7 @@ F1 和顶部“隐藏界面”按钮切换整个 `UIRoot.Visible`，包含占位
 
 操作指引集中在 `scenes/ui/help_overlay.tscn` 的 RichTextLabel 中。`HelpOverlay` 与 `UIRoot` 并列，所以 F1 隐藏 HUD 后仍可由 F2 打开。F2（`toggle_help`）、Esc（`close_help`）与空格都由主控制器处理；弹层不会自动修改 `IsRunning`。弹层最大为 760 × 680，随可用视口缩小，正文在内部滚动，不创建原生 Window。
 
-`HelpOverlay` 负责显示、关闭、居中及遮罩点击。遮罩消费按下和松开，松开后再关闭，避免关闭点击穿透；点击卡片不会关闭。`MainController.OnHelpOpenChanged()` 暂时禁用 HUD 的递归键盘焦点，并通过 `ISimulationWorld.SetInteractionEnabled(false)` 禁用世界交互。2D 世界把该请求交给相机，取消未结束的点击/拖动并关闭手势处理，仍记录原始光标位置供恢复使用，物理更新照常执行。关闭后恢复世界输入和仍可见的原控件焦点。3D 世界把同一交互开关交给 SimulationCamera3D，取消选择手势和相机拖动；弹层无需依赖具体相机类型。
+`HelpOverlay` 负责显示、关闭、居中及遮罩点击。遮罩消费按下和松开，松开后再关闭，避免关闭点击穿透；点击卡片不会关闭。`MainController.OnHelpOpenChanged()` 暂时禁用 HUD 的递归键盘焦点，并通过 `ISimulationWorld.SetInteractionEnabled(false)` 禁用世界交互。2D 世界把该请求交给相机，取消未结束的点击/拖动并关闭手势处理，仍记录原始光标位置供恢复使用，物理更新照常执行。关闭后恢复世界输入和仍可见的原控件焦点。3D 世界把同一交互开关交给 SimulationCamera3D 与 ObstacleEditor3D，取消选择、相机拖动、障碍拖动与放置；弹层无需依赖具体相机类型。
 
 相机只在 `_UnhandledInput()` 收到左键按下时开始一个待定手势，确保参数控件优先处理点击。通过 `WorldPressStarted(viewportPosition)` 让管理器记录按下时命中的个体；累计位移不足 5 个视口像素时不移动相机，越过阈值后按完整累计位移开始拖动。`_Input()` 接收后续移动与松开，跨入 UI 后也能结束拖动。未拖动且在世界内松开时发出 `WorldPressEnded(true)`，其余情况发出 false。失焦、丢失左键按住状态、Home、滚轮缩放或视口变化会取消待定手势，避免误选择或粘住相机。
 
@@ -138,7 +138,7 @@ Godot → BoidManager._PhysicsProcess(delta)
 
 障碍物采用独立 `Obstacle2D` 节点，保存形状与尺寸，直接在世界坐标下绘制矩形或圆形。缩放改变几何尺寸，不通过 Node2D.Scale 放大描边或鼠标容差；选中边框与缩放手柄按相机倍率补偿为稳定的屏幕尺寸。障碍物位置独立于相机，相机变化也不修改障碍物几何。
 
-`ObstaclePanel` 只发送创建、删除、尺寸修改与取消放置请求。`Refresh(ObstacleSelection?, ObstacleShape?)` 接收选中对象的形状、宽高与当前放置状态；用 `SetValueNoSignal()` 回填数值，避免拖动时的状态同步反过来触发编辑。圆形显示直径，矩形显示宽度和高度；无选择时尺寸与删除控件禁用。尺寸范围来自 `Obstacle2D` 的统一常量，避障参数范围与持久化由 `BoidConfig` 管理。
+`ObstaclePanel` 只发送创建、删除、尺寸修改与取消放置请求。`Refresh(ObstacleSelection?, ObstacleShape?)` 接收选中对象的形状、宽高深与当前放置状态；用 `SetValueNoSignal()` 回填数值，避免拖动时的状态同步反过来触发编辑。圆形/球体显示直径，矩形显示宽度和高度，长方体增加深度；无选择时尺寸与删除控件禁用。尺寸范围来自 `ObstacleSize` 的统一常量，避障参数范围与持久化由 `BoidConfig` 管理。
 
 添加按钮进入放置模式，下次世界点击确定位置并选中。障碍物本体拖动、缩放手柄及 Shift + 滚轮缩放优先于相机输入；普通空白拖动和滚轮保留原有相机操作。障碍物选择与 Boid 选择互斥。Delete 删除选中障碍物，但编辑输入框时由 GUI 处理；Esc 或右键取消放置。操作说明打开时取消待定操作并禁用世界交互，模拟运行状态不受影响。
 
@@ -277,13 +277,15 @@ Game3D (MainController)
 │       ├── Boids (Node3D)
 │       │   └── Boid_0 ... (Boid3D)
 │       │       └── Body (MeshInstance3D / CylinderMesh 六棱锥)
-│       └── SimulationView (Node3D / SimulationView3D)
+│       ├── SimulationView (Node3D / SimulationView3D)
 │           ├── ReferenceFrame (MeshInstance3D / ImmediateMesh 盒状边框)
 │           ├── Grid (MeshInstance3D / 可切换底面网格)
 │           ├── DebugOverlay (MeshInstance3D / 合批调试线段)
 │           ├── Camera3D (SimulationCamera3D，环绕、平移、缩放与复位)
 │           ├── WorldEnvironment
 │           └── Sun (DirectionalLight3D)
+│       ├── Obstacles (Node3D / 障碍物实例)
+│       └── ObstacleEditor (Node3D / ObstacleEditor3D)
 └── UI (CanvasLayer)
     ├── UIRoot (共用 HUD)
     └── HelpOverlay (共用弹层，三维专用正文)
@@ -297,18 +299,18 @@ Game3D (MainController)
 Godot → BoidManager3D._PhysicsProcess(delta)
         └── IsRunning → Step(delta)
                        ├── 规范化位置，NeighborSearch3D 复制快照并执行所选搜索
-					   ├── BoidSteering3D 从共同快照算完全体转向
+					   ├── 从共同快照算完全体转向：危险时避障，安全时群集规则
                        ├── 遍历个体
                        │   ├── Boid3D.UpdateBoid(delta, steeringAcceleration)
                        │   │   ├── 合并外部 / 当步转向加速度，限制模长
                        │   │   ├── 更新速度并限速，再按新速度更新 Position
                        │   │   └── 计算方向误差，积分角速度并更新 Quaternion
-                       │   └── X、Y、Z 分别环绕到固定 WorldBounds
+                       │   └── 扫描接触并滑动，X、Y、Z 环绕到固定 WorldBounds
                        ├── 发布真实搜索与整步统计
                        └── 从更新后的位置重建调试线段（不计入模拟耗时）
 ```
 
-`Boid3D` 没有自身的物理帧回调，使用原生 Node3D 的 Position / Quaternion，并保存 Vector3 速度、加速度、角速度和角加速度。它负责运动积分，不使用 RigidBody3D、重力或接触求解。管理器先调用 `BoidSteering3D.Calculate` 从共同快照算完全体转向并存入复用数组，再统一调用 `UpdateBoid`，避免前后遍历顺序改变结果。
+`Boid3D` 没有自身的物理帧回调，使用原生 Node3D 的 Position / Quaternion，并保存 Vector3 速度、加速度、角速度和角加速度。它负责运动积分，不使用 RigidBody3D 或重力。管理器先调用 ObstacleAvoidance3D，安全时调用 BoidSteering3D，从共同快照算完全体转向并存入复用数组，再统一调用 `UpdateBoid`，避免前后遍历顺序改变结果。
 
 `BoidSteering3D` 只计算三条规则，不拥有节点或跨步状态。分离累计单位远离方向除以距离，半径取分离与感知半径的较小值；重合时按唯一 ID 给一对相反方向。对齐累计邻居速度，聚集累计最短环绕位移，再取平均方向。每条规则的目标速率为 MaxSpeed，速度差除以 1 秒响应时间并限制为 MaxForce；乘各自权重后合成，再限制总加速度。无目标方向时不凭空制动。外部输入在 Boid3D 中与规则输入再次合成并限幅。没有个体间硬碰撞或最低速度保证。
 
@@ -325,19 +327,19 @@ boid.SetAcceleration(new Vector3(0, 20, -10)); // 持续输入，受共享 MaxFo
 
 UI 的“最大加速度”只是上限，不会凭空产生加速度；有规则目标时会朝目标速度变化。上调最大速度会提高规则目标速率，无目标或关闭规则时不会主动加速；重置生成时使用新的最大速度作为初始速率。
 
-`WorldSize` 默认 1280 × 720 × 720，以原点为中心。`WorldBounds` 是固定 Aabb，与相机视口独立。三个轴各自取模回到半开区间，保留速度和旋转，能处理一次跨越多个盒子宽度的情况。当前没有三维领队和障碍物，因此不应用二维的领队模式切换或接触处理。`SimulationView3D` 创建空间参考线，并将参考盒传给 SimulationCamera3D。相机右键绕观察中心旋转，中键沿观察平面平移，滚轮以鼠标投影位置为锚点缩放，Home 重置中心、角度及倍率。倍率限制为 0.25～8，俯仰限制为 ±85°，避免翻越极点。相机配置与模拟边界相互独立。
+`WorldSize` 默认 1280 × 720 × 720，以原点为中心。`WorldBounds` 是固定 Aabb，与相机视口独立。三个轴各自取模回到半开区间，保留速度和旋转，能处理一次跨越多个盒子宽度的情况。当前没有三维领队，因此不应用二维的领队模式切换；开启避障时，三维解析接触扫描也覆盖出口与对侧入口。`SimulationView3D` 创建空间参考线，并将参考盒传给 SimulationCamera3D。相机右键绕观察中心旋转，中键沿观察平面平移，滚轮以鼠标投影位置为锚点缩放，Home 重置中心、角度及倍率。倍率限制为 0.25～8，俯仰限制为 ±85°，避免翻越极点。相机配置与模拟边界相互独立。
 
 相机仅在 `_UnhandledInput` 开始手势，让 UI 优先处理输入；开始后由 `_Input` 接管移动与松开，因此可以在 UI 上结束世界拖动。失焦、鼠标离窗、丢失按键状态、视口变化、Home、缩放或帮助弹窗会取消待定手势。视口适配保留观察中心和用户倍率，三维相机不修改个体、共享配置或统计。
 
-两个世界共用 BoidConfig 的默认值和范围，但分别持有配置实例；三维的长度、速度、加速度使用世界单位，例如默认速度 120 世界单位/秒，不隐式换算成米。MainController 按世界定义资源中的 ConfigurationPath 分别读写 `user://boids_lab.cfg` 与 `user://boids_lab_3d.cfg`。三维暂时不使用的领队/避障字段不参与运动计算。
+两个世界共用 BoidConfig 的默认值和范围，但分别持有配置实例；三维的长度、速度、加速度使用世界单位，例如默认速度 120 世界单位/秒，不隐式换算成米。MainController 按世界定义资源中的 ConfigurationPath 分别读写 `user://boids_lab.cfg` 与 `user://boids_lab_3d.cfg`。三维领队字段暂不参与运动计算；避障开关、前瞻与间距已经生效。
 
-`SimulationFeatures` 声明可选能力：2D 为 All，3D 为 NeighborSearch | UniformGridSearch | Flocking | DebugDrawing。三维支持两种搜索切换、三条规则与分离范围控件；未启用 Leader 或 Obstacles，领队身份、跟随参数和障碍物控件隐藏。共享 UI 继续复用同一配置与事件接口，切换世界时重新绑定。
+`SimulationFeatures` 声明可选能力：2D 为 All，3D 为 NeighborSearch | UniformGridSearch | Flocking | DebugDrawing | Obstacles。三维支持两种搜索切换、三条规则与分离范围控件；未启用 Leader，领队身份与跟随参数隐藏；障碍物面板按世界维度显示长方体/球体或矩形/圆形，三维增加深度输入。共享 UI 继续复用同一配置与事件接口，切换世界时重新绑定。
 
 ControlPanel / StatsPanel 不接触 Vector2、Vector3 或相机。三维统计报告实际数量、最近一步更新/搜索耗时、候选次数与平均邻居数。MainController 的 0.25 秒计时仍只刷新统计 UI，模拟每个物理帧持续推进。
 
 `NeighborSearch3D` 在物理步开始时复制 ID、位置与速度。结果中的整数是快照下标，不是可能不连续的 ID；数组与邻居列表在数量不变时复用，结果只在下一次搜索或失效前有效。朴素搜索对每个个体检查全部其他个体，有向候选次数为 N × (N − 1)，包含恰在半径上的邻居和位置重合的其他个体。网格每轴按 `max(1, floor(边长 / 半径))` 均分，最多查 27 个周期邻格；某轴仅一格或两格时避免重复访问。稀疏字典只存已占用格子，每步重建；结果按快照下标排序，保证两种搜索的转向累加顺序一致。详见 [三维搜索说明](neighbor-search-3d.md)。平均邻居数为有向邻居总数除以个体数；空群体完成搜索后为 0。搜索计时包含快照、建格、距离判定、结果写入与排序，整步计时还包含转向、运动与环绕，不包含调试绘制。
 
-`WorldGeometry3D` 统一位置规范化、最短三轴环绕位移与半径判定。相隔半边长的两个点保留原位移方向，其他跨界位移选取更短一侧。摄像机操作、普通选择和绘制开关不使搜索结果失效；搜索算法/感知半径变化、Reset、增删个体会清除旧结果，统计显示 `--`，直到下一个物理步重新测量。
+`WorldGeometry3D` 统一位置规范化、最短三轴环绕位移与半径判定。相隔半边长的两个点保留原位移方向，其他跨界位移选取更短一侧。摄像机操作、普通选择和绘制开关不使搜索结果失效；搜索算法/感知半径变化、Reset、增删个体及障碍几何编辑会清除旧结果，统计显示 `--`，直到下一个物理步重新测量。
 
 左键选择沿 Camera3D 的投影射线检查网格包围球，保留至少 10 个屏幕像素的点击容差。取最近命中，完全重合时优先保留已选对象以便再次点击取消；不选相机后方或视锥之外的对象。按下时记录对象，松开且未拖动才提交选择，因此运行中的个体移动不会改变这次点击的身份。右键、中键与超过阈值的左键拖动不改变选择。删除选中对象、重置和输入隔离负责清理对象或手势引用。
 
@@ -347,16 +349,20 @@ ControlPanel / StatsPanel 不接触 Vector2、Vector3 或相机。三维统计�
 
 `SimulationView3D.RefreshDebug()` 在物理更新后、选择/参数变化和相机变化时重建一份 ImmediateMesh，将感知范围、分离范围、邻居线、速度箭头按颜色一起提交。分离范围为橙色，取 `min(SeparationRadius, PerceptionRadius)`，只显示选中个体并复用感知球的周期裁剪；开关与规则启用状态独立。暂停时仍可立即观察新的半径与选择。底面参考网格单独控制可见性，与搜索格子无关；盒状边框始终保留。
 
+三维障碍物由 Obstacle3D、ObstacleEditor3D、ObstacleAvoidance3D 分别承担几何显示、交互编辑和避障计算。长方体轴对齐，球体统一直径；前瞻转向优先于群集规则，积分后线段扫描约束高速位移，接触时保留切向速度。详情与限制见 [三维避障说明](obstacles-3d.md)。
+
 ## 后续实现顺序
 
 以下内容仍未实现：
 
-1. 3D：在现有搜索与群集规则基础上推进障碍物与领队。
+1. 3D：在现有搜索、群集规则与避障基础上推进领队。
 2. 两个版本：根据后续需求加入数量即时增减与 UI 单步控制。
 
-当前空间划分只使用简单均匀网格；没有引入 Compute Shader、碰撞节点、ECS、多线程或对象池。后续根据测量结果决定是否继续优化。
+当前空间划分只使用简单均匀网格；两种世界的障碍物逐一检测，没有引入 Compute Shader、碰撞节点、ECS、多线程或对象池。后续根据测量结果决定是否继续优化。
 
 ## 验证边界
+
+`obstacle_3d_checks` 与 `obstacle_interaction_3d_checks` 覆盖两种形状的三轴避障、双向环绕入口、跨界前瞻、高速薄障碍、滑动/重叠恢复、开关和连续运动，以及真实主场景中的创建/拖动/缩放/删除、遮挡与互斥选择、帮助/焦点隔离和切换清理。共 1371 项检查通过；相关二维及三维回归也通过，未进行图形窗口验收。
 
 `world_switch_checks` 验证反复往返切换、两套参数持久化、未提交数值保存、旧相机和世界释放、事件解除、重建暂停、HUD 显隐与帮助切换。
 

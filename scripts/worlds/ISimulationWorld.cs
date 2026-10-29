@@ -30,6 +30,6 @@ public interface ISimulationWorld
     void BeginObstaclePlacement(ObstacleShape shape);
     void CancelObstaclePlacement();
     void DeleteSelectedObstacle();
-    void ResizeSelectedObstacle(float width, float height);
+    void ResizeSelectedObstacle(float width, float height, float depth = 0);
     void SetSelectedBoidLeader(bool enabled);
 }

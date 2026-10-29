@@ -6,8 +6,8 @@ namespace BoidsLab;
 /// <summary>固定在世界坐标中的轴对齐障碍物；尺寸与节点缩放分开管理。</summary>
 public partial class Obstacle2D : Node2D
 {
-    public const float MinSize = 16f;
-    public const float MaxSize = 2000f;
+    public const float MinSize = ObstacleSize.Min;
+    public const float MaxSize = ObstacleSize.Max;
     public static readonly Vector2 DefaultRectangleSize = new(160, 100);
     public static readonly Vector2 DefaultCircleSize = new(100, 100);
 
@@ -20,7 +20,7 @@ public partial class Obstacle2D : Node2D
 
     public void Initialize(ObstacleShape shape, Vector2 dimensions)
     {
-        if (!Enum.IsDefined(shape)) throw new ArgumentOutOfRangeException(nameof(shape));
+        if (shape is not (ObstacleShape.Rectangle or ObstacleShape.Circle)) throw new ArgumentOutOfRangeException(nameof(shape));
         Shape = shape;
         SetDimensions(dimensions);
     }

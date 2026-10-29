@@ -146,7 +146,7 @@ public partial class BoidManager : Node2D, ISimulationWorld
     public void BeginObstaclePlacement(ObstacleShape shape) => _obstacleEditor.BeginPlacement(shape);
     public void CancelObstaclePlacement() => _obstacleEditor.CancelPlacement();
     public void DeleteSelectedObstacle() => _obstacleEditor.DeleteSelected();
-    public void ResizeSelectedObstacle(float width, float height) => _obstacleEditor.ResizeSelected(width, height);
+    public void ResizeSelectedObstacle(float width, float height, float depth = 0) => _obstacleEditor.ResizeSelected(width, height);
     internal void ClearBoidSelection() => SelectBoid(null);
 
     public void SetSelectedBoidLeader(bool enabled)

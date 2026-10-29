@@ -50,7 +50,7 @@ public partial class ObstacleEditor2D : Node2D
     public void BeginPlacement(ObstacleShape shape)
     {
         if (!_interactionEnabled) return;
-        if (!Enum.IsDefined(shape)) throw new ArgumentOutOfRangeException(nameof(shape));
+        if (shape is not (ObstacleShape.Rectangle or ObstacleShape.Circle)) throw new ArgumentOutOfRangeException(nameof(shape));
         CancelGesture();
         _camera.CancelPointerGesture();
         ClearSelection();

@@ -54,7 +54,7 @@ public partial class ObstacleAvoidanceChecks : Node
     private void CheckPrediction()
     {
         var config = new BoidConfig { MaxSpeed = 200, MaxForce = 200, ObstacleClearance = 12, AvoidanceLookAhead = 0.75f };
-        foreach (ObstacleShape kind in Enum.GetValues<ObstacleShape>())
+        foreach (ObstacleShape kind in new[] { ObstacleShape.Rectangle, ObstacleShape.Circle })
         {
             var shape = Shape(kind, new Vector2(500, 500), new Vector2(100, 100));
             try
@@ -101,7 +101,7 @@ public partial class ObstacleAvoidanceChecks : Node
 
     private void CheckMotion()
     {
-        foreach (ObstacleShape kind in Enum.GetValues<ObstacleShape>())
+        foreach (ObstacleShape kind in new[] { ObstacleShape.Rectangle, ObstacleShape.Circle })
         {
             var obstacle = Shape(kind, new Vector2(500, 500), kind == ObstacleShape.Rectangle ? new Vector2(16, 200) : new Vector2(100, 100));
             try
@@ -204,7 +204,7 @@ public partial class ObstacleAvoidanceChecks : Node
 
     private void CheckContinuousAvoidance()
     {
-        foreach (ObstacleShape kind in Enum.GetValues<ObstacleShape>())
+        foreach (ObstacleShape kind in new[] { ObstacleShape.Rectangle, ObstacleShape.Circle })
         {
             var config = new BoidConfig { BoidCount = 0, MaxSpeed = 120, MaxForce = 200,
                 SeparationEnabled = false, AlignmentEnabled = false, CohesionEnabled = false };

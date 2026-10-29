@@ -40,7 +40,9 @@
 - 感知球、分离球和邻居连线只显示选中个体，跨边界从对侧接续；速度箭头开关作用于全体，网格开关控制底面参考线，不代表搜索格子。
 - 数量、FPS、更新/搜索耗时、候选检查次数和平均邻居数来自真实运行。尚未测量或旧结果失效时显示 `--`；暂停时仍能观察当前关系，但不会把调试查询当作一次物理步测量。
 
-当前使用自身运动积分，不使用 RigidBody3D 或物理碰撞。三维领队和避障留到后续，UI 不展示这些尚未实现的功能。架构与运动输入示例见 [架构说明](docs/architecture.md#三维基础世界与共享-ui)。
+三维现已支持长方体与球体避障。左侧「添加长方体 / 添加球体」后点击场景放置，左键选择并拖动；面板修改宽、高、深或直径，选中对象上 Shift + 滚轮等比缩放，Delete 删除。拖动沿当前视角平面进行，旋转相机可从其他方向调整深度。暂停、运行时均可编辑；重置保留障碍物，切换世界或退出清空布局。
+
+避障包含提前转向与移动路径扫描，危险时优先于群集规则；高速移动和三轴环绕入口也检测接触。使用解析球体/轴对齐盒体几何与自身运动积分，没有 RigidBody3D 或全局寻路。关闭避障同时关闭接触约束；三维领队仍留到后续。完整操作在 F2 说明中，细节见 [三维避障说明](docs/obstacles-3d.md)。
 
 ## 2D 当前可用操作
 
@@ -189,9 +191,9 @@ boids/
 │   ├── rendering/SimulationView.cs, SimulationView3D.cs
 │   ├── rendering/DebugOverlayGeometry.cs, DebugOverlayGeometry3D.cs
 │   ├── obstacles/ObstacleShape.cs
-│   ├── obstacles/Obstacle2D.cs
-│   ├── obstacles/ObstacleAvoidance.cs
-│   ├── obstacles/ObstacleEditor2D.cs
+│   ├── obstacles/Obstacle2D.cs, Obstacle3D.cs
+│   ├── obstacles/ObstacleAvoidance.cs, ObstacleAvoidance3D.cs
+│   ├── obstacles/ObstacleEditor2D.cs, ObstacleEditor3D.cs
 │   ├── worlds/ISimulationWorld.cs, SimulationFeatures.cs
 │   └── ui/ControlPanel.cs, ObstaclePanel.cs, StatsPanel.cs, HelpOverlay.cs
 ├── tests/
@@ -254,6 +256,8 @@ godot --headless --path . res://tests/steering_checks.tscn --quit-after 120
 godot --headless --path . res://tests/debug_checks.tscn --quit-after 600
 godot --headless --path . res://tests/pause_shortcut_checks.tscn --quit-after 120
 godot --headless --path . res://tests/help_overlay_checks.tscn --quit-after 600
+godot --headless --path . res://tests/obstacle_3d_checks.tscn --quit-after 600
+godot --headless --path . res://tests/obstacle_interaction_3d_checks.tscn --quit-after 600
 godot --headless --path . res://tests/obstacle_avoidance_checks.tscn --quit-after 120
 godot --headless --path . res://tests/obstacle_interaction_checks.tscn --quit-after 600
 godot --headless --path . res://tests/leader_checks.tscn --quit-after 120
@@ -289,6 +293,8 @@ godot --headless --path . res://tests/boundary_mode_checks.tscn --quit-after 600
 `steering_3d_checks` 验证单条规则方向、权重与开关、环绕位移、完全重合、对称抵消、分离距离权重、速度/加速度限制、共同快照及外部输入。朴素与网格驱动相同初始群体连续运行 240 步，中途增删个体并修改半径，逐步对照位置、速度和加速度一致性。上述检查仅验证逻辑，不代表人工图形验收或桌面性能基准。
 
 2026-10-29 环境检查：本机 SDK 为 8.0.400，命令行构建零警告、零错误，世界切换、四组三维检查及八组相关二维检查通过。额外运行无图形编辑器导入时，Godot 报告 `.NET Sdk not found. The required version is '10.0.11'`，随后无法加载 `Microsoft.Build`。因此不能把本轮结果视为编辑器内构建验证通过；未改动系统 SDK，也未打开图形运行窗口。
+
+`obstacle_3d_checks` 与 `obstacle_interaction_3d_checks` 新增 1371 项无图形检查，覆盖两种三维障碍物的避让、连续接触、环绕入口、重叠恢复与创建/编辑交互；另外 11 组相关二维/三维回归通过。未进行图形画面验收。
 
 ## 初版框架的历史验证
 

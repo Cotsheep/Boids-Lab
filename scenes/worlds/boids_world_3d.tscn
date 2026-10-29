@@ -1,9 +1,10 @@
-[gd_scene load_steps=6 format=3]
+[gd_scene load_steps=7 format=3]
 
 [ext_resource type="Script" path="res://scripts/simulation/BoidManager3D.cs" id="1_world"]
 [ext_resource type="PackedScene" path="res://scenes/boids/boid_3d.tscn" id="2_boid"]
 [ext_resource type="Script" path="res://scripts/rendering/SimulationView3D.cs" id="3_view"]
 [ext_resource type="Script" path="res://scripts/rendering/SimulationCamera3D.cs" id="4_camera"]
+[ext_resource type="Script" path="res://scripts/obstacles/ObstacleEditor3D.cs" id="5_obstacles"]
 
 [sub_resource type="Environment" id="Environment_world"]
 background_mode = 1
@@ -41,3 +42,8 @@ environment = SubResource("Environment_world")
 rotation = Vector3(-0.9, -0.6, 0)
 light_color = Color(0.9, 0.95, 1, 1)
 light_energy = 1.2
+
+[node name="Obstacles" type="Node3D" parent="."]
+
+[node name="ObstacleEditor" type="Node3D" parent="."]
+script = ExtResource("5_obstacles")

@@ -197,9 +197,10 @@ public partial class Motion3DChecks : Node
         var world = app.GetNode<BoidManager3D>("World/BoidsWorld3D");
         var controls = app.GetNode<ControlPanel>("%ControlPanel");
         Check(world.Boids.Count == 8 && world.Config.RandomSeed == 314, "Inherited main scene loads configuration and instantiates the 3D world");
-        Check(controls.Obstacles is null && controls.FindChild("IsLeader", true, false) is null
+        Check(controls.Obstacles is not null && controls.Obstacles.FindChild("AddBox", true, false) is Button
+            && controls.FindChild("IsLeader", true, false) is null
             && controls.FindChild("LeaderFollowDistance", true, false) is null
-            && controls.FindChild("LeaderFollowWeight", true, false) is null, "Unsupported 3D leader and obstacle controls remain hidden");
+            && controls.FindChild("LeaderFollowWeight", true, false) is null, "3D obstacle controls are available while leader remains hidden");
         Check(controls.FindChild("SeparationEnabled", true, false) is CheckBox
             && controls.FindChild("AlignmentEnabled", true, false) is CheckBox
             && controls.FindChild("CohesionEnabled", true, false) is CheckBox, "All three implemented rules have controls");
