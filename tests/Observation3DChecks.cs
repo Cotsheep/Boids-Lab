@@ -206,6 +206,7 @@ public partial class Observation3DChecks : Node
         var stats = _world.Stats;
         ((CheckBox)panel.FindChild("ShowPerceptionRadius", true, false)).ButtonPressed = false;
         ((CheckBox)panel.FindChild("ShowNeighbors", true, false)).ButtonPressed = false;
+        ((CheckBox)panel.FindChild("ShowBoundary", true, false)).ButtonPressed = true;
         ((CheckBox)panel.FindChild("ShowGrid", true, false)).ButtonPressed = false;
         Check(view.DebugGeometry.RangePoints.Count == 0 && view.DebugGeometry.NeighborPoints.Count == 0
             && !view.GetNode<MeshInstance3D>("Grid").Visible && view.GetNode<MeshInstance3D>("ReferenceFrame").Visible,
@@ -217,7 +218,7 @@ public partial class Observation3DChecks : Node
         Check(_world.Stats.NeighborCandidateChecks is null && view.DebugGeometry.NeighborCount == 0
             && view.DebugGeometry.PerceptionCount == 1, "Paused radius update redraws immediately and invalidates old statistics");
         var saved = new BoidConfig();
-        Check(saved.Load(_app.ConfigurationPath) == Error.Ok && saved.PerceptionRadius == 1 && !saved.ShowGrid
+        Check(saved.Load(_app.ConfigurationPath) == Error.Ok && saved.PerceptionRadius == 1 && !saved.ShowGrid && saved.ShowBoundary
             && saved.ShowNeighbors && saved.ShowPerceptionRadius, "Implemented debug choices persist to the separate 3D config");
 
         Transform3D cameraBefore = _camera.Transform;

@@ -10,6 +10,8 @@ public partial class ControlPanel : VBoxContainer
     public event Action? StepRequested;
     public event Action? ConfigurationChanged;
     public event Action<bool>? LeaderAssignmentRequested;
+    public event Action? LeaderControlRequested;
+    private Button? _leaderControlButton;
 
     public ObstaclePanel? Obstacles { get; private set; }
 
@@ -18,6 +20,7 @@ public partial class ControlPanel : VBoxContainer
     private CheckBox? _leaderToggle;
     private Label? _leaderStatus;
     private Label? _selectionStatus;
+    private bool _threeDimensional;
 
     public void Bind(BoidConfig config, string lengthUnit, SimulationFeatures features = SimulationFeatures.All, bool threeDimensional = false)
     {
@@ -27,7 +30,9 @@ public partial class ControlPanel : VBoxContainer
             RemoveChild(child);
             child.QueueFree();
         }
+        _threeDimensional = threeDimensional;
         Obstacles = null;
+        _leaderControlButton = null;
         _leaderToggle = null;
         _leaderStatus = null;
         _selectionStatus = null;
@@ -48,7 +53,7 @@ public partial class ControlPanel : VBoxContainer
             _leaderToggle = new CheckBox
             {
                 Name = "IsLeader", Text = "设为领队", Disabled = true,
-                TooltipText = "先选中一个个体再勾选；勾选其他个体会转移唯一领队，取消普通选择不会清除领队。有领队时地图无限，解除身份后恢复视口环绕。",
+                TooltipText = threeDimensional ? "先选中个体再勾选；可转移唯一领队。领队模式无边界，取消身份后恢复软边界，保留所有位置。" : "先选中一个个体再勾选；勾选其他个体会转移唯一领队，取消普通选择不会清除领队。有领队时地图无限，解除身份后恢复视口环绕。",
             };
             _leaderToggle.Toggled += enabled => LeaderAssignmentRequested?.Invoke(enabled);
             AddChild(_leaderToggle);
@@ -56,6 +61,15 @@ public partial class ControlPanel : VBoxContainer
             _leaderStatus.AddThemeColorOverride("font_color", new Color("d69cff"));
             _leaderStatus.AddThemeFontSizeOverride("font_size", 13);
             AddChild(_leaderStatus);
+            if (threeDimensional && features.HasFlag(SimulationFeatures.DirectLeaderControl))
+            {
+                _leaderControlButton = new Button { Name = "ControlLeader", Text = "操控领队（F3）", Disabled = true,
+                    TooltipText = "捕获鼠标：鼠标调整视角，WASD 按相机视角移动；领队朝向跟随实际运动方向。松键刹停，Esc 释放鼠标；空格暂停时仍可调整视角。" };
+                _leaderControlButton.Pressed += () => LeaderControlRequested?.Invoke();
+                AddChild(_leaderControlButton);
+                AddNumber("FollowCameraDistance", "跟随视距", BoidConfig.FollowCameraDistanceRange, config.FollowCameraDistance,
+                    value => config.FollowCameraDistance = (float)value, "领队模式滚轮也可调整，Home 恢复默认距离。领队只接受障碍接触阻挡，不主动绕障。");
+            }
         }
 
         if (features.HasFlag(SimulationFeatures.Obstacles))
@@ -70,6 +84,17 @@ public partial class ControlPanel : VBoxContainer
                 value => config.ObstacleClearance = (float)value, $"单位：{lengthUnit}；个体中心与障碍物之间预留的距离。");
         }
 
+        if (threeDimensional)
+        {
+            AddHeading("三维观察范围");
+            AddNumber("WorldWidth", "宽度 X", BoidConfig.WorldWidthRange, config.WorldWidth,
+                value => config.WorldWidth = (float)value, "改变软边界范围，保留个体位置；Home 按新范围取景。");
+            AddNumber("WorldHeight", "高度 Y", BoidConfig.WorldHeightRange, config.WorldHeight,
+                value => config.WorldHeight = (float)value);
+            AddNumber("WorldDepth", "深度 Z", BoidConfig.WorldDepthRange, config.WorldDepth,
+                value => config.WorldDepth = (float)value);
+        }
+
         AddHeading("群体设置");
         AddNumber("BoidCount", "个体数量", BoidConfig.CountRange, config.BoidCount,
             value => config.BoidCount = (int)value, "目标数量；点击重置后重新生成，不会立即增删个体。");
@@ -81,7 +106,7 @@ public partial class ControlPanel : VBoxContainer
             AddHeading("邻居搜索");
             AddSearchMode(config, features.HasFlag(SimulationFeatures.UniformGridSearch));
             AddNumber("PerceptionRadius", "感知半径", BoidConfig.RadiusRange, config.PerceptionRadius,
-                value => config.PerceptionRadius = (float)value, $"单位：{lengthUnit}；环绕世界使用最短环绕距离，无限世界使用直接距离。包含半径边缘和重合的其他个体，不包含自身。");
+                value => config.PerceptionRadius = (float)value, threeDimensional ? "三维始终使用实际坐标和直接距离，包含半径边缘及重合的其他个体。" : $"单位：{lengthUnit}；环绕世界使用最短环绕距离，无限世界使用直接距离。包含半径边缘和重合的其他个体，不包含自身。");
         }
 
         AddHeading("运动参数");
@@ -120,12 +145,14 @@ public partial class ControlPanel : VBoxContainer
         if (features.HasFlag(SimulationFeatures.DebugDrawing))
         {
             AddHeading("调试可视化");
-            if (!features.HasFlag(SimulationFeatures.Leader))
+            if (!features.HasFlag(SimulationFeatures.Leader) || threeDimensional)
             {
                 _selectionStatus = new Label { Name = "SelectedBoidStatus", Text = "未选择个体" };
                 AddChild(_selectionStatus);
             }
             AddToggle("ShowGrid", "显示网格", config.ShowGrid, value => config.ShowGrid = value);
+            if (threeDimensional)
+                AddToggle("ShowBoundary", "显示边界", config.ShowBoundary, value => config.ShowBoundary = value);
             AddToggle("ShowNeighbors", "显示选中个体的邻居连线", config.ShowNeighbors, value => config.ShowNeighbors = value);
             AddToggle("ShowPerceptionRadius", "显示选中个体的感知范围", config.ShowPerceptionRadius, value => config.ShowPerceptionRadius = value);
             if (features.HasFlag(SimulationFeatures.Flocking))
@@ -161,14 +188,25 @@ public partial class ControlPanel : VBoxContainer
             && edit.GetParent() is SpinBox spin && IsAncestorOf(spin)) spin.Apply();
     }
 
-    public void RefreshLeaderState(int? selectedId, int? leaderId, bool hasTarget)
+    public void RefreshLeaderState(int? selectedId, int? leaderId, bool hasTarget, bool controlActive = false, bool running = false)
     {
         if (_selectionStatus is not null) _selectionStatus.Text = selectedId.HasValue ? $"已选择个体：#{selectedId}" : "未选择个体";
         if (_leaderToggle is null || _leaderStatus is null) return;
+        if (_leaderControlButton is not null)
+        {
+            _leaderControlButton.Disabled = !leaderId.HasValue || controlActive;
+            _leaderControlButton.Text = controlActive ? "操控中 · Esc 释放鼠标" : "操控领队（F3）";
+        }
         _leaderToggle.Disabled = !selectedId.HasValue;
         _leaderToggle.SetPressedNoSignal(selectedId.HasValue && selectedId == leaderId);
         _leaderStatus.Text = leaderId.HasValue
-            ? $"当前领队：#{leaderId} · {(hasTarget ? "跟随鼠标" : "鼠标移入场景后跟随")}" : "未指定领队";
+            ? (_threeDimensional ? $"当前领队：#{leaderId} · {(controlActive ? "操控中" : "待操控")}{(running ? "" : " · 已暂停")}" : $"当前领队：#{leaderId} · {(hasTarget ? "跟随鼠标" : "鼠标移入场景后跟随")}") : "未指定领队";
+    }
+
+    public void RefreshViewConfiguration(BoidConfig config)
+    {
+        if (FindChild("FollowCameraDistance", true, false) is SpinBox distance)
+            distance.SetValueNoSignal(config.FollowCameraDistance);
     }
 
     private static Button AddButton(HBoxContainer row, string name, string text, Action action)

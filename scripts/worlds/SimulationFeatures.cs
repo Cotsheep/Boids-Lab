@@ -13,5 +13,6 @@ public enum SimulationFeatures
     Flocking = 8,
     DebugDrawing = 16,
     UniformGridSearch = 32,
-    All = Leader | Obstacles | NeighborSearch | Flocking | DebugDrawing | UniformGridSearch,
+    DirectLeaderControl = 64,
+    All = Leader | Obstacles | NeighborSearch | Flocking | DebugDrawing | UniformGridSearch | DirectLeaderControl,
 }

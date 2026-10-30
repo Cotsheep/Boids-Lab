@@ -22,7 +22,7 @@ public partial class SimulationView3D : Node3D
         GetNode<MeshInstance3D>("DebugOverlay").Mesh = _debugMesh;
     }
 
-    public void Configure(Aabb bounds)
+    public void Configure(Aabb bounds, bool resetCamera = true)
     {
         var mesh = new ImmediateMesh();
         var material = new StandardMaterial3D
@@ -58,16 +58,18 @@ public partial class SimulationView3D : Node3D
         grid.SurfaceEnd();
         GetNode<MeshInstance3D>("Grid").Mesh = grid;
 
-        GetNode<SimulationCamera3D>("Camera3D").Configure(bounds);
+        var camera = GetNode<SimulationCamera3D>("Camera3D");
+        if (resetCamera) camera.Configure(bounds);
+        else camera.UpdateHomeBounds(bounds);
     }
 
     public void RefreshDebug()
     {
         if (_config is null || _manager is null) return;
-        GetNode<MeshInstance3D>("Grid").Visible = _config.ShowGrid;
+        GetNode<MeshInstance3D>("Grid").Visible = _config.ShowGrid && _manager.Leader is null;
+        GetNode<MeshInstance3D>("ReferenceFrame").Visible = _config.ShowBoundary && _manager.Leader is null;
         var camera = GetNode<SimulationCamera3D>("Camera3D");
-        float unitsPerPixel = camera.Size / Mathf.Max(1, GetViewport().GetVisibleRect().Size.Y);
-        DebugGeometry.Build(_manager.Boids, _manager.SelectedBoid, _config, _manager.WorldBounds, unitsPerPixel);
+        DebugGeometry.Build(_manager.Boids, _manager.SelectedBoid, _config, camera.UnitsPerPixelAt);
         _debugMesh.ClearSurfaces();
         if (DebugGeometry.RangePoints.Count + DebugGeometry.SeparationRangePoints.Count
             + DebugGeometry.NeighborPoints.Count + DebugGeometry.VelocityPoints.Count == 0) return;

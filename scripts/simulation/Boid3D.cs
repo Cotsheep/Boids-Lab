@@ -7,6 +7,9 @@ namespace BoidsLab;
 public partial class Boid3D : Node3D
 {
     [Export] public Material? SelectionMaterial { get; set; }
+    [Export] public Material? LeaderMaterial { get; set; }
+    [Export] public Material? SelectedLeaderMaterial { get; set; }
+    public bool IsLeader { get; private set; }
     public int Id { get; private set; }
     public bool IsSelected { get; private set; }
     private MeshInstance3D? _body;
@@ -35,9 +38,17 @@ public partial class Boid3D : Node3D
         RefreshAppearance();
     }
 
+    internal void SetLeader(bool leader)
+    {
+        IsLeader = leader;
+        RefreshAppearance();
+    }
+
     private void RefreshAppearance()
     {
-        if (_body is not null) _body.MaterialOverride = IsSelected ? SelectionMaterial : _normalOverride;
+        if (_body is not null) _body.MaterialOverride = IsLeader
+            ? (IsSelected ? SelectedLeaderMaterial : LeaderMaterial)
+            : IsSelected ? SelectionMaterial : _normalOverride;
     }
 
     // 用网格包围球进行轻量拾取，无需给每只个体添加碰撞体。保留最小屏幕点击容差。

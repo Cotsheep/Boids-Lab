@@ -1,4 +1,4 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene load_steps=7 format=3]
 
 [ext_resource type="Script" path="res://scripts/simulation/Boid3D.cs" id="1_boid"]
 
@@ -10,6 +10,14 @@ roughness = 0.8
 shading_mode = 0
 albedo_color = Color(1, 0.89, 0.58, 1)
 
+[sub_resource type="StandardMaterial3D" id="Material_leader"]
+shading_mode = 0
+albedo_color = Color(0.75, 0.39, 1, 1)
+
+[sub_resource type="StandardMaterial3D" id="Material_selected_leader"]
+shading_mode = 0
+albedo_color = Color(1, 0.63, 0.92, 1)
+
 [sub_resource type="CylinderMesh" id="Mesh_boid"]
 material = SubResource("Material_boid")
 top_radius = 0.0
@@ -20,6 +28,8 @@ radial_segments = 6
 [node name="Boid3D" type="Node3D"]
 script = ExtResource("1_boid")
 SelectionMaterial = SubResource("Material_selection")
+LeaderMaterial = SubResource("Material_leader")
+SelectedLeaderMaterial = SubResource("Material_selected_leader")
 
 [node name="Body" type="MeshInstance3D" parent="."]
 rotation = Vector3(-1.5707963, 0, 0)

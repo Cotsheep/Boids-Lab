@@ -43,6 +43,8 @@ public partial class ObstacleInteraction3DChecks : Node
             panel.ConfigurationChanged += () => configChanges++;
             Vector2 point = GetViewport().GetVisibleRect().Size * new Vector2(0.55f, 0.5f);
             Transform3D view = _camera.Transform;
+            panel.GetParent<ScrollContainer>().EnsureControlVisible(addBox);
+            await Frame();
             Click(addBox.GetGlobalRect().GetCenter());
             Check(_editor.PlacementShape == ObstacleShape.Box && _editor.Obstacles.Count == 0, "Creation button starts a preview, not a physical obstacle");
             Click(point);

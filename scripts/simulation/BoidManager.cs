@@ -14,7 +14,7 @@ public partial class BoidManager : Node2D, ISimulationWorld
 
     public string DisplayName => "二维世界";
     public string LengthUnit => "像素";
-    public SimulationFeatures Features => SimulationFeatures.All;
+    public SimulationFeatures Features => SimulationFeatures.All & ~SimulationFeatures.DirectLeaderControl;
     public BoidConfig Config => _config
         ?? throw new InvalidOperationException("Initialize the world with a shared configuration first.");
     public Rect2 ViewBounds { get; private set; }
@@ -27,6 +27,9 @@ public partial class BoidManager : Node2D, ISimulationWorld
     public int? SelectedBoidId => SelectedBoid?.Id;
     public int? LeaderId => Leader?.Id;
     public bool HasLeaderTarget => LeaderTarget.HasValue;
+    public bool IsLeaderControlActive => false;
+    public void SetLeaderControlActive(bool active) { }
+    public event Action? ConfigurationEdited { add { } remove { } }
     public event Action? BoidControlStateChanged;
     public SimulationStats Stats { get; private set; }
     public bool IsRunning { get; private set; }

@@ -30,6 +30,10 @@ public sealed class BoidConfig
     public static readonly NumberRange ObstacleClearanceRange = new(0, 100, 1, 12);
     public static readonly NumberRange LeaderFollowDistanceRange = new(16, 500, 1, 80);
     public static readonly NumberRange LeaderFollowWeightRange = new(0, 5, 0.1, 1.5);
+    public static readonly NumberRange WorldWidthRange = new(100, 100000, 10, 2560);
+    public static readonly NumberRange WorldHeightRange = new(100, 100000, 10, 1440);
+    public static readonly NumberRange WorldDepthRange = new(100, 100000, 10, 1440);
+    public static readonly NumberRange FollowCameraDistanceRange = new(80, 2000, 1, 300);
 
     public int BoidCount { get; set; } = (int)CountRange.Default;
     public int RandomSeed { get; set; } = (int)SeedRange.Default;
@@ -51,7 +55,12 @@ public sealed class BoidConfig
     public float ObstacleClearance { get; set; } = (float)ObstacleClearanceRange.Default;
     public float LeaderFollowDistance { get; set; } = (float)LeaderFollowDistanceRange.Default;
     public float LeaderFollowWeight { get; set; } = (float)LeaderFollowWeightRange.Default;
+    public float WorldWidth { get; set; } = (float)WorldWidthRange.Default;
+    public float WorldHeight { get; set; } = (float)WorldHeightRange.Default;
+    public float WorldDepth { get; set; } = (float)WorldDepthRange.Default;
+    public float FollowCameraDistance { get; set; } = (float)FollowCameraDistanceRange.Default;
     public bool ShowGrid { get; set; } = true;
+    public bool ShowBoundary { get; set; }
     public bool ShowNeighbors { get; set; }
     public bool ShowPerceptionRadius { get; set; }
     public bool ShowSeparationRadius { get; set; }
@@ -75,6 +84,10 @@ public sealed class BoidConfig
         ObstacleClearance = (float)ObstacleClearanceRange.Constrain(ObstacleClearance);
         LeaderFollowDistance = (float)LeaderFollowDistanceRange.Constrain(LeaderFollowDistance);
         LeaderFollowWeight = (float)LeaderFollowWeightRange.Constrain(LeaderFollowWeight);
+        WorldWidth = (float)WorldWidthRange.Constrain(WorldWidth);
+        WorldHeight = (float)WorldHeightRange.Constrain(WorldHeight);
+        WorldDepth = (float)WorldDepthRange.Constrain(WorldDepth);
+        FollowCameraDistance = (float)FollowCameraDistanceRange.Constrain(FollowCameraDistance);
     }
 
     public Error Load(string path = SavePath)
@@ -118,7 +131,12 @@ public sealed class BoidConfig
         ObstacleClearance = (float)ObstacleClearanceRange.Constrain(Number("obstacle_clearance", ObstacleClearance));
         LeaderFollowDistance = (float)LeaderFollowDistanceRange.Constrain(Number("leader_follow_distance", LeaderFollowDistance));
         LeaderFollowWeight = (float)LeaderFollowWeightRange.Constrain(Number("leader_follow_weight", LeaderFollowWeight));
+        WorldWidth = (float)WorldWidthRange.Constrain(Number("world_width_3d", WorldWidth));
+        WorldHeight = (float)WorldHeightRange.Constrain(Number("world_height_3d", WorldHeight));
+        WorldDepth = (float)WorldDepthRange.Constrain(Number("world_depth_3d", WorldDepth));
+        FollowCameraDistance = (float)FollowCameraDistanceRange.Constrain(Number("follow_camera_distance_3d", FollowCameraDistance));
         ShowGrid = Flag("visualization", "show_grid", ShowGrid);
+        ShowBoundary = Flag("visualization", "show_boundary_3d", ShowBoundary);
         ShowNeighbors = Flag("visualization", "show_neighbors", ShowNeighbors);
         ShowPerceptionRadius = Flag("visualization", "show_perception_radius", ShowPerceptionRadius);
         ShowSeparationRadius = Flag("visualization", "show_separation_radius", ShowSeparationRadius);
@@ -150,7 +168,12 @@ public sealed class BoidConfig
         file.SetValue("simulation", "obstacle_clearance", ObstacleClearance);
         file.SetValue("simulation", "leader_follow_distance", LeaderFollowDistance);
         file.SetValue("simulation", "leader_follow_weight", LeaderFollowWeight);
+        file.SetValue("simulation", "world_width_3d", WorldWidth);
+        file.SetValue("simulation", "world_height_3d", WorldHeight);
+        file.SetValue("simulation", "world_depth_3d", WorldDepth);
+        file.SetValue("simulation", "follow_camera_distance_3d", FollowCameraDistance);
         file.SetValue("visualization", "show_grid", ShowGrid);
+        file.SetValue("visualization", "show_boundary_3d", ShowBoundary);
         file.SetValue("visualization", "show_neighbors", ShowNeighbors);
         file.SetValue("visualization", "show_perception_radius", ShowPerceptionRadius);
         file.SetValue("visualization", "show_separation_radius", ShowSeparationRadius);

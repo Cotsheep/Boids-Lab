@@ -50,9 +50,10 @@ public partial class WorldSwitchChecks : Node
             Check(!world3D.IsRunning && world3D.Boids.Count == 9 && world3D.Config.PerceptionRadius == 40, "3D uses its own settings and starts paused");
             Check(_panel.Obstacles is not null && _panel.Obstacles.FindChild("AddBox", true, false) is Button
                 && _panel.Obstacles.FindChild("AddRectangle", true, false) is null
-                && _panel.FindChild("IsLeader", true, false) is null, "Obstacle controls switch dimensions; 2D leader controls are removed");
+                && _panel.FindChild("IsLeader", true, false) is CheckBox
+                && _panel.FindChild("ControlLeader", true, false) is Button, "3D obstacle and direct leader controls replace the 2D controls");
             Check(GetViewport().GetCamera2D() is null && GetViewport().GetCamera3D() is not null, "Only the new camera remains active");
-            Check(HelpText().Contains("三维基础运动") && world3D.Stats.UpdateMilliseconds is null, "Help and fresh statistics match the new world");
+            Check(HelpText().Contains("三维观察与领队飞行") && world3D.Stats.UpdateMilliseconds is null, "Help and fresh statistics match the new world");
             Check(_app.GetNode<StatsPanel>("%StatsPanel").FindChild("NeighborChecks", true, false) is Label { Text: "--" }, "Old measurements do not leak into the new HUD");
             var saved2D = new BoidConfig();
             Check(saved2D.Load(Path2D) == Error.Ok && saved2D.BoidCount == 15 && saved2D.NeighborSearchMode == NeighborSearchMode.UniformGrid,
@@ -75,7 +76,7 @@ public partial class WorldSwitchChecks : Node
                 && world2D.GetNode<ObstacleEditor2D>("ObstacleEditor").Obstacles.Count == 0, "Leader, selection and obstacle layout are discarded");
             Check(_panel.Obstacles is not null && _panel.FindChild("IsLeader", true, false) is CheckBox, "2D controls are restored");
             Check(GetViewport().GetCamera3D() is null && GetViewport().GetCamera2D() is not null, "3D camera no longer affects the viewport");
-            Check(!HelpText().Contains("三维基础运动"), "2D instructions are restored");
+            Check(!HelpText().Contains("三维观察与领队飞行"), "2D instructions are restored");
             Vector2[] resetPositions = world2D.Boids.Select(b => b.Position).ToArray();
             await Switch(1);
             world3D = _app.GetNode<BoidManager3D>("World/BoidsWorld3D");

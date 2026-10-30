@@ -4,7 +4,7 @@ using Godot;
 
 namespace BoidsLab;
 
-/// <summary>解析球体/轴对齐盒体的前瞻转向与接触约束。周期路径在边界处分段，避免跨盒的虚假直线。</summary>
+/// <summary>解析球体/轴对齐盒体的前瞻转向与接触约束。沿实际坐标的完整运动线段检测。</summary>
 public static class ObstacleAvoidance3D
 {
     private const float Skin = 0.01f;
@@ -13,18 +13,17 @@ public static class ObstacleAvoidance3D
     private const int MaxRecoveryPasses = 8;
 
     public static Vector3 Calculate(BoidSnapshot3D self, IReadOnlyList<Obstacle3D> obstacles,
-        BoidConfig config, Aabb bounds)
+        BoidConfig config)
     {
         if (!config.AvoidanceEnabled || config.MaxSpeed <= 0 || config.MaxForce <= 0 || obstacles.Count == 0)
             return Vector3.Zero;
-        Vector3 position = WorldGeometry3D.Wrap(self.Position, bounds);
+        Vector3 position = self.Position;
         float speed = self.Velocity.Length();
         float nearDistance = Mathf.Max(2, config.ObstacleClearance * 0.5f);
         float nearest = float.PositiveInfinity;
         Vector3 normal = Vector3.Zero;
         foreach (Obstacle3D obstacle in obstacles)
         {
-            if (!Participates(obstacle, config.ObstacleClearance, bounds)) continue;
             Surface(position, obstacle, config.ObstacleClearance, out float distance, out Vector3 outward);
             if (distance < nearDistance && distance < nearest && self.Velocity.Dot(outward) <= speed * 0.1f)
             {
@@ -35,16 +34,8 @@ public static class ObstacleAvoidance3D
         if (normal == Vector3.Zero && speed > Epsilon)
         {
             float lookDistance = speed * config.AvoidanceLookAhead + speed * speed / (2 * config.MaxForce);
-            Vector3 remaining = self.Velocity / speed * lookDistance;
-            for (int i = 0; i < MaxSegments && remaining.LengthSquared() > Epsilon * Epsilon; i++)
-            {
-                BoundaryFraction(position, remaining, bounds, out float edge, out Vector3I crossing);
-                Vector3 segment = remaining * edge;
-                if (FirstHit(position, segment, obstacles, config.ObstacleClearance, bounds, out _, out normal)) break;
-                position += segment;
-                remaining *= 1 - edge;
-                JumpAcross(ref position, crossing, bounds);
-            }
+            FirstHit(position, self.Velocity / speed * lookDistance, obstacles,
+                config.ObstacleClearance, out _, out normal);
         }
         if (normal == Vector3.Zero) return Vector3.Zero;
 
@@ -63,46 +54,36 @@ public static class ObstacleAvoidance3D
 
     /// <summary>扫描完整的本步位移，接触后沿面滑动；新增/放大障碍物的重叠也在此恢复。</summary>
     public static void ResolveMotion(Vector3 from, ref Vector3 position, ref Vector3 velocity,
-        IReadOnlyList<Obstacle3D> obstacles, float clearance, Aabb bounds)
+        IReadOnlyList<Obstacle3D> obstacles, float clearance)
     {
         Vector3 remaining = position - from;
-        position = WorldGeometry3D.Wrap(from, bounds);
-        RecoverOverlaps(ref position, ref velocity, obstacles, clearance, bounds);
+        position = from;
+        RecoverOverlaps(ref position, ref velocity, obstacles, clearance);
         for (int i = 0; i < MaxSegments && remaining.LengthSquared() > Epsilon * Epsilon; i++)
         {
-            BoundaryFraction(position, remaining, bounds, out float edge, out Vector3I crossing);
-            Vector3 segment = remaining * edge;
-            if (FirstHit(position, segment, obstacles, clearance, bounds, out float fraction, out Vector3 normal))
+            if (FirstHit(position, remaining, obstacles, clearance, out float fraction, out Vector3 normal))
             {
-                position += segment * fraction + normal * Skin;
-                remaining *= 1 - edge * fraction;
+                position += remaining * fraction + normal * Skin;
+                remaining *= 1 - fraction;
                 RemoveInward(ref remaining, normal);
                 RemoveInward(ref velocity, normal);
-                position = WorldGeometry3D.Wrap(position, bounds);
-                RecoverOverlaps(ref position, ref velocity, obstacles, clearance, bounds);
+                RecoverOverlaps(ref position, ref velocity, obstacles, clearance);
                 continue;
             }
-            position += segment;
-            remaining *= 1 - edge;
-            JumpAcross(ref position, crossing, bounds);
-            if (crossing != Vector3I.Zero) RecoverOverlaps(ref position, ref velocity, obstacles, clearance, bounds);
+            position += remaining;
+            break;
         }
-        // 极端步长最多处理 64 段，超出则丢弃剩余位移，不跳过碰撞检测。
-        position = WorldGeometry3D.Wrap(position, bounds);
-        RecoverOverlaps(ref position, ref velocity, obstacles, clearance, bounds);
+        // 极端步长有界处理；剩余位移不会绕过接触检测。
+        RecoverOverlaps(ref position, ref velocity, obstacles, clearance);
     }
 
-    private static bool Participates(Obstacle3D obstacle, float clearance, Aabb bounds) =>
-        obstacle.WorldBox.Grow(clearance).Intersects(bounds);
-
     private static bool FirstHit(Vector3 origin, Vector3 movement, IReadOnlyList<Obstacle3D> obstacles,
-        float clearance, Aabb bounds, out float fraction, out Vector3 normal)
+        float clearance, out float fraction, out Vector3 normal)
     {
         fraction = float.PositiveInfinity;
         normal = Vector3.Zero;
         foreach (Obstacle3D obstacle in obstacles)
-            if (Participates(obstacle, clearance, bounds)
-                && Sweep(origin, movement, obstacle, clearance, out float hit, out Vector3 outward) && hit < fraction)
+            if (Sweep(origin, movement, obstacle, clearance, out float hit, out Vector3 outward) && hit < fraction)
             {
                 fraction = hit;
                 normal = outward;
@@ -117,7 +98,7 @@ public static class ObstacleAvoidance3D
     }
 
     private static void RecoverOverlaps(ref Vector3 point, ref Vector3 velocity,
-        IReadOnlyList<Obstacle3D> obstacles, float clearance, Aabb bounds)
+        IReadOnlyList<Obstacle3D> obstacles, float clearance)
     {
         // 有界恢复；障碍物互相封闭或填满世界时，不承诺一定存在自由位置。
         for (int pass = 0; pass < MaxRecoveryPasses; pass++)
@@ -125,10 +106,9 @@ public static class ObstacleAvoidance3D
             bool moved = false;
             foreach (Obstacle3D obstacle in obstacles)
             {
-                if (!Participates(obstacle, clearance, bounds)) continue;
                 Surface(point, obstacle, clearance, out float distance, out Vector3 normal);
                 if (distance >= 0) continue;
-                point = WorldGeometry3D.Wrap(point + normal * (-distance + Skin), bounds);
+                point += normal * (-distance + Skin);
                 RemoveInward(ref velocity, normal);
                 moved = true;
             }
@@ -221,22 +201,4 @@ public static class ObstacleAvoidance3D
 
     private static double Dot(Vector3 a, Vector3 b) => (double)a.X * b.X + (double)a.Y * b.Y + (double)a.Z * b.Z;
 
-    private static void BoundaryFraction(Vector3 origin, Vector3 movement, Aabb bounds,
-        out float fraction, out Vector3I crossing)
-    {
-        var fractions = new Vector3(float.PositiveInfinity, float.PositiveInfinity, float.PositiveInfinity);
-        for (int axis = 0; axis < 3; axis++)
-            if (movement[axis] != 0)
-                fractions[axis] = ((movement[axis] > 0 ? bounds.End[axis] : bounds.Position[axis]) - origin[axis]) / movement[axis];
-        fraction = Mathf.Clamp(Mathf.Min(1, Mathf.Min(fractions.X, Mathf.Min(fractions.Y, fractions.Z))), 0, 1);
-        crossing = Vector3I.Zero;
-        for (int axis = 0; axis < 3; axis++)
-            if (fractions[axis] <= fraction) crossing[axis] = movement[axis] > 0 ? 1 : -1;
-    }
-
-    private static void JumpAcross(ref Vector3 position, Vector3I crossing, Aabb bounds)
-    {
-        for (int axis = 0; axis < 3; axis++)
-            if (crossing[axis] != 0) position[axis] = crossing[axis] > 0 ? bounds.Position[axis] : bounds.End[axis];
-    }
 }

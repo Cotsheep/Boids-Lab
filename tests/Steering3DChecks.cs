@@ -46,7 +46,7 @@ public partial class Steering3DChecks : Node
         var search = new NeighborSearch3D();
         Vector3 Force(int index = 0)
         {
-            search.Search(pair, config.PerceptionRadius, Bounds, config.NeighborSearchMode);
+            search.Search(pair, config.PerceptionRadius, config.NeighborSearchMode);
             return BoidSteering3D.Calculate(search, index, config);
         }
         foreach (NeighborSearchMode mode in Enum.GetValues<NeighborSearchMode>())
@@ -80,10 +80,10 @@ public partial class Steering3DChecks : Node
             config.CohesionWeight = 1;
             a.Position = new Vector3(49, 39, 29);
             b.Position = new Vector3(-49, -39, -29);
-            Near(Force(), Vector3.One.Normalized() * 10, "Cohesion takes the short route across all three boundaries");
+            Near(Force(), Vector3.Zero, "Cohesion does not connect opposite box corners");
             config.CohesionEnabled = false;
             config.SeparationEnabled = true;
-            Near(Force(), -Vector3.One.Normalized() * 10, "Separation uses the same wrapped displacement");
+            Near(Force(), Vector3.Zero, "Separation uses direct displacement");
             b.Position = a.Position;
             Vector3 first = Force();
             b.Initialize(config, 92, Vector3.Zero);
@@ -114,12 +114,12 @@ public partial class Steering3DChecks : Node
         b.Initialize(config, 92, Vector3.Zero);
         b.Position = Vector3.Right * 5;
         Boid3D c = MakeBoid(config, 301, Vector3.Left * 5);
-        search.Search(new[] { a, b, c }, 20, Bounds);
+        search.Search(new[] { a, b, c }, 20);
         Near(BoidSteering3D.Calculate(search, 0, config), Vector3.Zero, "Symmetric neighbors do not create a spurious target");
         config.CohesionEnabled = false;
         b.Position = Vector3.Right * 2;
         c.Position = Vector3.Up * 4;
-        search.Search(new[] { a, b, c }, 20, Bounds);
+        search.Search(new[] { a, b, c }, 20);
         Vector3 weighted = BoidSteering3D.Calculate(search, 0, config);
         Check(weighted.X < 0 && weighted.Y < 0 && Mathf.IsEqualApprox(weighted.X / weighted.Y, 2),
             "A nearer neighbor has proportionally stronger influence on separation direction");
@@ -133,8 +133,8 @@ public partial class Steering3DChecks : Node
 
     private BoidManager3D MakeWorld(BoidConfig config)
     {
+        config.WorldWidth = config.WorldHeight = config.WorldDepth = 200;
         var world = GD.Load<PackedScene>("res://scenes/worlds/boids_world_3d.tscn").Instantiate<BoidManager3D>();
-        world.WorldSize = Bounds.Size;
         world.Initialize(config);
         AddChild(world);
         return world;
@@ -202,8 +202,8 @@ public partial class Steering3DChecks : Node
                     "Naive and grid searches produce identical trajectories, including changes in count and radius");
                 Check(a.Position.IsFinite() && a.Velocity.IsFinite() && a.Acceleration.IsFinite() && a.Quaternion.IsFinite(),
                     "Long-running motion remains finite");
-                Check(a.Velocity.Length() <= configA.MaxSpeed + 0.001f && a.Acceleration.Length() <= configA.MaxForce + 0.001f
-                    && Bounds.HasPoint(a.Position), "Long-running speed, acceleration and wrapping stay bounded");
+                Check(a.Velocity.Length() <= configA.MaxSpeed + 0.001f && a.Acceleration.Length() <= configA.MaxForce + 0.001f,
+                    "Long-running speed and acceleration stay bounded without position clipping");
                 movedByRules |= a.Acceleration.LengthSquared() > 0;
             }
         }

@@ -7,12 +7,11 @@ namespace BoidsLab;
 
 public readonly record struct BoidSnapshot3D(int Id, Vector3 Position, Vector3 Velocity);
 
-/// <summary>三维朴素/网格搜索共用步前快照与环绕距离，邻居结果保存快照下标。</summary>
+/// <summary>三维朴素/网格搜索共用步前快照与直接距离，邻居结果保存快照下标。</summary>
 public sealed class NeighborSearch3D
 {
     public bool HasResults { get; private set; }
     public IReadOnlyList<BoidSnapshot3D> Snapshots => HasResults ? _snapshotView : Array.Empty<BoidSnapshot3D>();
-    public Aabb Bounds { get; private set; }
     public float Radius { get; private set; }
     public NeighborSearchMode Mode { get; private set; }
     public long CandidateChecks { get; private set; }
@@ -24,8 +23,6 @@ public sealed class NeighborSearch3D
     private List<int>[] _neighbors = Array.Empty<List<int>>();
     private IReadOnlyList<int>[] _neighborViews = Array.Empty<IReadOnlyList<int>>();
     private readonly Dictionary<Vector3I, List<int>> _cells = new();
-    private Vector3I _gridSize = Vector3I.One;
-    private Vector3 _cellSize = Vector3.One;
 
     public void Invalidate() => HasResults = false;
 
@@ -38,21 +35,16 @@ public sealed class NeighborSearch3D
     public Vector3 GetOffset(int fromIndex, int toIndex)
     {
         if (!HasResults) throw new InvalidOperationException("Run a neighbor search before reading results.");
-        return WorldGeometry3D.Offset(_snapshots[fromIndex].Position, _snapshots[toIndex].Position, Bounds);
+        return _snapshots[toIndex].Position - _snapshots[fromIndex].Position;
     }
 
-    public void Search(IReadOnlyList<Boid3D> boids, float radius, Aabb bounds, NeighborSearchMode mode = NeighborSearchMode.Naive)
+    public void Search(IReadOnlyList<Boid3D> boids, float radius, NeighborSearchMode mode = NeighborSearchMode.Naive)
     {
         ArgumentNullException.ThrowIfNull(boids);
         if (!Enum.IsDefined(mode)) throw new ArgumentOutOfRangeException(nameof(mode));
         if (!float.IsFinite(radius) || radius <= 0) throw new ArgumentOutOfRangeException(nameof(radius));
-        if (!bounds.Position.IsFinite() || !bounds.Size.IsFinite() || !bounds.End.IsFinite()
-            || bounds.Size.X <= 0 || bounds.Size.Y <= 0 || bounds.Size.Z <= 0)
-            throw new ArgumentOutOfRangeException(nameof(bounds));
-
         long started = Stopwatch.GetTimestamp();
         Invalidate();
-        Bounds = bounds;
         Radius = radius;
         Mode = mode;
         CandidateChecks = 0;
@@ -72,7 +64,7 @@ public sealed class NeighborSearch3D
         {
             Vector3 position = boids[i].Position;
             if (!position.IsFinite()) throw new ArgumentException("Boid positions must be finite.", nameof(boids));
-            _snapshots[i] = new BoidSnapshot3D(boids[i].Id, WorldGeometry3D.Wrap(position, bounds), boids[i].Velocity);
+            _snapshots[i] = new BoidSnapshot3D(boids[i].Id, position, boids[i].Velocity);
             _neighbors[i].Clear();
         }
 
@@ -90,12 +82,6 @@ public sealed class NeighborSearch3D
 
     private void SearchGrid()
     {
-        for (int axis = 0; axis < 3; axis++)
-        {
-            _gridSize[axis] = (int)Math.Clamp(Math.Floor(Bounds.Size[axis] / (double)Radius), 1, int.MaxValue / 2);
-            _cellSize[axis] = Bounds.Size[axis] / _gridSize[axis];
-        }
-        // 均分整条边，避免末端残格；多格时格宽至少为感知半径，只需检查 3×3×3 邻域。
         for (int i = 0; i < _snapshots.Length; i++)
         {
             Vector3I key = CellAt(_snapshots[i].Position);
@@ -105,15 +91,11 @@ public sealed class NeighborSearch3D
         for (int i = 0; i < _snapshots.Length; i++)
         {
             Vector3I center = CellAt(_snapshots[i].Position);
-            int xStart = _gridSize.X <= 2 ? 0 : center.X - 1;
-            int yStart = _gridSize.Y <= 2 ? 0 : center.Y - 1;
-            int zStart = _gridSize.Z <= 2 ? 0 : center.Z - 1;
-            for (int x = 0; x < Math.Min(3, _gridSize.X); x++)
-                for (int y = 0; y < Math.Min(3, _gridSize.Y); y++)
-                    for (int z = 0; z < Math.Min(3, _gridSize.Z); z++)
+            for (int x = -1; x <= 1; x++)
+                for (int y = -1; y <= 1; y++)
+                    for (int z = -1; z <= 1; z++)
                     {
-                        var cell = new Vector3I((xStart + x + _gridSize.X) % _gridSize.X,
-                            (yStart + y + _gridSize.Y) % _gridSize.Y, (zStart + z + _gridSize.Z) % _gridSize.Z);
+                        var cell = center + new Vector3I(x, y, z);
                         if (!_cells.TryGetValue(cell, out List<int>? members)) continue;
                         foreach (int j in members) CheckCandidate(i, j);
                     }
@@ -126,7 +108,7 @@ public sealed class NeighborSearch3D
     {
         var result = new Vector3I();
         for (int axis = 0; axis < 3; axis++)
-            result[axis] = (int)Math.Clamp(Math.Floor(((double)position[axis] - Bounds.Position[axis]) / _cellSize[axis]), 0, _gridSize[axis] - 1);
+            result[axis] = (int)Math.Clamp(Math.Floor((double)position[axis] / Radius), int.MinValue + 1d, int.MaxValue - 1d);
         return result;
     }
 
@@ -134,7 +116,7 @@ public sealed class NeighborSearch3D
     {
         if (i == j) return;
         CandidateChecks++;
-        Vector3 offset = WorldGeometry3D.Offset(_snapshots[i].Position, _snapshots[j].Position, Bounds);
+        Vector3 offset = _snapshots[j].Position - _snapshots[i].Position;
         if (WorldGeometry3D.WithinRadius(offset, Radius)) _neighbors[i].Add(j);
     }
 }

@@ -154,6 +154,8 @@ public partial class MainController : Node
         _controls.StepRequested += StepSimulation;
         _controls.ConfigurationChanged += ApplyConfiguration;
         _controls.LeaderAssignmentRequested += _world.SetSelectedBoidLeader;
+        _controls.LeaderControlRequested += BeginLeaderControl;
+        _world.ConfigurationEdited += OnWorldConfigurationEdited;
         _world.BoidControlStateChanged += RefreshLeaderControls;
         if (_controls.Obstacles is { } obstacles)
         {
@@ -174,6 +176,8 @@ public partial class MainController : Node
         _controls.StepRequested -= StepSimulation;
         _controls.ConfigurationChanged -= ApplyConfiguration;
         _controls.LeaderAssignmentRequested -= _world.SetSelectedBoidLeader;
+        _controls.LeaderControlRequested -= BeginLeaderControl;
+        _world.ConfigurationEdited -= OnWorldConfigurationEdited;
         _world.BoidControlStateChanged -= RefreshLeaderControls;
         if (_controls.Obstacles is { } obstacles)
         {
@@ -214,11 +218,19 @@ public partial class MainController : Node
             GetViewport().SetInputAsHandled();
             return;
         }
+        if (@event.IsAction("control_leader"))
+        {
+            if (@event.IsActionPressed("control_leader") && !_help.Visible
+                && GetViewport().GuiGetFocusOwner() is not (LineEdit or TextEdit)) BeginLeaderControl();
+            GetViewport().SetInputAsHandled();
+            return;
+        }
         if (@event.IsAction("close_help"))
         {
             if (@event.IsActionPressed("close_help"))
             {
                 if (_help.Visible) _help.Close();
+                else if (_world.IsLeaderControlActive) _world.SetLeaderControlActive(false);
                 else _world.CancelObstaclePlacement();
             }
             GetViewport().SetInputAsHandled();
@@ -252,6 +264,7 @@ public partial class MainController : Node
 
     private void ToggleUi()
     {
+        _world.SetLeaderControlActive(false);
         if (_uiRoot.Visible)
         {
             Control? focused = GetViewport().GuiGetFocusOwner();
@@ -265,7 +278,21 @@ public partial class MainController : Node
         _controls.Obstacles?.Refresh(_world.SelectedObstacleInfo, _world.ObstaclePlacement);
 
     private void RefreshLeaderControls() =>
-        _controls.RefreshLeaderState(_world.SelectedBoidId, _world.LeaderId, _world.HasLeaderTarget);
+        _controls.RefreshLeaderState(_world.SelectedBoidId, _world.LeaderId, _world.HasLeaderTarget, _world.IsLeaderControlActive, _world.IsRunning);
+
+    private void BeginLeaderControl()
+    {
+        if (_help.Visible || !_world.Features.HasFlag(SimulationFeatures.DirectLeaderControl) || !_world.LeaderId.HasValue) return;
+        _controls.CommitPendingEdits();
+        GetViewport().GuiGetFocusOwner()?.ReleaseFocus();
+        _world.SetLeaderControlActive(true);
+    }
+
+    private void OnWorldConfigurationEdited()
+    {
+        SaveConfiguration();
+        _controls.RefreshViewConfiguration(_config);
+    }
 
     private void ToggleRunning()
     {
@@ -304,6 +331,7 @@ public partial class MainController : Node
     private void RefreshInterface()
     {
         _controls.RefreshRunState(_world.IsRunning, _world.CanStep);
+        RefreshLeaderControls();
         string runState = _world.IsRunning
             ? (_world.CoreImplemented ? "运行中" : "已请求运行")
             : "已暂停";

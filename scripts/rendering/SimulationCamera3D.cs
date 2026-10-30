@@ -18,9 +18,17 @@ public partial class SimulationCamera3D : Camera3D
     public event Action<Vector2>? WorldPressStarted;
     public event Action<bool>? WorldPressEnded;
     public event Action? ViewChanged;
+    public event Action? ManualViewChanged;
+    public event Action<float>? FollowDistanceRequested;
+    public bool IsFollowing => _leader is not null;
+    private Boid3D? _leader;
+    private LeaderController3D? _leaderController;
+    private BoidConfig? _followConfig;
+    private bool _followFrozen;
 
     private Aabb _homeBounds;
     private float _distance;
+    private float _referenceSize;
     private float _yaw;
     private float _pitch;
     private bool _configured;
@@ -41,6 +49,50 @@ public partial class SimulationCamera3D : Camera3D
         _window.MouseExited += CancelGesture;
     }
 
+    public void StartFollowing(Boid3D leader, LeaderController3D controller, BoidConfig config)
+    {
+        CancelGesture();
+        _leader = leader;
+        _leaderController = controller;
+        _followConfig = config;
+        _followFrozen = false;
+        Projection = ProjectionType.Perspective;
+        Fov = 70;
+        ApplyFollow(0, true);
+        ManualViewChanged?.Invoke();
+    }
+
+    public void SetFollowFrozen(bool frozen) => _followFrozen = frozen;
+
+    public override void _Process(double delta)
+    {
+        if (IsFollowing && !_followFrozen) ApplyFollow((float)delta, false);
+    }
+
+    private void ApplyFollow(float dt, bool snap)
+    {
+        if (_leader is null || _leaderController is null || _followConfig is null) return;
+        float distance = _followConfig.FollowCameraDistance;
+        Quaternion target = _leaderController.TargetOrientation;
+        Vector3 up = target * Vector3.Up;
+        OrbitCenter = GetParent<Node3D>().ToLocal(_leader.GlobalPosition);
+        Vector3 desired = OrbitCenter - _leaderController.Forward * distance + up * distance * 0.15f;
+        float blend = snap ? 1f : 1f - Mathf.Exp(-8f * dt);
+        Position = Position.Lerp(desired, blend);
+        Quaternion = Quaternion.Slerp(target, blend).Normalized();
+        Far = Mathf.Max(5000, distance * 4);
+        ViewChanged?.Invoke();
+    }
+
+    public void AdjustFollowDistance(float notches)
+    {
+        if (_followConfig is null || !IsFollowing) return;
+        CancelGesture();
+        FollowDistanceRequested?.Invoke((float)BoidConfig.FollowCameraDistanceRange.Constrain(
+            _followConfig.FollowCameraDistance / Mathf.Pow(ZoomPerNotch, notches)));
+        ManualViewChanged?.Invoke();
+    }
+
     public void Configure(Aabb homeBounds)
     {
         if (!homeBounds.Position.IsFinite() || !homeBounds.Size.IsFinite()
@@ -49,22 +101,61 @@ public partial class SimulationCamera3D : Camera3D
         _homeBounds = homeBounds;
         _configured = true;
         _distance = homeBounds.Size.Length() * 1.5f;
+        _referenceSize = homeBounds.Size.Length();
         Projection = ProjectionType.Orthogonal;
         KeepAspect = KeepAspectEnum.Height;
         Far = _distance + homeBounds.Size.Length() * 2f;
         FitWorld();
     }
 
+    public void UpdateHomeBounds(Aabb bounds)
+    {
+        _homeBounds = bounds;
+        if (!IsFollowing) Far = Mathf.Max(Far, Position.DistanceTo(bounds.GetCenter()) + bounds.Size.Length() * 2f);
+    }
+
+    public float UnitsPerPixelAt(Vector3 position)
+    {
+        float depth = Mathf.Max(Near, (ToGlobal(Vector3.Zero) - GetParent<Node3D>().ToGlobal(position)).Dot(GlobalBasis.Z));
+        return Projection == ProjectionType.Orthogonal
+            ? Size / Mathf.Max(1, GetViewport().GetVisibleRect().Size.Y)
+            : 2 * depth * Mathf.Tan(Mathf.DegToRad(Fov * 0.5f)) / Mathf.Max(1, GetViewport().GetVisibleRect().Size.Y);
+    }
+
     public void FitWorld()
     {
         if (!_configured) return;
         CancelGesture();
+        if (IsFollowing)
+        {
+            FollowDistanceRequested?.Invoke((float)BoidConfig.FollowCameraDistanceRange.Default);
+            ApplyFollow(0, true);
+            ManualViewChanged?.Invoke();
+            return;
+        }
+        _distance = _homeBounds.Size.Length() * 1.5f;
+        Far = _distance + _homeBounds.Size.Length() * 2f;
+        _referenceSize = _homeBounds.Size.Length();
         OrbitCenter = _homeBounds.GetCenter();
         ZoomFactor = 1f;
         Vector3 offset = new Vector3(1f, 0.75f, 1.2f).Normalized();
         _yaw = Mathf.Atan2(offset.X, offset.Z);
         _pitch = Mathf.Asin(offset.Y);
         ApplyView();
+        ManualViewChanged?.Invoke();
+    }
+
+    public void RecenterObservation(Vector3 center)
+    {
+        _leader = null;
+        _leaderController = null;
+        _followConfig = null;
+        _followFrozen = false;
+        Projection = ProjectionType.Orthogonal;
+        OrbitCenter = center;
+        Far = _distance + _homeBounds.Size.Length() * 2f;
+        ApplyView();
+        ManualViewChanged?.Invoke();
     }
 
     public void SetInteractionEnabled(bool enabled)
@@ -86,6 +177,7 @@ public partial class SimulationCamera3D : Camera3D
         if (@event is not InputEventMouseButton { Pressed: true } button) return;
         if (button.ButtonIndex is MouseButton.Left or MouseButton.Right or MouseButton.Middle)
         {
+            if (IsFollowing && button.ButtonIndex != MouseButton.Left) return;
             CancelGesture();
             _gesture = button.ButtonIndex;
             _pressPosition = button.Position;
@@ -100,6 +192,12 @@ public partial class SimulationCamera3D : Camera3D
             _ => 0f,
         };
         if (direction == 0f) return;
+        if (IsFollowing)
+        {
+            AdjustFollowDistance(direction * (button.Factor > 0 ? button.Factor : 1));
+            GetViewport().SetInputAsHandled();
+            return;
+        }
         CancelGesture();
         Vector3 before = ToParentPoint(ProjectPosition(button.Position, _distance));
         float amount = button.Factor > 0 ? button.Factor : 1;
@@ -108,6 +206,7 @@ public partial class SimulationCamera3D : Camera3D
         // 鼠标在观察中心平面上的投影保持不动。
         OrbitCenter += before - ToParentPoint(ProjectPosition(button.Position, _distance));
         ApplyView();
+        ManualViewChanged?.Invoke();
         GetViewport().SetInputAsHandled();
     }
 
@@ -157,12 +256,14 @@ public partial class SimulationCamera3D : Camera3D
             _yaw = Mathf.Wrap(_yaw - movement.X * OrbitRadiansPerPixel, -Mathf.Pi, Mathf.Pi);
             _pitch = Mathf.Clamp(_pitch + movement.Y * OrbitRadiansPerPixel, -PitchLimit, PitchLimit);
             ApplyView();
+            ManualViewChanged?.Invoke();
         }
         else if (_gesture == MouseButton.Middle)
         {
             OrbitCenter += ToParentPoint(ProjectPosition(motion.Position - movement, _distance))
                 - ToParentPoint(ProjectPosition(motion.Position, _distance));
             ApplyView();
+            ManualViewChanged?.Invoke();
         }
         GetViewport().SetInputAsHandled();
     }
@@ -184,14 +285,15 @@ public partial class SimulationCamera3D : Camera3D
     private void OnViewportChanged()
     {
         CancelGesture();
-        if (_configured) ApplyView();
+        if (_configured && !IsFollowing) ApplyView();
+        ManualViewChanged?.Invoke();
     }
 
     private void ApplySize()
     {
         Vector2 viewportSize = GetViewport().GetVisibleRect().Size;
         float aspect = viewportSize.X / Mathf.Max(1f, viewportSize.Y);
-        Size = _homeBounds.Size.Length() * 1.1f / (ZoomFactor * Mathf.Min(1f, aspect));
+        Size = _referenceSize * 1.1f / (ZoomFactor * Mathf.Min(1f, aspect));
     }
 
     private void ApplyView()

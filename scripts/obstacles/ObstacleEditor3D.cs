@@ -20,6 +20,7 @@ public partial class ObstacleEditor3D : Node3D
     private Node3D _container = null!;
     private Obstacle3D? _preview;
     private Obstacle3D? _dragTarget;
+    private Vector3 _placementPoint, _placementNormal;
     private Vector3 _planePoint, _planeNormal, _startPointer, _startPosition;
     private Vector2 _pressScreen;
     private bool _dragged, _swallowRelease;
@@ -40,7 +41,7 @@ public partial class ObstacleEditor3D : Node3D
         _world = world;
         _camera = camera;
         _container = container;
-        _camera.ViewChanged += OnViewChanged;
+        _camera.ManualViewChanged += OnViewChanged;
     }
 
     public void BeginPlacement(ObstacleShape shape)
@@ -53,6 +54,9 @@ public partial class ObstacleEditor3D : Node3D
         ClearSelection();
         _world.ClearBoidSelection();
         PlacementShape = shape;
+        _placementPoint = _camera.GetParent<Node3D>().ToGlobal(_camera.OrbitCenter);
+        _placementNormal = _camera.GlobalBasis.Z;
+        _camera.SetFollowFrozen(true);
         _preview = new Obstacle3D { Name = "PlacementPreview" };
         _preview.Initialize(shape, DefaultSize(shape));
         _preview.SetPreview(true);
@@ -65,6 +69,7 @@ public partial class ObstacleEditor3D : Node3D
     {
         if (PlacementShape is null) return;
         PlacementShape = null;
+        _camera.SetFollowFrozen(_dragTarget is not null);
         if (_preview is not null)
         {
             _container.RemoveChild(_preview);
@@ -77,7 +82,7 @@ public partial class ObstacleEditor3D : Node3D
     public Obstacle3D AddObstacle(ObstacleShape shape, Vector3 position)
     {
         if (!position.IsFinite()) throw new ArgumentOutOfRangeException(nameof(position));
-        var obstacle = new Obstacle3D { Name = $"Obstacle_{_nextId++}", Position = ClampCenter(position) };
+        var obstacle = new Obstacle3D { Name = $"Obstacle_{_nextId++}", Position = position };
         obstacle.Initialize(shape, DefaultSize(shape));
         _container.AddChild(obstacle);
         _obstacles.Add(obstacle);
@@ -147,7 +152,7 @@ public partial class ObstacleEditor3D : Node3D
         if (_dragged)
         {
             Vector3 pointer = PointOnPlane(motion.Position, _planePoint, _planeNormal);
-            target.Position = ClampCenter(_startPosition + _container.ToLocal(pointer) - _container.ToLocal(_startPointer));
+            target.Position = _startPosition + _container.ToLocal(pointer) - _container.ToLocal(_startPointer);
             GeometryChanged?.Invoke();
         }
         GetViewport().SetInputAsHandled();
@@ -192,6 +197,7 @@ public partial class ObstacleEditor3D : Node3D
         _camera.CancelGesture();
         Select(hit);
         _dragTarget = hit;
+        _camera.SetFollowFrozen(true);
         _dragged = false;
         _pressScreen = mouse.Position;
         _startPosition = hit.Position;
@@ -225,8 +231,8 @@ public partial class ObstacleEditor3D : Node3D
         return target;
     }
 
-    private Vector3 PlacementPoint(Vector2 screen) => ClampCenter(_container.ToLocal(PointOnPlane(screen,
-        _camera.GetParent<Node3D>().ToGlobal(_camera.OrbitCenter), _camera.GlobalBasis.Z)));
+    private Vector3 PlacementPoint(Vector2 screen) => _container.ToLocal(PointOnPlane(screen,
+        _placementPoint, _placementNormal));
 
     private Vector3 PointOnPlane(Vector2 screen, Vector3 point, Vector3 normal)
     {
@@ -236,17 +242,22 @@ public partial class ObstacleEditor3D : Node3D
         return Mathf.Abs(denominator) < 0.000001f ? point : origin + direction * ((point - origin).Dot(normal) / denominator);
     }
 
-    private Vector3 ClampCenter(Vector3 position) => position.Clamp(_world.WorldBounds.Position, _world.WorldBounds.End - Vector3.One * 0.001f);
     private static Vector3 DefaultSize(ObstacleShape shape) => shape == ObstacleShape.Sphere ? Obstacle3D.DefaultSphereSize : Obstacle3D.DefaultBoxSize;
     private void UpdatePreview(Vector2 screen) { if (_preview is not null) _preview.Position = PlacementPoint(screen); }
     private void OnViewChanged() { CancelGesture(); UpdatePreview(GetViewport().GetMousePosition()); }
-    public void CancelGesture() { _dragTarget = null; _dragged = false; _swallowRelease = false; }
+    public void CancelGesture()
+    {
+        _dragTarget = null;
+        _dragged = false;
+        _swallowRelease = false;
+        _camera?.SetFollowFrozen(PlacementShape is not null);
+    }
 
     public override void _ExitTree()
     {
         GetWindow().FocusExited -= CancelGesture;
         GetWindow().MouseExited -= CancelGesture;
         GetViewport().SizeChanged -= CancelGesture;
-        if (_camera is not null) _camera.ViewChanged -= OnViewChanged;
+        if (_camera is not null) _camera.ManualViewChanged -= OnViewChanged;
     }
 }

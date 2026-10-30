@@ -18,7 +18,9 @@ public interface ISimulationWorld
     int? SelectedBoidId { get; }
     int? LeaderId { get; }
     bool HasLeaderTarget { get; }
+    bool IsLeaderControlActive { get; }
     event Action? BoidControlStateChanged;
+    event Action? ConfigurationEdited;
 
     void Initialize(BoidConfig config);
     void SetRunning(bool running);
@@ -32,4 +34,5 @@ public interface ISimulationWorld
     void DeleteSelectedObstacle();
     void ResizeSelectedObstacle(float width, float height, float depth = 0);
     void SetSelectedBoidLeader(bool enabled);
+    void SetLeaderControlActive(bool active);
 }

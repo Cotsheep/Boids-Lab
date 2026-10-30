@@ -15,7 +15,7 @@ public partial class Obstacle3DChecks : Node
         try
         {
             CheckGeometryAndPrediction();
-            CheckMotionAndWrapping();
+            CheckContinuousMotion();
             CheckManager();
             GD.Print($"PASS: {_checks} 3D obstacle geometry/avoidance/contact/integration assertions (headless).");
             GetTree().Quit();
@@ -41,24 +41,24 @@ public partial class Obstacle3DChecks : Node
             foreach (Vector3 axis in new[] { Vector3.Right, Vector3.Up, Vector3.Back })
             {
                 Vector3 point = -axis * 200, velocity = axis * 200;
-                Vector3 acceleration = ObstacleAvoidance3D.Calculate(new(0, point, velocity), list, config, Bounds);
+                Vector3 acceleration = ObstacleAvoidance3D.Calculate(new(0, point, velocity), list, config);
                 Check(acceleration.Dot(axis) < 0 && acceleration.Cross(axis).Length() > 0, "Head-on approach brakes and chooses a 3D tangent");
                 Check(acceleration.IsFinite() && acceleration.Length() <= config.MaxForce + 0.001, "Avoidance obeys acceleration cap");
-                Vector3 opposite = ObstacleAvoidance3D.Calculate(new(1, point, velocity), list, config, Bounds);
+                Vector3 opposite = ObstacleAvoidance3D.Calculate(new(1, point, velocity), list, config);
                 Near(acceleration - axis * acceleration.Dot(axis), -(opposite - axis * opposite.Dot(axis)), "IDs choose opposite head-on tangents");
-                Near(ObstacleAvoidance3D.Calculate(new(0, point, -velocity), list, config, Bounds), Vector3.Zero, "Departing boid is not turned back");
-                Near(ObstacleAvoidance3D.Calculate(new(0, point, Vector3.Zero), list, config, Bounds), Vector3.Zero, "Distant stationary boid remains still");
-                Near(ObstacleAvoidance3D.Calculate(new(0, -axis * 62, -velocity), list, config, Bounds), Vector3.Zero, "Departing near contact keeps moving away");
-                Check(ObstacleAvoidance3D.Calculate(new(0, -axis * 62, Vector3.Zero), list, config, Bounds).Length() > 0, "Stopped surface contact receives escape steering");
+                Near(ObstacleAvoidance3D.Calculate(new(0, point, -velocity), list, config), Vector3.Zero, "Departing boid is not turned back");
+                Near(ObstacleAvoidance3D.Calculate(new(0, point, Vector3.Zero), list, config), Vector3.Zero, "Distant stationary boid remains still");
+                Near(ObstacleAvoidance3D.Calculate(new(0, -axis * 62, -velocity), list, config), Vector3.Zero, "Departing near contact keeps moving away");
+                Check(ObstacleAvoidance3D.Calculate(new(0, -axis * 62, Vector3.Zero), list, config).Length() > 0, "Stopped surface contact receives escape steering");
                 ObstacleAvoidance3D.Surface(-axis * 70, shape, 12, out float distance, out Vector3 normal);
                 Check(Mathf.IsEqualApprox(distance, 8), "Clearance is measured from boid center to inflated surface");
                 Near(normal, -axis, "Surface normal points outward");
             }
             config.AvoidanceEnabled = false;
-            Near(ObstacleAvoidance3D.Calculate(new(0, Vector3.Left * 200, Vector3.Right * 200), list, config, Bounds), Vector3.Zero, "Disabled avoidance has no force");
+            Near(ObstacleAvoidance3D.Calculate(new(0, Vector3.Left * 200, Vector3.Right * 200), list, config), Vector3.Zero, "Disabled avoidance has no force");
             config.AvoidanceEnabled = true;
             config.MaxForce = 0;
-            Near(ObstacleAvoidance3D.Calculate(new(0, Vector3.Left * 200, Vector3.Right * 200), list, config, Bounds), Vector3.Zero, "Zero force does not divide by zero");
+            Near(ObstacleAvoidance3D.Calculate(new(0, Vector3.Left * 200, Vector3.Right * 200), list, config), Vector3.Zero, "Zero force does not divide by zero");
             config.MaxForce = 200;
             shape.QueueFree();
         }
@@ -74,7 +74,7 @@ public partial class Obstacle3DChecks : Node
         box.QueueFree();
     }
 
-    private void CheckMotionAndWrapping()
+    private void CheckContinuousMotion()
     {
         foreach (ObstacleShape kind in Shapes)
         {
@@ -83,12 +83,12 @@ public partial class Obstacle3DChecks : Node
             foreach (Vector3 axis in new[] { Vector3.Right, Vector3.Up, Vector3.Back })
             {
                 Vector3 from = -axis * 400, position = axis * 400, velocity = axis * 800;
-                ObstacleAvoidance3D.ResolveMotion(from, ref position, ref velocity, list, 12, Bounds);
+                ObstacleAvoidance3D.ResolveMotion(from, ref position, ref velocity, list, 12);
                 Near(position, -axis * 20.01f, "High-speed motion cannot cross a thin obstacle");
                 Near(velocity, Vector3.Zero, "Contact removes inward velocity");
                 position = Vector3.Zero;
                 velocity = axis * 100;
-                ObstacleAvoidance3D.ResolveMotion(Vector3.Zero, ref position, ref velocity, list, 12, Bounds);
+                ObstacleAvoidance3D.ResolveMotion(Vector3.Zero, ref position, ref velocity, list, 12);
                 ObstacleAvoidance3D.Surface(position, obstacle, 12, out float distance, out _);
                 Check(distance >= 0 && position.IsFinite() && velocity.IsFinite(), "Initial overlap is recovered with a finite normal");
                 foreach (int sign in new[] { -1, 1 })
@@ -98,13 +98,18 @@ public partial class Obstacle3DChecks : Node
                     from = direction * 490;
                     position = from + direction * 100;
                     velocity = direction * 100;
-                    ObstacleAvoidance3D.ResolveMotion(from, ref position, ref velocity, list, 5, Bounds);
-                    Near(position, -direction * 483.01f, "Wrapped entry is swept on each axis in both directions");
-                    Near(velocity, Vector3.Zero, "Wrapped entry contact removes inward velocity");
+                    ObstacleAvoidance3D.ResolveMotion(from, ref position, ref velocity, list, 5);
+                    Near(position, from + direction * 100, "Opposite-face obstacle is not on the motion path");
+                    Near(velocity, direction * 100, "Crossing the former boundary preserves velocity");
                     var config = new BoidConfig { MaxSpeed = 60, MaxForce = 200, AvoidanceLookAhead = 0.75f, ObstacleClearance = 5 };
-                    Vector3 acceleration = ObstacleAvoidance3D.Calculate(new(0, from, direction * 60), list, config, Bounds);
-                    Check(acceleration.Dot(direction) < 0 && acceleration.Cross(direction).Length() > 0,
-                        "Look-ahead also sees the obstacle across the periodic boundary");
+                    Vector3 acceleration = ObstacleAvoidance3D.Calculate(new(0, from, direction * 60), list, config);
+                    Near(acceleration, Vector3.Zero, "Prediction has no periodic obstacle copy");
+                    obstacle.Position = direction * 530;
+                    position = from + direction * 100;
+                    ObstacleAvoidance3D.ResolveMotion(from, ref position, ref velocity, list, 5);
+                    Near(position, direction * 516.99f, "An obstacle outside the former box still blocks contact");
+                    Check(ObstacleAvoidance3D.Calculate(new(0, from, direction * 60), list, config).Length() > 0,
+                        "Prediction sees obstacles outside the observation box");
                 }
                 obstacle.Position = Vector3.Zero;
             }
@@ -112,15 +117,15 @@ public partial class Obstacle3DChecks : Node
         }
         var wall = Shape(ObstacleShape.Box, Vector3.Zero, new Vector3(16, 200, 200));
         Vector3 slide = new(100, 40, 50), slideVelocity = new(200, 40, 50);
-        ObstacleAvoidance3D.ResolveMotion(new Vector3(-100, 0, 0), ref slide, ref slideVelocity, new[] { wall }, 0, Bounds);
+        ObstacleAvoidance3D.ResolveMotion(new Vector3(-100, 0, 0), ref slide, ref slideVelocity, new[] { wall }, 0);
         Near(slide, new Vector3(-8.01f, 40, 50), "Contact preserves both tangential motion components");
         Near(slideVelocity, new Vector3(0, 40, 50), "Contact projects velocity onto the surface plane");
         wall.Position = new Vector3(0, 300, 0);
         Vector3 multiple = new(2490, -2490, 1490), speed = new(1, 2, 3);
-        Vector3 expected = WorldGeometry3D.Wrap(multiple, Bounds);
-        ObstacleAvoidance3D.ResolveMotion(Vector3.Zero, ref multiple, ref speed, Array.Empty<Obstacle3D>(), 0, Bounds);
-        Near(multiple, expected, "Unobstructed multi-axis multi-width movement wraps correctly", 0.002f);
-        Near(speed, new Vector3(1, 2, 3), "Unobstructed wrapping preserves velocity");
+        Vector3 expected = multiple;
+        ObstacleAvoidance3D.ResolveMotion(Vector3.Zero, ref multiple, ref speed, Array.Empty<Obstacle3D>(), 0);
+        Near(multiple, expected, "Unobstructed multi-axis multi-width movement is continuous", 0.002f);
+        Near(speed, new Vector3(1, 2, 3), "Unobstructed motion preserves velocity");
         wall.QueueFree();
     }
 

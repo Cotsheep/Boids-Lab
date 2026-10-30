@@ -149,19 +149,20 @@ public partial class Motion3DChecks : Node
             && world.Stats.AverageNeighbors == 0 && world.Stats.NeighborSearchMilliseconds.HasValue,
             "Empty-world neighbor measurements are actual zero values after a step");
 
+        config.MaxForce = 0; // Isolate continuous motion from the independently checked soft boundary.
         Boid3D spawned = world.SpawnBoid(world.WorldBounds.End - Vector3.One, new Vector3(10, 20, 30));
         var readOnlyView = world.Boids;
         Vector3 speed = spawned.Velocity;
         Quaternion facing = spawned.Quaternion;
         world.Step(1);
-        Near(spawned.Position, world.WorldBounds.Position + new Vector3(9, 19, 29), 0.001f, "Positive crossings wrap on all axes");
-        Near(spawned.Velocity, speed, 0, "Wrapping preserves velocity");
-        Check(spawned.Quaternion.IsEqualApprox(facing), "Wrapping preserves orientation");
+        Near(spawned.Position, world.WorldBounds.End + new Vector3(9, 19, 29), 0.001f, "Positive crossings remain continuous on all axes");
+        Near(spawned.Velocity, speed, 0, "Boundary crossing preserves velocity");
+        Check(spawned.Quaternion.IsEqualApprox(facing), "Boundary crossing preserves orientation");
         Boid3D negative = world.SpawnBoid(world.WorldBounds.Position + Vector3.One, new Vector3(-10, -20, -30));
         world.Step(1);
-        Near(negative.Position, world.WorldBounds.End - new Vector3(9, 19, 29), 0.001f, "Negative crossings wrap on all axes");
+        Near(negative.Position, world.WorldBounds.Position - new Vector3(9, 19, 29), 0.001f, "Negative crossings remain continuous on all axes");
         Boid3D far = world.SpawnBoid(world.WorldBounds.Position + world.WorldSize * new Vector3(4, -3, 5) + new Vector3(3, 4, 5), Vector3.Zero);
-        Near(far.Position, world.WorldBounds.Position + new Vector3(3, 4, 5), 0.001f, "Multiple-width overshoot wraps correctly");
+        Near(far.Position, world.WorldBounds.Position + world.WorldSize * new Vector3(4, -3, 5) + new Vector3(3, 4, 5), 0.001f, "Spawning outside the box preserves actual coordinates");
         int removedId = negative.Id;
         world.RemoveBoid(negative);
         Check(readOnlyView.Count == 2 && world.Stats.BoidCount == 2, "Read-only collection reflects dynamic removal");
@@ -198,9 +199,9 @@ public partial class Motion3DChecks : Node
         var controls = app.GetNode<ControlPanel>("%ControlPanel");
         Check(world.Boids.Count == 8 && world.Config.RandomSeed == 314, "Inherited main scene loads configuration and instantiates the 3D world");
         Check(controls.Obstacles is not null && controls.Obstacles.FindChild("AddBox", true, false) is Button
-            && controls.FindChild("IsLeader", true, false) is null
-            && controls.FindChild("LeaderFollowDistance", true, false) is null
-            && controls.FindChild("LeaderFollowWeight", true, false) is null, "3D obstacle controls are available while leader remains hidden");
+            && controls.FindChild("IsLeader", true, false) is CheckBox
+            && controls.FindChild("LeaderFollowDistance", true, false) is SpinBox
+            && controls.FindChild("LeaderFollowWeight", true, false) is SpinBox, "3D obstacle and leader controls are available");
         Check(controls.FindChild("SeparationEnabled", true, false) is CheckBox
             && controls.FindChild("AlignmentEnabled", true, false) is CheckBox
             && controls.FindChild("CohesionEnabled", true, false) is CheckBox, "All three implemented rules have controls");
@@ -231,7 +232,7 @@ public partial class Motion3DChecks : Node
         Check(!app.GetNode<Control>("%UIRoot").Visible, "F1 hides the shared HUD");
         Press(app, "toggle_help");
         var help = app.GetNode<HelpOverlay>("%HelpOverlay");
-        Check(help.Visible && help.GetNode<RichTextLabel>("Card/Column/Instructions").Text.Contains("三维基础运动"), "F2 shows 3D instructions even with HUD hidden");
+        Check(help.Visible && help.GetNode<RichTextLabel>("Card/Column/Instructions").Text.Contains("三维观察与领队飞行"), "F2 shows 3D instructions even with HUD hidden");
         Press(app, "close_help");
         Press(app, "toggle_ui");
         return app;
