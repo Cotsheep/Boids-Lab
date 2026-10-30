@@ -58,7 +58,8 @@ public partial class WorldSwitchChecks : Node
             var saved2D = new BoidConfig();
             Check(saved2D.Load(Path2D) == Error.Ok && saved2D.BoidCount == 15 && saved2D.NeighborSearchMode == NeighborSearchMode.UniformGrid,
                 "Pending numeric input is committed without changing the 2D search mode");
-            CountInput().Value = 12;
+            CountInput().GetLineEdit().Text = "12";
+            CountInput().GetLineEdit().EmitSignal(LineEdit.SignalName.TextSubmitted, "12");
             ((SpinBox)_panel.FindChild("PerceptionRadius", true, false)).Value = 55;
             ((CheckBox)_panel.FindChild("ShowVelocity", true, false)).ButtonPressed = true;
             world3D.SetRunning(true);

@@ -217,8 +217,9 @@ public partial class Motion3DChecks : Node
             "3D offers both implemented search methods");
         Check(controls.FindChild("ShowNeighbors", true, false) is CheckBox, "Implemented debug controls are available");
         var count = (SpinBox)controls.FindChild("BoidCount", true, false);
-        count.Value = 12;
-        Check(world.Config.BoidCount == 12 && world.Boids.Count == 8, "Shared UI updates the configuration before reset");
+        count.GetLineEdit().Text = "12";
+        count.GetLineEdit().EmitSignal(LineEdit.SignalName.TextSubmitted, "12");
+        Check(world.Config.BoidCount == 12 && world.Boids.Count == 12, "Submitting population count updates configuration and existing population");
         var saved = new BoidConfig();
         Check(saved.Load(testPath) == Error.Ok && saved.BoidCount == 12, "UI writes to its isolated configuration path");
         ((Button)controls.FindChild("Reset", true, false)).EmitSignal(Button.SignalName.Pressed);

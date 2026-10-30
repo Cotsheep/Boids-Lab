@@ -199,7 +199,9 @@ MainController               └──> SimulationView
 
 参数范围与默认值只在 `BoidConfig` 中定义。`MainController`、管理器、个体与背景绘制节点引用相同的配置对象。控件改变时更新并保存配置，调用管理器的 `ConfigurationChanged()` 做范围约束并请求重绘；运动上限在下一次运行更新时读取。
 
-界面的“个体数量”表示目标数量。数量与种子修改后在 Reset 生效，当前没有自动同步数量差额。`InitializePopulation()` 每次创建按 `Config.RandomSeed` 初始化的随机数生成器，使用 `Config.BoidCount`、当前可见的 `ViewBounds` 和 `Config.MaxSpeed` 生成位置、方向与速度，再逐个调用 `SpawnBoid()`。同一引擎版本、相同配置和可见边界下可复现初始状态，不在每次参数变化时重新设种子。
+界面的「请求个体数量」通过 Enter 或失焦提交给 `ISimulationWorld.ResizePopulation()`，两个管理器立即补齐或缩减差额，保持已有状态；数字草稿不会触发增删。种子仍只在 Reset 生效。`InitializePopulation()` 使用局部随机生成器复现重置结果；即时增量使用另一份随机生成器，Reset 时以种子异或固定常量初始化，之后连续使用，不受未重置的种子编辑影响。
+
+缩减从列表末尾移除，优先保留领队，其次是普通选择。新增复用 `SpawnBoid()`，在观察范围或无限世界的群体质心附近采样，用已有障碍的带间距距离函数过滤；每个待新增个体最多尝试 64 次，首次耗尽后结束本次增量并设置 `PopulationSpawnLimited`。UI 保留请求数，显示实际数并允许 Enter 重试。三维批量操作结束后统一刷新调试与材质；两种世界均使旧搜索和统计失效。细节与验收见 [数量即时增减](population-resizing.md)。
 
 管理器对外提供 `IReadOnlyList<Boid2D> Boids`，它包装同一个内部列表，会反映创建和移除。这个接口只限制集合增删入口；其中的 Boid 仍然是实际节点对象。调试绘制可以读取节点状态，正常运动更新由管理器调度个体完成。
 
@@ -258,6 +260,7 @@ MainController               └──> SimulationView
 - `Reset()`：暂停、移除旧个体，ID 归零，按配置重新生成；加速度、角速度和计时清零或恢复未测量。
 - `SpawnBoid(position, velocity)`：世界就绪后创建并注册一个个体，分配递增 ID，更新真实数量。
 - `RemoveBoid(boid)`：移除已注册个体，保留其余个体的 ID 和状态，更新真实数量。
+- `ResizePopulation(requestedCount)`：将请求限制到 0～5000，稳定地增删现有群体，保留运行状态与存活个体；报告新增是否因有限采样未完成。
 - `Step(deltaSeconds)`：明确推进一个时间步，先搜索邻居并计算全部转向，再调用个体运动积分并修正障碍物接触。内部使用或测试可直接调用，运行回调由 IsRunning 控制。
 - `StepOnce()`：仅暂停时调用原有 `Step(1.0 / Engine.PhysicsTicksPerSecond)`，完成后保持暂停；`CanStep = !IsRunning`，运行时拒绝单步。MainController 刷新统计和状态，帮助、世界切换及三维鼠标捕获期间拒绝 UI 单步请求，不增加额外更新路径。详见 [单步控制](single-step.md)。
 - `CoreImplemented`：表示基础运动可运行，两个世界均为 true；可选功能是否实现由 `Features` 分别声明，不能据此判断群集规则已实现。
@@ -292,7 +295,7 @@ Game3D (MainController)
 	└── HelpOverlay (共用弹层，三维专用正文)
 ```
 
-`BoidManager3D` 实现 `ISimulationWorld`，统一管理实例、领队身份、软边界、固定物理步和计时。个体的 ID 在一次 Reset 内唯一；创建和移除在更新遍历之外执行。初始与重置后暂停，数量和种子修改仍在重置后生效。重置保留障碍布局。
+`BoidManager3D` 实现 `ISimulationWorld`，统一管理实例、领队身份、软边界、固定物理步和计时。个体的 ID 在一次 Reset 内唯一；创建和移除在更新遍历之外执行。初始与重置后暂停，数量提交后立即增减，种子在重置后生效。重置保留障碍布局。
 
 每个固定物理步的顺序为：
 
@@ -355,7 +358,7 @@ Godot → BoidManager3D._PhysicsProcess(delta)
 
 ## 后续实现顺序
 
-三维近距离淡化及二维/三维单步控制已实现，真实键盘手感仍待验收。后续开发为数量即时增减，具体语义及验收条件见 [下一阶段开发计划](next-development-plan.md)。
+三维近距离淡化、二维/三维单步控制及数量即时增减已实现，真实键盘手感仍待验收。具体阶段状态见 [开发计划](next-development-plan.md)。
 
 当前空间划分只使用简单均匀网格；两种世界的障碍物逐一检测，没有引入 Compute Shader、碰撞节点、ECS、多线程或对象池。后续根据测量结果决定是否继续优化。
 

@@ -36,6 +36,7 @@ public partial class BoidManager : Node2D, ISimulationWorld
     // 基础运动、邻居搜索与分离/对齐/聚集规则均已可运行。
     public bool CoreImplemented => true;
     public bool CanStep => !IsRunning;
+    public bool PopulationSpawnLimited { get; private set; }
     public ObstacleSelection? SelectedObstacleInfo => _obstacleEditor.SelectionInfo;
     public ObstacleShape? ObstaclePlacement => _obstacleEditor.PlacementShape;
     public event Action? ObstacleSelectionChanged;
@@ -47,6 +48,7 @@ public partial class BoidManager : Node2D, ISimulationWorld
     private SimulationCamera2D _camera = null!;
     private ObstacleEditor2D _obstacleEditor = null!;
     private int _nextBoidId;
+    private readonly RandomNumberGenerator _populationRandom = new();
     private Vector2[] _steeringAccelerations = Array.Empty<Vector2>();
     private Boid2D? _pressedBoid;
     private Vector2 _leaderHeading = Vector2.Right;
@@ -235,6 +237,8 @@ public partial class BoidManager : Node2D, ISimulationWorld
     public void Reset()
     {
         Config.Normalize();
+        PopulationSpawnLimited = false;
+        _populationRandom.Seed = (ulong)Config.RandomSeed ^ 0x9e3779b97f4a7c15UL;
         IsRunning = false;
         _obstacleEditor.CancelGesture();
         _obstacleEditor.CancelPlacement();
@@ -266,7 +270,51 @@ public partial class BoidManager : Node2D, ISimulationWorld
             InvalidateNeighborResults();
         // 管理器和个体共享 Config；不复制参数，也不在参数变化时重置个体。
         _view.QueueRedraw();
-        // 数量和种子在 Reset 时生效；修改运动上限在下一次运行更新时生效。
+        // 数量由独立提交入口调整；种子在 Reset 时生效。
+    }
+
+    public void ResizePopulation(int requestedCount)
+    {
+        Config.BoidCount = (int)BoidConfig.CountRange.Constrain(requestedCount);
+        PopulationSpawnLimited = false;
+        if (_boids.Count == Config.BoidCount) return;
+        // 稳定地从列表末尾缩减，先保留领队，再保留普通选择。
+        for (int i = _boids.Count - 1; i >= 0 && _boids.Count > Config.BoidCount; i--)
+            if (_boids[i] != Leader && _boids[i] != SelectedBoid) RemoveBoid(_boids[i]);
+        if (_boids.Count > Config.BoidCount && SelectedBoid is { } selected && selected != Leader) RemoveBoid(selected);
+        if (_boids.Count > Config.BoidCount && Leader is { } leader) RemoveBoid(leader);
+
+        Rect2 region = ViewBounds;
+        if (Leader is not null)
+        {
+            Vector2 center = Vector2.Zero;
+            foreach (Boid2D boid in _boids) center += boid.Position / _boids.Count;
+            float radius = Mathf.Max(Config.PerceptionRadius, Config.SeparationRadius * Mathf.Sqrt(Config.BoidCount));
+            region = new Rect2(center - Vector2.One * radius, Vector2.One * radius * 2);
+        }
+        while (_boids.Count < Config.BoidCount)
+        {
+            bool placed = false;
+            for (int attempt = 0; attempt < 64; attempt++)
+            {
+                Vector2 position = region.Position + new Vector2(_populationRandom.Randf(), _populationRandom.Randf()) * region.Size;
+                position = WorldGeometry2D.Wrap(position, WrapBounds);
+                bool clear = true;
+                foreach (Obstacle2D obstacle in _obstacleEditor.Obstacles)
+                {
+                    ObstacleAvoidance.Surface(position, obstacle, Config.ObstacleClearance, out float distance, out _);
+                    if (distance <= 0) { clear = false; break; }
+                }
+                if (!clear) continue;
+                Vector2 velocity = Vector2.FromAngle(_populationRandom.RandfRange(-Mathf.Pi, Mathf.Pi)) * Config.MaxSpeed;
+                SpawnBoid(position, velocity);
+                placed = true;
+                break;
+            }
+            if (!placed) { PopulationSpawnLimited = true; break; }
+        }
+        InvalidateNeighborResults();
+        _view.QueueRedraw();
     }
 
     /// <summary>创建并注册一个个体；在世界就绪后、更新遍历之外调用。</summary>
@@ -300,6 +348,11 @@ public partial class BoidManager : Node2D, ISimulationWorld
     public void RemoveBoid(Boid2D boid)
     {
         if (!_boids.Remove(boid)) return;
+        if (_pressedBoid == boid)
+        {
+            _pressedBoid = null;
+            _camera.CancelPointerGesture();
+        }
         if (Leader == boid) SetLeader(null);
         if (SelectedBoid == boid) SelectBoid(null);
         _boidsRoot.RemoveChild(boid);
@@ -414,6 +467,7 @@ public partial class BoidManager : Node2D, ISimulationWorld
 
     public override void _ExitTree()
     {
+        _populationRandom.Dispose();
         GetWindow().FocusEntered -= OnFocusEntered;
         GetWindow().FocusExited -= OnFocusExited;
         if (_obstacleEditor is not null)

@@ -147,7 +147,7 @@ public static class ObstacleAvoidance
     }
 
     /// <summary>带留距的形状有符号距离及向外单位法线；内部为负。</summary>
-    private static void Surface(Vector2 point, Obstacle2D obstacle, float clearance,
+    internal static void Surface(Vector2 point, Obstacle2D obstacle, float clearance,
         out float distance, out Vector2 normal)
     {
         Vector2 offset = point - obstacle.Position;

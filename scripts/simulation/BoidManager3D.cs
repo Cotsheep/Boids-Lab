@@ -17,6 +17,7 @@ public partial class BoidManager3D : Node3D, ISimulationWorld
         | SimulationFeatures.UniformGridSearch | SimulationFeatures.Flocking | SimulationFeatures.Obstacles | SimulationFeatures.Leader | SimulationFeatures.DirectLeaderControl;
     public bool CoreImplemented => true; // 基础运动可运行；可选能力由 Features 明确声明。
     public bool CanStep => !IsRunning;
+    public bool PopulationSpawnLimited { get; private set; }
     public bool IsRunning { get; private set; }
     public SimulationStats Stats { get; private set; }
     public Aabb WorldBounds { get; private set; }
@@ -41,6 +42,8 @@ public partial class BoidManager3D : Node3D, ISimulationWorld
     private ObstacleEditor3D _obstacleEditor = null!;
     private Boid3D? _pressedBoid;
     private int _nextBoidId;
+    private readonly RandomNumberGenerator _populationRandom = new();
+    private bool _resizingPopulation;
 
     public BoidManager3D() => Boids = _boids.AsReadOnly();
 
@@ -88,6 +91,7 @@ public partial class BoidManager3D : Node3D, ISimulationWorld
 
     public void Reset()
     {
+        PopulationSpawnLimited = false;
         IsRunning = false;
         SetLeaderControlActive(false);
         SetLeader(null);
@@ -96,6 +100,7 @@ public partial class BoidManager3D : Node3D, ISimulationWorld
         _obstacleEditor.CancelPlacement();
         SelectBoid(null);
         NormalizeConfiguration();
+        _populationRandom.Seed = (ulong)Config.RandomSeed ^ 0x9e3779b97f4a7c15UL;
         foreach (Boid3D boid in _boids)
         {
             _boidsRoot.RemoveChild(boid);
@@ -144,6 +149,11 @@ public partial class BoidManager3D : Node3D, ISimulationWorld
     public void RemoveBoid(Boid3D boid)
     {
         if (!_boids.Remove(boid)) return;
+        if (_pressedBoid == boid)
+        {
+            _pressedBoid = null;
+            _camera.CancelGesture();
+        }
         if (Leader == boid) SetLeader(null);
         if (SelectedBoid == boid) SelectBoid(null);
         _boidsRoot.RemoveChild(boid);
@@ -244,7 +254,62 @@ public partial class BoidManager3D : Node3D, ISimulationWorld
     internal void ClearBoidSelection() { _pressedBoid = null; SelectBoid(null); }
     private void OnObstaclesChanged() => ObstacleSelectionChanged?.Invoke();
 
-    private void RefreshDebug() => _view.RefreshDebug();
+    private void RefreshDebug()
+    {
+        if (!_resizingPopulation) _view.RefreshDebug();
+    }
+
+    public void ResizePopulation(int requestedCount)
+    {
+        Config.BoidCount = (int)BoidConfig.CountRange.Constrain(requestedCount);
+        PopulationSpawnLimited = false;
+        if (_boids.Count == Config.BoidCount) return;
+        _resizingPopulation = true;
+        try
+        {
+            for (int i = _boids.Count - 1; i >= 0 && _boids.Count > Config.BoidCount; i--)
+                if (_boids[i] != Leader && _boids[i] != SelectedBoid) RemoveBoid(_boids[i]);
+            if (_boids.Count > Config.BoidCount && SelectedBoid is { } selected && selected != Leader) RemoveBoid(selected);
+            if (_boids.Count > Config.BoidCount && Leader is { } leader) RemoveBoid(leader);
+
+            Aabb region = WorldBounds;
+            if (Leader is not null)
+            {
+                Vector3 center = Vector3.Zero;
+                foreach (Boid3D boid in _boids) center += boid.Position / _boids.Count;
+                float radius = Mathf.Max(Config.PerceptionRadius, Config.SeparationRadius * Mathf.Pow(Config.BoidCount, 1f / 3));
+                region = new Aabb(center - Vector3.One * radius, Vector3.One * radius * 2);
+            }
+            while (_boids.Count < Config.BoidCount)
+            {
+                bool placed = false;
+                for (int attempt = 0; attempt < 64; attempt++)
+                {
+                    Vector3 position = region.Position + new Vector3(_populationRandom.Randf(), _populationRandom.Randf(), _populationRandom.Randf()) * region.Size;
+                    bool clear = true;
+                    foreach (Obstacle3D obstacle in _obstacleEditor.Obstacles)
+                    {
+                        ObstacleAvoidance3D.Surface(position, obstacle, Config.ObstacleClearance, out float distance, out _);
+                        if (distance <= 0) { clear = false; break; }
+                    }
+                    if (!clear) continue;
+                    float y = _populationRandom.RandfRange(-1, 1);
+                    float angle = _populationRandom.RandfRange(-Mathf.Pi, Mathf.Pi);
+                    float horizontal = Mathf.Sqrt(Mathf.Max(0, 1 - y * y));
+                    SpawnBoid(position, new Vector3(horizontal * Mathf.Cos(angle), y, horizontal * Mathf.Sin(angle)) * Config.MaxSpeed);
+                    placed = true;
+                    break;
+                }
+                if (!placed) { PopulationSpawnLimited = true; break; }
+            }
+        }
+        finally
+        {
+            _resizingPopulation = false;
+            InvalidateStats();
+            RefreshDebug();
+        }
+    }
 
     private void InvalidateStats()
     {
@@ -364,6 +429,7 @@ public partial class BoidManager3D : Node3D, ISimulationWorld
 
     public override void _ExitTree()
     {
+        _populationRandom.Dispose();
         if (_camera is null) return;
         SetLeaderControlActive(false);
         LeaderController.ActiveChanged -= OnLeaderControlChanged;

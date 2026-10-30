@@ -153,6 +153,7 @@ public partial class MainController : Node
         _controls.ResetRequested += ResetSimulation;
         _controls.StepRequested += StepSimulation;
         _controls.ConfigurationChanged += ApplyConfiguration;
+        _controls.PopulationCountRequested += ResizePopulation;
         _controls.LeaderAssignmentRequested += AssignSelectedBoidLeader;
         _controls.LeaderControlRequested += BeginLeaderControl;
         _world.ConfigurationEdited += OnWorldConfigurationEdited;
@@ -175,6 +176,7 @@ public partial class MainController : Node
         _controls.ResetRequested -= ResetSimulation;
         _controls.StepRequested -= StepSimulation;
         _controls.ConfigurationChanged -= ApplyConfiguration;
+        _controls.PopulationCountRequested -= ResizePopulation;
         _controls.LeaderAssignmentRequested -= AssignSelectedBoidLeader;
         _controls.LeaderControlRequested -= BeginLeaderControl;
         _world.ConfigurationEdited -= OnWorldConfigurationEdited;
@@ -196,6 +198,7 @@ public partial class MainController : Node
         if (_statsElapsed < 0.25) return;
         _statsElapsed = 0;
         _stats.Refresh(_world.Stats, Engine.GetFramesPerSecond());
+        _controls.RefreshPopulationState(_config.BoidCount, _world.Stats.BoidCount ?? 0, _world.PopulationSpawnLimited);
     }
 
     public override void _Input(InputEvent @event)
@@ -327,6 +330,15 @@ public partial class MainController : Node
         RefreshInterface();
     }
 
+    private void ResizePopulation(int requested)
+    {
+        _config.BoidCount = (int)BoidConfig.CountRange.Constrain(requested);
+        // 切换前仍提交并保存草稿，但即将释放的世界无需再分配新个体。
+        if (!_switchPending) _world.ResizePopulation(_config.BoidCount);
+        SaveConfiguration();
+        RefreshInterface();
+    }
+
     private void SaveConfiguration()
     {
         Error error = _config.Save(ConfigurationPath);
@@ -337,13 +349,14 @@ public partial class MainController : Node
     private void RefreshInterface()
     {
         _controls.RefreshRunState(_world.IsRunning, _world.CanStep);
+        _controls.RefreshPopulationState(_config.BoidCount, _world.Stats.BoidCount ?? 0, _world.PopulationSpawnLimited);
         RefreshLeaderControls();
         string runState = _world.IsRunning
             ? (_world.CoreImplemented ? "运行中" : "已请求运行")
             : "已暂停";
         _status.Text = _world.CoreImplemented ? runState : $"{runState} · 核心尚未实现";
         _placeholder.Visible = !_world.CoreImplemented;
-        _debug.Text = _storageWarning ?? $"目标数量：{_config.BoidCount}  |  随机种子：{_config.RandomSeed}  |  场景：{_world.DisplayName}";
+        _debug.Text = _storageWarning ?? $"请求数量：{_config.BoidCount}  |  随机种子：{_config.RandomSeed}  |  场景：{_world.DisplayName}";
         _stats.Refresh(_world.Stats, Engine.GetFramesPerSecond());
     }
 

@@ -12,6 +12,7 @@ public interface ISimulationWorld
     bool CoreImplemented { get; }
     bool CanStep { get; }
     SimulationStats Stats { get; }
+    bool PopulationSpawnLimited { get; }
     ObstacleSelection? SelectedObstacleInfo { get; }
     ObstacleShape? ObstaclePlacement { get; }
     event Action? ObstacleSelectionChanged;
@@ -27,6 +28,7 @@ public interface ISimulationWorld
     // 仅控制相机/选择等用户操作；关闭时取消待定手势，不改变模拟运行状态。
     void SetInteractionEnabled(bool enabled);
     void Reset();
+    void ResizePopulation(int requestedCount);
     // 仅暂停时推进一个当前物理频率的时间步，保持暂停；运行时不执行。
     void StepOnce();
     void ConfigurationChanged();

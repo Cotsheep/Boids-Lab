@@ -9,6 +9,7 @@ public partial class ControlPanel : VBoxContainer
     public event Action? ResetRequested;
     public event Action? StepRequested;
     public event Action? ConfigurationChanged;
+    public event Action<int>? PopulationCountRequested;
     public event Action<bool>? LeaderAssignmentRequested;
     public event Action? LeaderControlRequested;
     private Button? _leaderControlButton;
@@ -21,6 +22,9 @@ public partial class ControlPanel : VBoxContainer
     private Label? _leaderStatus;
     private Label? _selectionStatus;
     private Label? _separationRadiusWarning;
+    private SpinBox _populationInput = null!;
+    private Label _populationStatus = null!;
+    private int _lastPopulationSubmission;
     private bool _threeDimensional;
 
     public void Bind(BoidConfig config, string lengthUnit, SimulationFeatures features = SimulationFeatures.All, bool threeDimensional = false)
@@ -101,8 +105,7 @@ public partial class ControlPanel : VBoxContainer
         }
 
         AddHeading("群体设置");
-        AddNumber("BoidCount", "个体数量", BoidConfig.CountRange, config.BoidCount,
-            value => config.BoidCount = (int)value, "目标数量；点击重置后重新生成，不会立即增删个体。");
+        AddPopulationCount(config.BoidCount);
         AddNumber("RandomSeed", "随机种子", BoidConfig.SeedRange, config.RandomSeed,
             value => config.RandomSeed = (int)value, "点击重置后生效；相同种子和参数可复现初始位置与速度。");
 
@@ -207,7 +210,54 @@ public partial class ControlPanel : VBoxContainer
     {
         // 只提交正在编辑的文本。未聚焦输入框的文字可能尚未追上本帧更新的 Value。
         if (GetViewport().GuiGetFocusOwner() is LineEdit edit
-            && edit.GetParent() is SpinBox spin && IsAncestorOf(spin)) spin.Apply();
+            && edit.GetParent() is SpinBox spin && IsAncestorOf(spin))
+        {
+            if (spin == _populationInput) SubmitPopulationCount(false);
+            else spin.Apply();
+        }
+    }
+
+    public void RefreshPopulationState(int requested, int actual, bool limited)
+    {
+        _populationStatus.Text = limited
+            ? $"请求 {requested}，实际 {actual}。未找到足够的无障碍位置；调整范围或障碍后按 Enter 重试。"
+            : $"实际数量：{actual}";
+        _populationStatus.AddThemeColorOverride("font_color", new Color(limited ? "ffc75a" : "91a6bb"));
+    }
+
+    private void AddPopulationCount(int current)
+    {
+        var row = new HBoxContainer();
+        row.AddChild(new Label { Text = "请求个体数量", SizeFlagsHorizontal = SizeFlags.ExpandFill });
+        _populationInput = new SpinBox
+        {
+            Name = "BoidCount", MinValue = BoidConfig.CountRange.Min, MaxValue = BoidConfig.CountRange.Max,
+            Step = BoidConfig.CountRange.Step, Value = current, CustomMinimumSize = new Vector2(128, 34),
+            UpdateOnTextChanged = false,
+            TooltipText = "按 Enter 或离开输入框后调整数量，保留已有个体的运动状态。缩减时优先保留领队和选中个体；新增个体避开障碍。",
+        };
+        _lastPopulationSubmission = current;
+        SpinBox input = _populationInput;
+        input.GetLineEdit().TextSubmitted += _ => { if (input == _populationInput) SubmitPopulationCount(true); };
+        input.GetLineEdit().FocusExited += () => { if (input == _populationInput) SubmitPopulationCount(false); };
+        row.AddChild(input);
+        AddChild(row);
+        _populationStatus = new Label
+        {
+            Name = "PopulationStatus", AutowrapMode = TextServer.AutowrapMode.WordSmart,
+            MouseFilter = MouseFilterEnum.Ignore,
+        };
+        _populationStatus.AddThemeFontSizeOverride("font_size", 13);
+        AddChild(_populationStatus);
+    }
+
+    private void SubmitPopulationCount(bool explicitSubmit)
+    {
+        _populationInput.Apply();
+        int requested = (int)BoidConfig.CountRange.Constrain(_populationInput.Value);
+        if (!explicitSubmit && requested == _lastPopulationSubmission) return;
+        _lastPopulationSubmission = requested; // Enter 后的失焦不重复增删；再次 Enter 可重试未完成的新增。
+        PopulationCountRequested?.Invoke(requested);
     }
 
     public void RefreshLeaderState(int? selectedId, int? leaderId, bool hasTarget, bool controlActive = false, bool running = false)
