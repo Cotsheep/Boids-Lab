@@ -20,6 +20,7 @@ public partial class ControlPanel : VBoxContainer
     private CheckBox? _leaderToggle;
     private Label? _leaderStatus;
     private Label? _selectionStatus;
+    private Label? _separationRadiusWarning;
     private bool _threeDimensional;
 
     public void Bind(BoidConfig config, string lengthUnit, SimulationFeatures features = SimulationFeatures.All, bool threeDimensional = false)
@@ -36,6 +37,7 @@ public partial class ControlPanel : VBoxContainer
         _leaderToggle = null;
         _leaderStatus = null;
         _selectionStatus = null;
+        _separationRadiusWarning = null;
         AddHeading("模拟控制");
         var buttons = new HBoxContainer();
         AddChild(buttons);
@@ -109,7 +111,7 @@ public partial class ControlPanel : VBoxContainer
             AddHeading("邻居搜索");
             AddSearchMode(config, features.HasFlag(SimulationFeatures.UniformGridSearch));
             AddNumber("PerceptionRadius", "感知半径", BoidConfig.RadiusRange, config.PerceptionRadius,
-                value => config.PerceptionRadius = (float)value, threeDimensional ? "三维始终使用实际坐标和直接距离，包含半径边缘及重合的其他个体。" : $"单位：{lengthUnit}；环绕世界使用最短环绕距离，无限世界使用直接距离。包含半径边缘和重合的其他个体，不包含自身。");
+                value => { config.PerceptionRadius = (float)value; RefreshRadiusWarning(config); }, threeDimensional ? "三维始终使用实际坐标和直接距离，包含半径边缘及重合的其他个体。" : $"单位：{lengthUnit}；环绕世界使用最短环绕距离，无限世界使用直接距离。包含半径边缘和重合的其他个体，不包含自身。");
         }
 
         AddHeading("运动参数");
@@ -133,7 +135,18 @@ public partial class ControlPanel : VBoxContainer
                     value => config.LeaderFollowWeight = (float)value, "跟随与原有群集规则共同作用；设为零关闭跟随贡献，避障仍优先。");
             }
             AddNumber("SeparationRadius", "分离半径", BoidConfig.SeparationRadiusRange, config.SeparationRadius,
-                value => config.SeparationRadius = (float)value, $"单位：{lengthUnit}；仅避开此范围内的邻居，实际范围不超过感知半径。");
+                value => { config.SeparationRadius = (float)value; RefreshRadiusWarning(config); }, $"单位：{lengthUnit}；仅避开此范围内的邻居，实际范围不超过感知半径。");
+            _separationRadiusWarning = new Label
+            {
+                Name = "SeparationRadiusWarning",
+                Text = "提醒：分离半径大于感知半径，实际分离范围以感知半径为限。",
+                AutowrapMode = TextServer.AutowrapMode.WordSmart,
+                MouseFilter = MouseFilterEnum.Ignore,
+            };
+            _separationRadiusWarning.AddThemeColorOverride("font_color", new Color("ffc75a"));
+            _separationRadiusWarning.AddThemeFontSizeOverride("font_size", 13);
+            AddChild(_separationRadiusWarning);
+            RefreshRadiusWarning(config);
             AddToggle("SeparationEnabled", "启用分离规则", config.SeparationEnabled, value => config.SeparationEnabled = value);
             AddNumber("SeparationWeight", "分离权重", BoidConfig.SeparationRange, config.SeparationWeight,
                 value => config.SeparationWeight = (float)value, "避开近邻；越近的邻居对分离方向影响越大，权重为零时不贡献加速度。");
@@ -182,6 +195,12 @@ public partial class ControlPanel : VBoxContainer
     {
         _startPause.Text = running ? "暂停" : "开始";
         _step.Disabled = !canStep;
+    }
+
+    private void RefreshRadiusWarning(BoidConfig config)
+    {
+        if (_separationRadiusWarning is not null)
+            _separationRadiusWarning.Visible = config.SeparationRadius > config.PerceptionRadius;
     }
 
     public void CommitPendingEdits()
