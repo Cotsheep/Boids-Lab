@@ -147,7 +147,7 @@ public partial class MotionChecks : Node
         manager.Initialize(config);
         AddChild(manager);
         Check(manager.Boids.Count == 3 && manager.Stats.BoidCount == 3, "Generate actual configured population");
-        Check(!manager.IsRunning && !manager.CanStep && manager.CoreImplemented, "Start paused and keep UI single-step disabled");
+        Check(!manager.IsRunning && manager.CanStep && manager.CoreImplemented, "Start paused and allow UI single-step");
         var snapshot = manager.Boids.Select(b => (b.Position, b.Velocity, b.Id)).ToArray();
         manager.Reset();
         Check(manager.Boids.Select(b => (b.Position, b.Velocity, b.Id)).SequenceEqual(snapshot), "Reset repeats seeded initial state");

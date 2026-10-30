@@ -16,7 +16,7 @@ public partial class BoidManager3D : Node3D, ISimulationWorld
     public SimulationFeatures Features => SimulationFeatures.NeighborSearch | SimulationFeatures.DebugDrawing
         | SimulationFeatures.UniformGridSearch | SimulationFeatures.Flocking | SimulationFeatures.Obstacles | SimulationFeatures.Leader | SimulationFeatures.DirectLeaderControl;
     public bool CoreImplemented => true; // 基础运动可运行；可选能力由 Features 明确声明。
-    public bool CanStep => false;
+    public bool CanStep => !IsRunning;
     public bool IsRunning { get; private set; }
     public SimulationStats Stats { get; private set; }
     public Aabb WorldBounds { get; private set; }
@@ -271,8 +271,10 @@ public partial class BoidManager3D : Node3D, ISimulationWorld
         Config.Normalize();
     }
 
-    // 单步功能继续保持关闭。
-    public void StepOnce() { }
+    public void StepOnce()
+    {
+        if (CanStep) Step(1.0 / Engine.PhysicsTicksPerSecond);
+    }
     public void SetInteractionEnabled(bool enabled)
     {
         _interactionEnabled = enabled;

@@ -226,7 +226,7 @@ public partial class Motion3DChecks : Node
         var body = world.Boids[0].GetNode<MeshInstance3D>("Body");
         Check(body.Mesh is CylinderMesh, "Each 3D individual is rendered by a native mesh node");
         Near(body.Basis * Vector3.Up, Vector3.Forward, 0.001f, "Cone tip agrees with the boid -Z facing convention");
-        Check(((Button)controls.FindChild("Step", true, false)).Disabled, "Step remains unavailable");
+        Check(!((Button)controls.FindChild("Step", true, false)).Disabled, "Paused 3D world allows single-step");
         Check(!app.GetNode<Control>("%CorePlaceholder").Visible, "Runnable base motion does not show the unimplemented-core overlay");
         Press(app, "toggle_ui");
         Check(!app.GetNode<Control>("%UIRoot").Visible, "F1 hides the shared HUD");

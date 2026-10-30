@@ -35,7 +35,7 @@ public partial class BoidManager : Node2D, ISimulationWorld
     public bool IsRunning { get; private set; }
     // 基础运动、邻居搜索与分离/对齐/聚集规则均已可运行。
     public bool CoreImplemented => true;
-    public bool CanStep => false; // 按当前需求，暂不开放 UI 单步功能。
+    public bool CanStep => !IsRunning;
     public ObstacleSelection? SelectedObstacleInfo => _obstacleEditor.SelectionInfo;
     public ObstacleShape? ObstaclePlacement => _obstacleEditor.PlacementShape;
     public event Action? ObstacleSelectionChanged;

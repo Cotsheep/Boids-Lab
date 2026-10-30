@@ -45,7 +45,8 @@ public partial class ControlPanel : VBoxContainer
             .TooltipText = "暂停并按当前数量、种子和最大速度重新生成个体；清空加速度与旋转状态。";
         _step = AddButton(buttons, "Step", "单步", () => StepRequested?.Invoke());
         _step.Disabled = true;
-        _step.TooltipText = "单步功能暂未开放。";
+        _step.TooltipText = "暂停时推进一个固定物理时间步，完成后仍保持暂停，并刷新调试与统计。"
+            + (threeDimensional ? "操控领队时请先按 Esc 释放鼠标。" : "");
 
         if (features.HasFlag(SimulationFeatures.Leader))
         {

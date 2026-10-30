@@ -314,7 +314,7 @@ public partial class MainController : Node
 
     private void StepSimulation()
     {
-        if (!_world.CanStep) return;
+        if (_switchPending || _help.Visible || _world.IsLeaderControlActive || !_world.CanStep) return;
         _world.StepOnce();
         RefreshInterface();
     }
