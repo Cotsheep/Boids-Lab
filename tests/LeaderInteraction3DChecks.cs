@@ -45,16 +45,18 @@ public partial class LeaderInteraction3DChecks : Node
             panel.GetParent<ScrollContainer>().EnsureControlVisible(checkbox);
             await Frame();
             Click(checkbox.GetGlobalRect().GetCenter());
-            Check(_world.Leader == a && !control.Disabled && !_world.IsLeaderControlActive && !_world.IsRunning,
-                "Native assignment enters perspective without capturing or starting");
-            Check(status.Text.Contains("待操控") && status.Text.Contains("已暂停"), "3D status describes control and pause separately");
+            Check(_world.Leader == a && control.Disabled && _world.IsLeaderControlActive && !_world.IsRunning
+                && GetViewport().GuiGetFocusOwner() is null,
+                "Native assignment enters control and clears focus without starting the simulation");
+            Check(status.Text.Contains("操控中") && status.Text.Contains("已暂停"), "3D status describes control and pause separately");
             Tap(Key.F1);
             Click(Screen(a));
             Check(_world.SelectedBoid is null && _world.Leader == a && a.IsLeader, "Perspective deselection preserves identity");
             Click(Screen(b));
             Check(_world.SelectedBoid == b && _world.Leader == a, "Perspective selection does not implicitly transfer leader");
             checkbox.ButtonPressed = true;
-            Check(_world.Leader == b && !a.IsLeader && b.IsLeader, "Assignment transfers exactly one identity");
+            Check(_world.Leader == b && !a.IsLeader && b.IsLeader && _world.IsLeaderControlActive
+                && _world.LeaderController.MovementDirection == Vector3.Zero, "UI transfer assigns one identity and starts fresh control");
             _world.SetLeader(a);
             Tap(Key.F3);
             // Headless DisplayServer cannot capture an OS pointer; graphical acceptance checks the actual capture.
@@ -94,6 +96,7 @@ public partial class LeaderInteraction3DChecks : Node
             Tap(Key.Escape);
             Check(!_world.IsLeaderControlActive && _camera.IsFollowing && Input.MouseMode == Input.MouseModeEnum.Visible,
                 "Escape releases pointer while keeping leader and perspective following");
+            CheckReleasedView(a);
             Tap(Key.F1);
             var speed = (SpinBox)panel.FindChild("MaxSpeed", true, false);
             speed.GetLineEdit().GrabFocus();
@@ -150,6 +153,57 @@ public partial class LeaderInteraction3DChecks : Node
             GetTree().Quit();
         }
         catch (Exception error) { GD.PushError(error.ToString()); GetTree().Quit(1); }
+    }
+
+    private void CheckReleasedView(Boid3D leader)
+    {
+        Vector2 point = GetViewport().GetVisibleRect().Size * new Vector2(0.65f, 0.35f);
+        Vector3 position = leader.Position;
+        Quaternion orientation = leader.Quaternion;
+        Quaternion target = _world.LeaderController.TargetOrientation;
+        Transform3D camera = _camera.Transform;
+        Pointer(point, new Vector2(30, 20));
+        Check(_world.LeaderController.TargetOrientation == target, "Released pointer motion alone does not rotate the view");
+        RightDrag(point);
+        _camera._Process(0.5);
+        Check(_world.LeaderController.TargetOrientation != target && _camera.Transform != camera
+            && !_world.IsLeaderControlActive && !_world.IsRunning,
+            "Right drag adjusts the paused follow view without capturing or running");
+        Check(leader.Position == position && leader.Quaternion == orientation,
+            "Paused released-view rotation preserves the leader position and facing");
+        target = _world.LeaderController.TargetOrientation;
+        Tap(Key.F3);
+        KeyEvent(Key.W, true);
+        Check(_world.IsLeaderControlActive && _world.LeaderController.TargetOrientation == target
+            && _world.LeaderController.MovementDirection.Dot(target * Vector3.Forward) > 0.999f,
+            "Recapturing keeps the adjusted view as the movement reference");
+        KeyEvent(Key.W, false);
+        Tap(Key.Escape);
+        Tap(Key.F2);
+        RightDrag(point);
+        Check(_world.LeaderController.TargetOrientation == target, "Help blocks released follow-view rotation");
+        Tap(Key.Escape);
+        Tap(Key.F1);
+        var selector = _app.GetNode<OptionButton>("%WorldSelector");
+        RightDrag(selector.GetGlobalRect().GetCenter());
+        Check(_world.LeaderController.TargetOrientation == target, "A right drag starting on UI does not rotate the follow view");
+        Tap(Key.F1);
+        Pointer(point);
+        Button(point, MouseButton.Right, true);
+        GetWindow().EmitSignal(Window.SignalName.FocusExited);
+        Pointer(point + new Vector2(60, -35), new Vector2(60, -35), MouseButtonMask.Right);
+        Button(point, MouseButton.Right, false);
+        GetWindow().EmitSignal(Window.SignalName.FocusEntered);
+        Check(_world.LeaderController.TargetOrientation == target && !_world.IsLeaderControlActive,
+            "Focus loss cancels released-view dragging without recapturing on recovery");
+    }
+
+    private void RightDrag(Vector2 point)
+    {
+        Pointer(point);
+        Button(point, MouseButton.Right, true);
+        Pointer(point + new Vector2(60, -35), new Vector2(60, -35), MouseButtonMask.Right);
+        Button(point + new Vector2(60, -35), MouseButton.Right, false);
     }
 
     private async Task CheckEditing(Boid3D leader)

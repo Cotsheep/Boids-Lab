@@ -6,6 +6,8 @@
 
 显示选项调整：新增三维「显示边界」，默认关闭；仅在勾选且没有领队时显示观察盒边框。配置自动保存，底面网格仍单独控制，软边界计算不受显示开关影响。构建及 observation_3d、leader_3d、world_switch、boundary_3d 四组回归通过。
 
+操控入口与观察调整：界面指定/转移三维领队后自动捕获鼠标并进入操控，保持原有暂停状态。释放后可以右键拖动调整跟随视角，暂停时不改变领队位姿，重新捕获后 WASD 沿用调整后的视角。真实视口检查覆盖自动操控、右键调视角、GUI/帮助隔离和失焦清理；构建及 leader_interaction_3d、observation_3d、obstacle_interaction_3d、二维 leader_interaction、world_switch 五组回归通过。
+
 ## 四阶段交付
 
 | 阶段 | 已实现内容 | 可独立运行的主要检查 |
@@ -29,9 +31,9 @@ C# 命令行构建通过，零警告、零错误。只在构建进程设置已�
 
 可通过 `-Scenes boundary_3d_checks,leader_3d_checks,leader_interaction_3d_checks` 只运行指定组。运行器按退出码、PASS 标记和 ERROR 输出判定，并在 finally 中还原测试前两套用户配置。日志保存到 `.godot/validation/full-regression/`。
 
-已核查全部 22 个场景的最新日志均通过：
+已核查全部 23 个场景的最新日志均通过：
 
-- 三维：boundary_3d、leader_3d、leader_interaction_3d、motion_3d、observation_3d、obstacle_3d、obstacle_interaction_3d、spatial_3d、steering_3d。
+- 三维：boundary_3d、camera_fade_3d、leader_3d、leader_interaction_3d、motion_3d、observation_3d、obstacle_3d、obstacle_interaction_3d、spatial_3d、steering_3d。
 - 二维及共享：boundary_mode、debug、help_overlay、leader、leader_interaction、leader_spacing、motion、neighbor、obstacle_avoidance、obstacle_interaction、pause_shortcut、steering、world_switch。
 
 以上名称均带 `_checks` 后缀。覆盖独立欧氏距离参照、负数与百万级坐标、两种搜索轨迹一致性、六面/边角边界、范围外障碍和连续接触、身份生命周期、真实视口输入、配置隔离。无图形耗时不作为桌面性能结论。
@@ -49,6 +51,6 @@ C# 命令行构建通过，零警告、零错误。只在构建进程设置已�
 
 尚不能视为完整飞行手感验收：自动键盘工具发送空格时，Godot 收到逻辑键 Space、物理键 Pause，无法据此验证绑定物理键的真实键盘操作。临时诊断输出已移除。F3、Esc、WASD、暂停、文本焦点、帮助和失焦的程序逻辑已通过视口输入检查，但仍需用实际键盘确认捕获/释放、鼠标转向与平滑追随的主观效果。
 
-已知取景限制：200 个跟随者聚集后，默认 300 视距可能位于群体附近，近处个体会遮挡领队。实际拉远到约 650 可观察队形。默认值仍遵循本轮方案；没有加入相机碰撞、个体透明化或自动取景策略。转弯队形、近距离遮挡和飞行时相机平滑仍适合单独人工评估。
+早期取景检查发现：200 个跟随者聚集后，默认 300 视距可能位于群体附近，近处个体会遮挡领队，拉远到约 650 可观察队形。后续已加入默认开启的近距离淡化，保持原视距和群集规则，通过 4694 项逻辑检查及 16 组图形对比，详见 [相机淡化验收](camera-fade-3d.md)。选中对象仍保持不透明；这项改善不保证任意队形都完全无遮挡，也不包含相机碰撞。真实键盘与连续飞行时相机手感仍需人工评估。
 
 无限世界继续使用现有单精度坐标，不引入浮动原点。本次短时窗口检查不代表图形驱动长期稳定性测试。

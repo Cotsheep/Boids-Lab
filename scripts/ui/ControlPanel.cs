@@ -53,7 +53,7 @@ public partial class ControlPanel : VBoxContainer
             _leaderToggle = new CheckBox
             {
                 Name = "IsLeader", Text = "设为领队", Disabled = true,
-                TooltipText = threeDimensional ? "先选中个体再勾选；可转移唯一领队。领队模式无边界，取消身份后恢复软边界，保留所有位置。" : "先选中一个个体再勾选；勾选其他个体会转移唯一领队，取消普通选择不会清除领队。有领队时地图无限，解除身份后恢复视口环绕。",
+                TooltipText = threeDimensional ? "先选中个体再勾选，自动操控该领队；Esc 释放鼠标后可右键调整视角。领队模式无边界，取消身份后恢复软边界，保留所有位置。" : "先选中一个个体再勾选；勾选其他个体会转移唯一领队，取消普通选择不会清除领队。有领队时地图无限，解除身份后恢复视口环绕。",
             };
             _leaderToggle.Toggled += enabled => LeaderAssignmentRequested?.Invoke(enabled);
             AddChild(_leaderToggle);
@@ -69,6 +69,8 @@ public partial class ControlPanel : VBoxContainer
                 AddChild(_leaderControlButton);
                 AddNumber("FollowCameraDistance", "跟随视距", BoidConfig.FollowCameraDistanceRange, config.FollowCameraDistance,
                     value => config.FollowCameraDistance = (float)value, "领队模式滚轮也可调整，Home 恢复默认距离。领队只接受障碍接触阻挡，不主动绕障。");
+                AddToggle("FadeNearbyBoids", "淡化近处个体", config.FadeNearbyBoids, value => config.FadeNearbyBoids = value);
+                GetNode<CheckBox>("FadeNearbyBoids").TooltipText = "仅在领队跟随视角中淡化贴近相机的普通个体，减轻遮挡；领队和选中个体保留高亮。只影响显示，不改变运动或点击选择。";
             }
         }
 

@@ -23,9 +23,9 @@ public sealed class BoidConfig
     public static readonly NumberRange ForceRange = new(0, 2000, 1, 200);
     public static readonly NumberRange AngularSpeedRange = new(0, 1440, 1, 360);
     public static readonly NumberRange AngularAccelerationRange = new(0, 7200, 1, 720);
-    public static readonly NumberRange SeparationRange = new(0, 5, 0.1, 1.5);
-    public static readonly NumberRange AlignmentRange = new(0, 5, 0.1, 1);
-    public static readonly NumberRange CohesionRange = new(0, 5, 0.1, 1);
+    public static readonly NumberRange SeparationRange = new(0, 50, 0.1, 1.5);
+    public static readonly NumberRange AlignmentRange = new(0, 50, 0.1, 1);
+    public static readonly NumberRange CohesionRange = new(0, 50, 0.1, 1);
     public static readonly NumberRange AvoidanceLookAheadRange = new(0.1, 3, 0.05, 0.75);
     public static readonly NumberRange ObstacleClearanceRange = new(0, 100, 1, 12);
     public static readonly NumberRange LeaderFollowDistanceRange = new(16, 500, 1, 80);
@@ -59,6 +59,7 @@ public sealed class BoidConfig
     public float WorldHeight { get; set; } = (float)WorldHeightRange.Default;
     public float WorldDepth { get; set; } = (float)WorldDepthRange.Default;
     public float FollowCameraDistance { get; set; } = (float)FollowCameraDistanceRange.Default;
+    public bool FadeNearbyBoids { get; set; } = true;
     public bool ShowGrid { get; set; } = true;
     public bool ShowBoundary { get; set; }
     public bool ShowNeighbors { get; set; }
@@ -135,6 +136,7 @@ public sealed class BoidConfig
         WorldHeight = (float)WorldHeightRange.Constrain(Number("world_height_3d", WorldHeight));
         WorldDepth = (float)WorldDepthRange.Constrain(Number("world_depth_3d", WorldDepth));
         FollowCameraDistance = (float)FollowCameraDistanceRange.Constrain(Number("follow_camera_distance_3d", FollowCameraDistance));
+        FadeNearbyBoids = Flag("visualization", "fade_nearby_boids_3d", FadeNearbyBoids);
         ShowGrid = Flag("visualization", "show_grid", ShowGrid);
         ShowBoundary = Flag("visualization", "show_boundary_3d", ShowBoundary);
         ShowNeighbors = Flag("visualization", "show_neighbors", ShowNeighbors);
@@ -172,6 +174,7 @@ public sealed class BoidConfig
         file.SetValue("simulation", "world_height_3d", WorldHeight);
         file.SetValue("simulation", "world_depth_3d", WorldDepth);
         file.SetValue("simulation", "follow_camera_distance_3d", FollowCameraDistance);
+        file.SetValue("visualization", "fade_nearby_boids_3d", FadeNearbyBoids);
         file.SetValue("visualization", "show_grid", ShowGrid);
         file.SetValue("visualization", "show_boundary_3d", ShowBoundary);
         file.SetValue("visualization", "show_neighbors", ShowNeighbors);

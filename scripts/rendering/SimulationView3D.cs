@@ -8,6 +8,7 @@ public partial class SimulationView3D : Node3D
     public DebugOverlayGeometry3D DebugGeometry { get; } = new();
     private BoidConfig? _config;
     private BoidManager3D? _manager;
+    private BaseMaterial3D? _nearCameraMaterial;
     private readonly ImmediateMesh _debugMesh = new();
     private readonly StandardMaterial3D _debugMaterial = new()
     {
@@ -66,6 +67,7 @@ public partial class SimulationView3D : Node3D
     public void RefreshDebug()
     {
         if (_config is null || _manager is null) return;
+        RefreshNearCameraFade(_config, _manager);
         GetNode<MeshInstance3D>("Grid").Visible = _config.ShowGrid && _manager.Leader is null;
         GetNode<MeshInstance3D>("ReferenceFrame").Visible = _config.ShowBoundary && _manager.Leader is null;
         var camera = GetNode<SimulationCamera3D>("Camera3D");
@@ -79,6 +81,23 @@ public partial class SimulationView3D : Node3D
         AddPoints(DebugGeometry.NeighborPoints, new Color("ffc75a"));
         AddPoints(DebugGeometry.VelocityPoints, new Color("6baeff"));
         _debugMesh.SurfaceEnd();
+    }
+
+    private void RefreshNearCameraFade(BoidConfig config, BoidManager3D manager)
+    {
+        bool enabled = config.FadeNearbyBoids && manager.Leader is not null;
+        if (enabled && _nearCameraMaterial is null && manager.Boids.Count > 0
+            && manager.Boids[0].NormalMaterial is BaseMaterial3D source)
+        {
+            // 同一世界复用一份材质副本；原始场景材质和身份高亮材质保持不变。
+            // PixelAlpha 距离淡化可用于当前 Compatibility 渲染器。
+            _nearCameraMaterial = (BaseMaterial3D)source.Duplicate();
+            _nearCameraMaterial.DistanceFadeMode = BaseMaterial3D.DistanceFadeModeEnum.PixelAlpha;
+            _nearCameraMaterial.DistanceFadeMinDistance = 120;
+            _nearCameraMaterial.DistanceFadeMaxDistance = 240;
+        }
+        foreach (Boid3D boid in manager.Boids)
+            boid.SetViewMaterial(enabled ? _nearCameraMaterial : null);
     }
 
     private void AddPoints(System.Collections.Generic.List<Vector3> points, Color color)

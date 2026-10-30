@@ -61,6 +61,12 @@ public partial class LeaderController3D : Node
 
     private void Release() => SetActive(false);
 
+    public void RotateView(Vector2 movement)
+    {
+        _yaw = Mathf.Wrap(_yaw + movement.X * Sensitivity, -Mathf.Pi, Mathf.Pi);
+        _pitch = Mathf.Clamp(_pitch - movement.Y * Sensitivity, -PitchLimit, PitchLimit);
+    }
+
     public override void _Process(double delta)
     {
         if (Active && (GetViewport().GuiGetFocusOwner() is LineEdit or TextEdit
@@ -87,8 +93,7 @@ public partial class LeaderController3D : Node
         }
         if (@event is InputEventMouseMotion motion)
         {
-            _yaw = Mathf.Wrap(_yaw + motion.Relative.X * Sensitivity, -Mathf.Pi, Mathf.Pi);
-            _pitch = Mathf.Clamp(_pitch - motion.Relative.Y * Sensitivity, -PitchLimit, PitchLimit);
+            RotateView(motion.Relative);
         }
         else if (@event is InputEventMouseButton { Pressed: true } button)
         {

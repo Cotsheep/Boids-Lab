@@ -14,6 +14,8 @@ public partial class Boid3D : Node3D
     public bool IsSelected { get; private set; }
     private MeshInstance3D? _body;
     private Material? _normalOverride;
+    private Material? _viewMaterial;
+    internal Material? NormalMaterial => _normalOverride ?? _body?.Mesh?.SurfaceGetMaterial(0);
     // 所有矢量都属于 Boids 容器坐标系，时间单位为秒，角量使用弧度。
     public Vector3 Velocity { get; private set; }
     public Vector3 Acceleration { get; private set; }
@@ -48,7 +50,14 @@ public partial class Boid3D : Node3D
     {
         if (_body is not null) _body.MaterialOverride = IsLeader
             ? (IsSelected ? SelectedLeaderMaterial : LeaderMaterial)
-            : IsSelected ? SelectionMaterial : _normalOverride;
+            : IsSelected ? SelectionMaterial : _viewMaterial ?? _normalOverride;
+    }
+
+    internal void SetViewMaterial(Material? material)
+    {
+        if (_viewMaterial == material) return;
+        _viewMaterial = material;
+        RefreshAppearance();
     }
 
     // 用网格包围球进行轻量拾取，无需给每只个体添加碰撞体。保留最小屏幕点击容差。

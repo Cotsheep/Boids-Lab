@@ -153,7 +153,7 @@ public partial class MainController : Node
         _controls.ResetRequested += ResetSimulation;
         _controls.StepRequested += StepSimulation;
         _controls.ConfigurationChanged += ApplyConfiguration;
-        _controls.LeaderAssignmentRequested += _world.SetSelectedBoidLeader;
+        _controls.LeaderAssignmentRequested += AssignSelectedBoidLeader;
         _controls.LeaderControlRequested += BeginLeaderControl;
         _world.ConfigurationEdited += OnWorldConfigurationEdited;
         _world.BoidControlStateChanged += RefreshLeaderControls;
@@ -175,7 +175,7 @@ public partial class MainController : Node
         _controls.ResetRequested -= ResetSimulation;
         _controls.StepRequested -= StepSimulation;
         _controls.ConfigurationChanged -= ApplyConfiguration;
-        _controls.LeaderAssignmentRequested -= _world.SetSelectedBoidLeader;
+        _controls.LeaderAssignmentRequested -= AssignSelectedBoidLeader;
         _controls.LeaderControlRequested -= BeginLeaderControl;
         _world.ConfigurationEdited -= OnWorldConfigurationEdited;
         _world.BoidControlStateChanged -= RefreshLeaderControls;
@@ -279,6 +279,12 @@ public partial class MainController : Node
 
     private void RefreshLeaderControls() =>
         _controls.RefreshLeaderState(_world.SelectedBoidId, _world.LeaderId, _world.HasLeaderTarget, _world.IsLeaderControlActive, _world.IsRunning);
+
+    private void AssignSelectedBoidLeader(bool enabled)
+    {
+        _world.SetSelectedBoidLeader(enabled);
+        if (enabled && _world.SelectedBoidId == _world.LeaderId) BeginLeaderControl();
+    }
 
     private void BeginLeaderControl()
     {

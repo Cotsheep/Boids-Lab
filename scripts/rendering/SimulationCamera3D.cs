@@ -177,7 +177,7 @@ public partial class SimulationCamera3D : Camera3D
         if (@event is not InputEventMouseButton { Pressed: true } button) return;
         if (button.ButtonIndex is MouseButton.Left or MouseButton.Right or MouseButton.Middle)
         {
-            if (IsFollowing && button.ButtonIndex != MouseButton.Left) return;
+            if (IsFollowing && button.ButtonIndex == MouseButton.Middle) return;
             CancelGesture();
             _gesture = button.ButtonIndex;
             _pressPosition = button.Position;
@@ -253,9 +253,13 @@ public partial class SimulationCamera3D : Camera3D
         }
         if (_gesture == MouseButton.Right)
         {
-            _yaw = Mathf.Wrap(_yaw - movement.X * OrbitRadiansPerPixel, -Mathf.Pi, Mathf.Pi);
-            _pitch = Mathf.Clamp(_pitch + movement.Y * OrbitRadiansPerPixel, -PitchLimit, PitchLimit);
-            ApplyView();
+            if (IsFollowing) _leaderController!.RotateView(movement);
+            else
+            {
+                _yaw = Mathf.Wrap(_yaw - movement.X * OrbitRadiansPerPixel, -Mathf.Pi, Mathf.Pi);
+                _pitch = Mathf.Clamp(_pitch + movement.Y * OrbitRadiansPerPixel, -PitchLimit, PitchLimit);
+                ApplyView();
+            }
             ManualViewChanged?.Invoke();
         }
         else if (_gesture == MouseButton.Middle)
