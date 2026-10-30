@@ -10,13 +10,15 @@
 
 二维支持鼠标目标领队；三维支持第三人称飞行领队。两者都使用唯一身份与身后跟随区域。
 
+当前约定范围内的开发已完成，后续实机验收由维护者进行。文档入口见[文档导航](docs/README.md)，交付范围见[开发计划完成记录](docs/next-development-plan.md)。
+
 项目采用普通全窗口游戏的结构：`Game (Node)` 下分别放置 `World (Node)` 与 `UI (CanvasLayer)`。Node2D / Node3D 世界直接显示在根视口中，Control 面板作为 HUD 覆盖在世界画面上。`main_3d.tscn` 继承主场景，只改变默认进入的世界。两个入口均可通过顶部选择器在运行时切换 2D / 3D；默认 F5 仍进入 2D。
 
 ## 打开和运行
 
 1. 使用 Godot **4.7.2 .NET 版**导入本目录的 `project.godot`。已有项目目录仍为 `boids`，应用和程序集名称为 `BoidsLab`。
 2. 在编辑器中构建 C# 项目。2D：打开 `scenes/main.tscn` 后按 F6，或直接按 F5。3D：打开 `scenes/main_3d.tscn` 后按 F6。
-3. 也可以先在本目录运行 `dotnet build BoidsLab.csproj`，再由编辑器启动。
+3. 也可以先在本目录运行 `dotnet build BoidsLab.csproj`，再由编辑器启动。本机现有编辑器 SDK 检测异常尚未修复，已验证的命令行方式见[本机构建说明](#本机构建说明)。
 
 初始窗口为 1360 × 860，最小为 960 × 640。这里的“全窗口”指游戏世界使用整个根视口，不切换操作系统的独占全屏模式，也没有修改原生窗口模式。HUD 顶部显示标题和状态，左侧参数面板可滚动，底部统计项可换行。空白 UI 和提示文字不拦截鼠标，有交互的面板与控件正常接收输入；参数面板内滚动不会同时缩放相机。使用 Compatibility 渲染器，无第三方插件或素材依赖；原有 Godot 图标保留。
 
@@ -81,7 +83,7 @@
 
 `Boid2D.SetAcceleration(Vector2)` 保留为持续的外部加速度输入，传入 `Vector2.Zero` 撤销。每步群集转向单独传入 `UpdateBoid(delta, steeringAcceleration)`，与外部输入相加后限制总加速度；规则不会覆盖外部输入，也不会把上一帧转向残留到下一帧。角加速度只控制外观朝向平滑跟随实际速度方向，不直接旋转速度向量。具体公式与调用示例见 [架构说明](docs/architecture.md)。
 
-## 领队与全局跟随
+## 2D 领队与全局跟随
 
 选中 Boid 后勾选“设为领队”，该个体以紫色本体和菱形持续标记；普通选择仍使用金色圆环。选中领队后取消勾选可解除身份，无选中个体时复选框禁用。领队与普通选择分开保存，点击其他个体、障碍物或空白不会改变身份。
 
@@ -91,7 +93,7 @@
 
 目标与跟随区域都使用世界坐标，不绕回屏幕另一侧。相机移动后按当前光标重新换算目标，个体不会随相机传送。领队不参与三条群集规则，避障优先；当前没有全局路径规划，障碍物内部或封闭区域的目标可能不可达。重置、移除领队或解除身份会清空目标；身份和目标不跨运行保存，跟随参数会保存。
 
-## 障碍物编辑与避障
+## 2D 障碍物编辑与避障
 
 在“障碍物”面板选择添加矩形或圆形，再点击世界画面放置。放置后自动选中并显示高亮边框和缩放手柄。拖动本体移动；矩形右下角手柄分别调整宽高，圆形右侧手柄调整直径。面板提供对应尺寸输入，也可将鼠标放在选中障碍物上，用 Shift + 滚轮等比缩放。正常滚轮仍用于相机缩放。尺寸范围统一为 16–2000 世界像素。
 
@@ -109,7 +111,9 @@
 
 三条规则各自转换为受限加速度，乘以权重后求和，再限制总模长。关闭某条规则或将其权重设为 0，可消除它在下一步的贡献；无群集转向、避障或外部加速度时保持惯性运动。没有最小速度限制。完全重合的个体会根据 ID 确定相反分离方向，避免除零。此实现是转向行为，不是保证个体之间互不穿透的碰撞系统。
 
-地图模式由是否存在领队自动决定，无需额外开关：
+## 2D 世界边界
+
+二维地图模式由是否存在领队自动决定，无需额外开关：
 
 - **有领队**：无限世界，个体出屏后继续运动；相机拖动、缩放和 Home 只改变观察位置。
 - **无领队**：以相机当前可见矩形为环绕边界，个体越过一侧会从对侧进入，并保留越界余量、速度和朝向。拖动、缩放、Home 或视口尺寸变化后，即使暂停也立即把越界个体传送回新范围。
@@ -118,7 +122,7 @@
 
 `BoidManager.WorldSize` 的 1280 × 720 只作为初始与 Home 的参考尺寸。相机适配窗口比例，缩放仍限制为参考倍率的 0.25–8 倍；平移不设地图范围限制。背景和网格始终覆盖当前视口，网格固定在世界坐标上。这里的“像素”指世界像素，缩放后不一定等于屏幕像素。坐标仍受 Godot 单精度浮点数精度限制，没有额外实现浮动原点。
 
-## 选择与调试观察
+## 2D 选择与调试观察
 
 左键按下时记录命中的个体，松开且移动不足 5 个视口像素时确认选择，因此运行中的个体即使已经移开，也能被选中。超过阈值则平移相机，不改变选择；从 UI 控件开始的操作只影响 UI。命中测试使用实际三角形，同时保留 10 个视口像素的点击容差，缩小时仍可点击。普通个体选中时显示金色外观和圆环，取消后恢复原始颜色；领队始终保留紫色本体，被选中时叠加金色圆环。重置或移除该个体会清除选择。
 
@@ -126,7 +130,7 @@
 
 连线依据**当前画面上的位置**查询，不依赖上一物理步的缓存，因此暂停、首次开始前、改变半径或调整相机后都能立即查看。它只对选中个体做一次 O(N) 距离扫描，不修改模拟搜索结果或性能统计。调试绘制开销会影响 FPS，但不计入模拟更新/搜索耗时。各显示开关会保存，选择状态不保存；隐藏 HUD 后仍可选择并查看已开启的调试显示。
 
-## 邻居搜索与性能对比
+## 2D 邻居搜索与性能对比
 
 每次物理更新先复制所有个体的位置与速度，再搜索邻居、计算所有个体的转向，最后统一移动。有领队时按直接世界距离、无领队时按最短环绕距离判断邻居：包含恰好位于感知半径上的个体与重合位置的其他个体，不包含自身。两种方式输出相同的邻居集合，遍历顺序可以不同；转向会有浮点累加顺序造成的微小差异，不承诺长期轨迹逐位一致。
 
@@ -141,7 +145,7 @@
 
 ## 配置
 
-范围与默认值集中定义在 `scripts/simulation/BoidConfig.cs`，UI 从这里获取，不再复制定义。
+范围与默认值集中定义在 `scripts/simulation/BoidConfig.cs`，UI 从这里获取，不再复制定义。下表为二维 / 三维共用参数；线性量在二维按世界像素、三维按世界单位解释。
 
 | 参数 | 默认值 | 范围 | 步长 / 单位 |
 | --- | --- | --- | --- |
@@ -161,71 +165,47 @@
 | 领队后方距离 | 80 | 16–500 | 1 像素 |
 | 领队跟随权重 | 1.5 | 0–5 | 0.1 |
 
-三条规则和避障默认启用；网格默认显示，其余可视化默认关闭。当前范围只是实验用的输入约束，不代表经过算法效果或性能验证。
+三维另保存以下观察参数：
 
-数值输入按 Enter 或失去焦点后提交。配置修改时保存为 `user://boids_lab.cfg`，下次启动恢复；不会自动保存运行状态。Windows 默认位置为 `%APPDATA%/Godot/app_userdata/BoidsLab/boids_lab.cfg`。首次启动找不到配置时使用默认值。无效类型回退到默认值，越界数值被限制到合法范围。加载或保存失败会显示提示；Reset 不删除配置文件。
+| 参数 | 默认值 | 范围 / 步长 |
+| --- | --- | --- |
+| 观察宽 / 高 / 深 | 2560 / 1440 / 1440 | 100–100000 / 10 世界单位 |
+| 跟随视距 | 300 | 80–2000 / 1 世界单位 |
+| 显示边界 | 关闭 | 仅控制观察盒边框 |
+| 淡化近处个体 | 开启 | 仅影响透视跟随显示 |
+
+三条规则和避障默认启用；网格默认显示，邻居关系、感知范围、分离范围与运动方向调试默认关闭。当前范围只是实验用的输入约束，不代表对所有参数组合都有算法效果或性能保证。
+
+数值输入按 Enter 或失去焦点后提交。二维配置保存为 `user://boids_lab.cfg`，三维为 `user://boids_lab_3d.cfg`，下次进入对应世界时恢复；不会自动保存运行状态。Windows 默认目录为 `%APPDATA%/Godot/app_userdata/BoidsLab/`。首次启动找不到配置时使用默认值。无效类型回退到默认值，越界数值被限制到合法范围。加载或保存失败会显示提示；Reset 不删除配置文件。
 
 ## 目录
 
 ```text
 boids/
-├── project.godot
-├── BoidsLab.csproj
-├── BoidsLab.sln
+├── project.godot, BoidsLab.csproj, BoidsLab.sln
 ├── scenes/
-│   ├── main.tscn, main_3d.tscn
-│   ├── lab_theme.tres
-│   ├── boids/boid_2d.tscn, boid_3d.tscn
-│   ├── ui/help_overlay.tscn
-│   └── worlds/boids_world_2d.tscn, boids_world_3d.tscn
+│   ├── main.tscn, main_3d.tscn         # 二维默认入口、三维默认入口
+│   ├── boids/                        # 个体外观
+│   ├── ui/                           # 帮助弹层
+│   └── worlds/                       # 世界场景与维度定义资源
 ├── scripts/
-│   ├── app/MainController.cs
-│   ├── simulation/Boid2D.cs, Boid3D.cs
-│   ├── simulation/BoidConfig.cs
-│   ├── simulation/BoidManager.cs, BoidManager3D.cs
-│   ├── simulation/BoidSteering.cs, BoidSteering3D.cs
-│   ├── simulation/LeaderSteering.cs
-│   ├── simulation/NeighborSearch2D.cs, NeighborSearch3D.cs
-│   ├── simulation/WorldGeometry3D.cs
-│   ├── simulation/SimulationStats.cs
-│   ├── rendering/SimulationCamera2D.cs, SimulationCamera3D.cs
-│   ├── rendering/SimulationView.cs, SimulationView3D.cs
-│   ├── rendering/DebugOverlayGeometry.cs, DebugOverlayGeometry3D.cs
-│   ├── obstacles/ObstacleShape.cs
-│   ├── obstacles/Obstacle2D.cs, Obstacle3D.cs
-│   ├── obstacles/ObstacleAvoidance.cs, ObstacleAvoidance3D.cs
-│   ├── obstacles/ObstacleEditor2D.cs, ObstacleEditor3D.cs
-│   ├── worlds/ISimulationWorld.cs, SimulationFeatures.cs
-│   └── ui/ControlPanel.cs, ObstaclePanel.cs, StatsPanel.cs, HelpOverlay.cs
+│   ├── app/                          # 主控制器与世界切换
+│   ├── simulation/                   # 配置、运动、搜索、群集、边界及领队
+│   ├── rendering/                    # 相机、参考几何与调试绘制
+│   ├── obstacles/                    # 障碍、编辑和避障
+│   ├── worlds/                       # 世界接口、能力与资源定义
+│   └── ui/                           # 控件绑定、帮助与统计
 ├── tests/
-│   ├── Motion3DChecks.cs, motion_3d_checks.tscn
-│   ├── Observation3DChecks.cs, observation_3d_checks.tscn
-│   ├── Spatial3DChecks.cs, spatial_3d_checks.tscn
-│   ├── Steering3DChecks.cs, steering_3d_checks.tscn
-│   ├── MotionChecks.cs
-│   ├── motion_checks.tscn
-│   ├── NeighborChecks.cs
-│   ├── neighbor_checks.tscn
-│   ├── SteeringChecks.cs
-│   ├── steering_checks.tscn
-│   ├── DebugChecks.cs
-│   ├── debug_checks.tscn
-│   ├── PauseShortcutChecks.cs
-│   ├── pause_shortcut_checks.tscn
-│   ├── HelpOverlayChecks.cs
-│   ├── help_overlay_checks.tscn
-│   ├── ObstacleAvoidanceChecks.cs
-│   ├── obstacle_avoidance_checks.tscn
-│   ├── ObstacleInteractionChecks.cs
-│   ├── obstacle_interaction_checks.tscn
-│   ├── LeaderChecks.cs
-│   ├── leader_checks.tscn
-│   ├── LeaderInteractionChecks.cs
-│   └── leader_interaction_checks.tscn
-└── docs/architecture.md
+│   ├── run-headless.ps1               # 完整回归入口
+│   ├── *_checks.tscn, *Checks.cs      # 25 组二维 / 三维检查
+│   └── camera_fade_visual.tscn        # 固定快照图形对比
+└── docs/
+    ├── README.md                     # 文档导航
+    ├── architecture.md               # 架构与职责
+    └── manual-acceptance.md           # 维护者实机验收清单
 ```
 
-参数控件在 `ControlPanel.Bind()` 中生成；HUD 布局在 `main.tscn` 的 `UI/UIRoot` 分支中编辑，操作说明正文在两份 `scenes/worlds/world_*.tres` 中编辑，弹层布局在 `scenes/ui/help_overlay.tscn` 中编辑，世界与相机在 `boids_world_2d.tscn` 中编辑。`BoidManager` 是世界根节点，负责生成、统一更新、障碍物接触和计时；`Boid2D` 保存自身运动状态并完成积分，`boid_2d.tscn` 中的 Polygon2D 跟随节点变换显示三角形。`SimulationView` 负责背景、网格和调试绘制入口；`SimulationCamera2D` 处理拖动、缩放、全景复位和视口适配。主控制器通过 `ISimulationWorld` 操作 2D 或 3D 世界；`SimulationFeatures` 声明已实现能力，控制面板据此创建可用控件。主控制器按 `SimulationWorldDefinition` 资源切换世界、独立配置和说明。详见 [架构说明](docs/architecture.md)。
+参数控件在 `ControlPanel.Bind()` 中生成；HUD 布局在 `main.tscn` 的 `UI/UIRoot` 分支中编辑，操作说明正文在两份 `scenes/worlds/world_*.tres` 中编辑，弹层布局在 `scenes/ui/help_overlay.tscn` 中编辑，世界与相机分别在 `boids_world_2d.tscn` / `boids_world_3d.tscn` 中编辑。`BoidManager` 是世界根节点，负责生成、统一更新、障碍物接触和计时；`Boid2D` 保存自身运动状态并完成积分，`boid_2d.tscn` 中的 Polygon2D 跟随节点变换显示三角形。`SimulationView` 负责背景、网格和调试绘制入口；`SimulationCamera2D` 处理拖动、缩放、全景复位和视口适配。主控制器通过 `ISimulationWorld` 操作 2D 或 3D 世界；`SimulationFeatures` 声明已实现能力，控制面板据此创建可用控件。主控制器按 `SimulationWorldDefinition` 资源切换世界、独立配置和说明。详见 [架构说明](docs/architecture.md)。
 
 ## 本机构建说明
 
@@ -239,84 +219,18 @@ dotnet build BoidsLab.csproj --source D:/app/Godot4.7.2/GodotSharp/Tools/nupkgs
 
 `--source` 指向本机 Godot 自带的官方包；其他机器应改成自己的安装路径，或使用常规包还原。项目本身没有写入机器专用绝对路径。
 
-还原完成后，可以使用常规 `dotnet build BoidsLab.sln --no-restore --verbosity minimal` 构建。本次重构已通过该命令，零警告、零错误。
+还原完成后，可以使用常规 `dotnet build BoidsLab.sln --no-restore --verbosity minimal` 构建。最新功能提交已通过该命令，零警告、零错误。编辑器仍曾报告需要 SDK `10.0.11` 而无法加载 `Microsoft.Build`；本轮没有改动系统 SDK，也不将命令行成功视为编辑器构建已修复。
 
 ## 当前验证
 
-使用 `tests/run-headless.ps1 -GodotExecutable <Godot .NET 控制台程序路径>` 构建并运行全部检查，日志位于 `.godot/validation/full-regression/`。该入口会恢复旧二维测试可能触及的用户配置。新增软边界、领队跟随与真实视口输入检查分别为 `boundary_3d_checks`、`leader_3d_checks`、`leader_interaction_3d_checks`。
+截至 2026-10-31，最新功能提交 `3762a3d` 的 C# 命令行构建为零警告、零错误，完整 **25 组无图形回归通过**。其中单步专项包含 137 项断言，数量即时增减专项包含 84 项断言；三维观察、搜索、边界、领队、障碍、配置隔离及既有二维行为均有回归覆盖。
 
-2026-10-30：C# 构建零警告、零错误；23 组二维/三维检查全部通过。原生窗口已检查观察运行、身份高亮、透视切换、群体跟随、滚轮视距及返回观察模式。新增近距离淡化，通过 Compatibility 渲染检查和 40/200 个跟随者、两种视距、四种运动状态的 16 组画面对比。实际键盘飞行手感仍待人工复核。完整结果及限制见 [三维实施验收记录](docs/3d-implementation-validation.md)与[相机淡化验收](docs/camera-fade-3d.md)。
-
-二维与三维单步控制已实现，复用原有运动更新，保留个体、身份、选择和障碍布局。完整 24 组回归通过，新增 137 项单步检查覆盖 60/120 Hz、两种搜索、按钮/焦点/帮助隔离、领队制动及反复世界切换。详见 [单步控制](docs/single-step.md)。
-
-2026-10-31：数量即时增减已实现，完整 25 组无图形回归通过，包含新增的数量提交、稳定增删、障碍保护和随机复现检查。阶段状态见 [开发计划](docs/next-development-plan.md)，真实键盘操控仍待实测。
-
-## 各阶段验证记录
-
-以下为功能逐次引入时的记录；早期三维周期环绕描述已由当前直接坐标、软边界和领队检查替代。
-
-先构建 C# 项目，再使用 Godot .NET 可执行文件运行：
-
-```text
-godot --headless --path . res://tests/world_switch_checks.tscn --quit-after 600
-godot --headless --path . res://tests/spatial_3d_checks.tscn --quit-after 600
-godot --headless --path . res://tests/steering_3d_checks.tscn --quit-after 600
-godot --headless --path . res://tests/observation_3d_checks.tscn --quit-after 600
-godot --headless --path . res://tests/motion_3d_checks.tscn --quit-after 600
-godot --headless --path . res://tests/motion_checks.tscn --quit-after 120
-godot --headless --path . res://tests/neighbor_checks.tscn --quit-after 120
-godot --headless --path . res://tests/steering_checks.tscn --quit-after 120
-godot --headless --path . res://tests/debug_checks.tscn --quit-after 600
-godot --headless --path . res://tests/pause_shortcut_checks.tscn --quit-after 120
-godot --headless --path . res://tests/help_overlay_checks.tscn --quit-after 600
-godot --headless --path . res://tests/obstacle_3d_checks.tscn --quit-after 600
-godot --headless --path . res://tests/obstacle_interaction_3d_checks.tscn --quit-after 600
-godot --headless --path . res://tests/obstacle_avoidance_checks.tscn --quit-after 120
-godot --headless --path . res://tests/obstacle_interaction_checks.tscn --quit-after 600
-godot --headless --path . res://tests/leader_checks.tscn --quit-after 120
-godot --headless --path . res://tests/leader_interaction_checks.tscn --quit-after 600
-godot --headless --path . res://tests/leader_spacing_checks.tscn --quit-after 600
-godot --headless --path . res://tests/boundary_mode_checks.tscn --quit-after 600
+```powershell
+./tests/run-headless.ps1 -GodotExecutable '<Godot .NET 控制台程序路径>'
 ```
 
-检查真实节点的匀速移动、加速度积分、60/120 步时间一致性、线性/角速度上限、角加速度上限、朝向收敛与跨 ±180° 转向、零速处理、暂停/重置、种子复现、无限世界运动、相机缩放/拖动后的可见范围、统计和新旧配置兼容。测试使用 `.godot/validation/` 中的临时配置，不覆盖用户设置。退出码 0 表示通过。本次 C# 构建与运动检查均通过；未进行图形窗口测试或 Boids 算法性能测试。
+该入口构建项目、运行全部检查，并在结束后恢复测试前的二维 / 三维用户配置。日志位于 `.godot/validation/full-regression/`；日志和截图属于本地生成产物，不随源码推送。详细覆盖与限制见[自动验证记录](docs/3d-implementation-validation.md)。
 
-邻居检查以独立的欧氏距离和九幅周期图像的最短距离为参考，验证两种搜索的结果、无重复/无自身、负坐标、百万级坐标、格线与半径边缘、重合位置、随机与密集分布、空群体。还检查步前快照、非连续 ID、两种地图模式下的相机与搜索联动、控件绑定、统计和配置兼容。稀疏场景验证候选次数减少，不把无窗口耗时当作桌面性能基准。
+此前已完成部分原生窗口检查，以及近距离淡化的 16 组固定状态开关对比。连续飞行、相机平滑、视觉效果与真实键盘操控仍由维护者完成[实机验收清单](docs/manual-acceptance.md)，尚未记录最终通过结论。无图形回归不代替实机验收，也不作为桌面性能或图形驱动长期稳定性结论。
 
-三条规则的无窗口检查覆盖单规则方向、分离距离权重、开关与权重即时生效、视口两侧不误判为近邻、完全重合与对称抵消、无邻居、加速度/速度限制、外部输入叠加、快照更新顺序、配置兼容和两种搜索模式的一致性。每种模式还通过 300 个物理步的群集运行检查，验证状态有限、速度与加速度限幅、轨迹确实改变。这些是逻辑验证，不代表已人工评估图形效果。
-
-调试检查通过真实视口输入验证暂停/运行时单选、再次点击取消、拖动区分、UI 隔离、原色恢复、缩放命中和删除/重置清理；同时验证选中对象的感知范围/邻居线、全体方向、切换/取消选择后的范围清理、视口边缘裁剪与大半径几何，以及绘制不改写模拟统计。采用无窗口验证，未进行原生窗口截图或图形效果验收。
-
-操作说明检查在真实主场景中验证默认隐藏、按钮/F2/Esc/点击外部开关、隐藏 HUD 后打开、焦点隔离、空格暂停/继续、保持模拟运行、背景输入阻断、取消待定手势、说明内部滚动和无窗口视口尺寸适配。弹窗检查及现有空格、选择调试检查均通过，未进行图形窗口视觉验收。
-
-障碍物检查覆盖两种形状的前瞻转向、加速度限幅、高速线段接触、沿表面运动、初始重叠、正负方向的出屏运动、视野外障碍物及配置兼容；每种形状还在真实管理器中连续运行 300 步，检查保持间距且持续绕到一侧。编辑交互通过真实视口输入验证创建、互斥选择、拖动、手柄与数值缩放、滚轮区分、删除、弹窗拦截及重置保留布局。以上检查和既有回归检查均在无窗口模式下通过，未进行图形窗口视觉验收。
-
-领队检查覆盖无邻居时的全局跟随、身后位置、移动领队的速度补偿、目标减速与停止、世界坐标目标方向、同一步快照与列表顺序独立性、避障优先、删除/重置清理和配置兼容。真实主场景检查勾选、转移、颜色恢复、普通选择独立、暂停目标、鼠标连续跟随与 UI/障碍物/弹窗隔离、相机变换和 F1 隐藏后的操作。只进行无窗口验证，未人工验收图形效果。
-
-`leader_spacing_checks` 使用真实管理器检查 40/200 个追随者、默认和高跟随权重下的静止及持续转弯场景，验证近邻间距，并确认群体仍跟随领队而非散离。
-
-`boundary_mode_checks` 检查有无领队切换、转移/删除/重置、暂停与运行状态保持、立即回收视口外个体、视角变化，以及两种搜索和调试连线在重复切换后的结果一致性。
-
-`motion_3d_checks` 验证三维匀速/加速、60/120 步积分一致性、线性与角运动限幅、竖直和 180° 朝向收敛、三个坐标轴的正负越界、动态创建/移除、种子复现、相机包围整个空间，以及实际物理回调中的暂停/继续。真实 3D 主场景还验证共享 UI、独立配置保存、重置、F1/F2、未实现控件隐藏和原生网格朝向。全部通过，并通过 2D 空格、弹层、障碍物交互、领队交互和边界切换回归。仅进行了无图形验证，尚未人工验收三维画面。
-
-`observation_3d_checks` 通过真实主场景输入验证右键旋转、中键平移、滚轮锚点与倍率上下限、Home、文本焦点、UI 与帮助隔离、失焦和丢失按键状态时终止拖动，以及无窗口视口尺寸变化。相机操作不改变模拟盒、个体或模拟统计。
-
-`spatial_3d_checks` 以独立的 27 幅周期图像距离为参照，对照两种搜索在面/边/角落、半径边缘、单轴少量格子、非整除边长、重合位置、随机分布、空群体下的结果；验证快照冻结、统计失效和稀疏分布的候选减少。还检查跨边界线长、感知/分离范围裁剪、实际分离半径、大半径与全域感知，以及调试查询不改写模拟统计。三维观察检查覆盖运行/暂停选择、前后遮挡、取消/转移/删除/重置、独立高亮材质和帮助输入隔离。
-
-`steering_3d_checks` 验证单条规则方向、权重与开关、环绕位移、完全重合、对称抵消、分离距离权重、速度/加速度限制、共同快照及外部输入。朴素与网格驱动相同初始群体连续运行 240 步，中途增删个体并修改半径，逐步对照位置、速度和加速度一致性。上述检查仅验证逻辑，不代表人工图形验收或桌面性能基准。
-
-2026-10-29 环境检查：本机 SDK 为 8.0.400，命令行构建零警告、零错误，世界切换、四组三维检查及八组相关二维检查通过。额外运行无图形编辑器导入时，Godot 报告 `.NET Sdk not found. The required version is '10.0.11'`，随后无法加载 `Microsoft.Build`。因此不能把本轮结果视为编辑器内构建验证通过；未改动系统 SDK，也未打开图形运行窗口。
-
-`obstacle_3d_checks` 与 `obstacle_interaction_3d_checks` 新增 1371 项无图形检查，覆盖两种三维障碍物的避让、连续接触、环绕入口、重叠恢复与创建/编辑交互；另外 11 组相关二维/三维回归通过。未进行图形画面验收。
-
-## 初版框架的历史验证
-
-- Godot MCP：确认 4.7.2 Mono，创建/保存场景、启动编辑器和项目；应用运行日志无错误。
-- 运行内检查：70 项全部通过，覆盖按钮状态、所有参数及规则开关、配置保存/恢复、网格实际绘制、未实现统计保持 `--`。
-- 窗口布局：960 × 640、1360 × 860、1920 × 1080 均已运行并检查截图。
-
-验证脚本与截图位于忽略目录 `.godot/validation/`，属于可删除的本地检查产物，不是项目运行依赖。FPS 是界面运行帧率，本次没有进行 Boids 算法性能测试。
-
-当前架构与观察控件已通过 C# 编译和静态结构检查。另以 Godot `--headless` 模式实例化当前主场景，验证了 HUD 隐藏/恢复、输入框焦点释放、按键重复过滤、UI 输入隔离、不同倍率下的左键拖动、在 UI 上松手及失焦时停止拖动、鼠标位置缩放、缩放边界、Home 复位及无窗口视口尺寸适配。检查脚本与日志位于 `.godot/validation/check_observation_controls.gd` 和 `observation-controls.log`。
-
-上述旧版截图不能代表当前布局；本次没有进行原生窗口、截图或图形驱动稳定性测试。无窗口检查验证的是运行逻辑，不代表画面效果或显卡驱动稳定性。
+旧版检查与各阶段结果已移至[历次验证记录](docs/validation-history.md)。
