@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Godot;
 
 namespace BoidsLab;
@@ -26,6 +27,10 @@ public partial class ControlPanel : VBoxContainer
     private Label _populationStatus = null!;
     private int _lastPopulationSubmission;
     private bool _threeDimensional;
+    private VBoxContainer _content = null!;
+    private HBoxContainer _categories = null!;
+    private readonly Dictionary<string, (Button Button, ScrollContainer Scroll)> _pages = new();
+    public string CurrentCategory { get; private set; } = "Basics";
 
     public void Bind(BoidConfig config, string lengthUnit, SimulationFeatures features = SimulationFeatures.All, bool threeDimensional = false)
     {
@@ -42,156 +47,239 @@ public partial class ControlPanel : VBoxContainer
         _leaderStatus = null;
         _selectionStatus = null;
         _separationRadiusWarning = null;
-        AddHeading("模拟控制");
-        var buttons = new HBoxContainer();
+        _pages.Clear();
+        CurrentCategory = "Basics";
+        MouseFilter = MouseFilterEnum.Stop;
+        MouseForcePassScrollEvents = false;
+        AddThemeConstantOverride("separation", 12);
+
+        var buttons = new HBoxContainer { Name = "SimulationActions" };
         AddChild(buttons);
         _startPause = AddButton(buttons, "StartPause", "开始", () => ToggleRunningRequested?.Invoke());
-        _startPause.TooltipText = "空格：暂停 / 继续；无论焦点在哪个控件上都有效，长按不会重复切换。";
-        AddButton(buttons, "Reset", "重置", () => ResetRequested?.Invoke())
-            .TooltipText = "暂停并按当前数量、种子和最大速度重新生成个体；清空加速度与旋转状态。";
+        _startPause.ThemeTypeVariation = "PrimaryButton";
+        _startPause.TooltipText = "空格：暂停 / 继续；输入框有焦点时也有效。";
         _step = AddButton(buttons, "Step", "单步", () => StepRequested?.Invoke());
         _step.Disabled = true;
-        _step.TooltipText = "暂停时推进一个固定物理时间步，完成后仍保持暂停，并刷新调试与统计。"
-            + (threeDimensional ? "操控领队时请先按 Esc 释放鼠标。" : "");
+        _step.TooltipText = "暂停时推进一个物理时间步，完成后仍保持暂停。"
+            + (threeDimensional ? "操控领队时先按 Esc 释放鼠标。" : "");
+        AddButton(buttons, "Reset", "重置", () => ResetRequested?.Invoke())
+            .TooltipText = "按当前请求数量与种子重新生成并暂停；清除领队，保留障碍布局。";
+        _selectionStatus = new Label
+        {
+            Name = "SelectedBoidStatus", Text = "未选择个体 · 点击场景选择",
+            AutowrapMode = TextServer.AutowrapMode.WordSmart, MouseFilter = MouseFilterEnum.Ignore,
+        };
+        _selectionStatus.AddThemeFontSizeOverride("font_size", 13);
+        _selectionStatus.AddThemeColorOverride("font_color", new Color("91a6bb"));
+        AddChild(_selectionStatus);
+        _categories = new HBoxContainer { Name = "Categories" };
+        _categories.AddThemeConstantOverride("separation", 4);
+        AddChild(_categories);
+
+        BeginCategory("Basics", "基础", "数量、生成与运动上限");
+        AddHeading("群体生成");
+        AddPopulationCount(config.BoidCount);
+        AddNumber("RandomSeed", "随机种子", BoidConfig.SeedRange, config.RandomSeed,
+            value => config.RandomSeed = (int)value, "重置后生效；相同种子和参数可复现初始位置与速度。");
+        AddHint("数量在 Enter / 失焦后即时调整；种子在重置后生效。");
+        AddHeading("平移运动");
+        AddNumber("MaxSpeed", "最大速度", BoidConfig.SpeedRange, config.MaxSpeed,
+            value => config.MaxSpeed = (float)value, $"单位：{lengthUnit}/秒；限制速率，也用作初始速率和目标速率。");
+        AddNumber("MaxForce", "最大加速度", BoidConfig.ForceRange, config.MaxForce,
+            value => config.MaxForce = (float)value, $"单位：{lengthUnit}/秒²；限制总加速度，设为零时不能主动转向或刹停。");
+        AddHeading("朝向转动");
+        AddNumber("MaxAngularSpeed", "最大角速度", BoidConfig.AngularSpeedRange, config.MaxAngularSpeedDegrees,
+            value => config.MaxAngularSpeedDegrees = (float)value, "单位：度/秒；朝向旋转速度上限。");
+        AddNumber("MaxAngularAcceleration", "最大角加速度", BoidConfig.AngularAccelerationRange, config.MaxAngularAccelerationDegrees,
+            value => config.MaxAngularAccelerationDegrees = (float)value, "单位：度/秒²；朝向平滑跟随实际运动方向。");
+
+        if (features.HasFlag(SimulationFeatures.NeighborSearch) || features.HasFlag(SimulationFeatures.Flocking))
+        {
+            BeginCategory("Flocking", "群集", "感知范围、搜索方式与三条规则");
+            AddHeading("邻居感知");
+            if (features.HasFlag(SimulationFeatures.NeighborSearch))
+            {
+                AddSearchMode(config, features.HasFlag(SimulationFeatures.UniformGridSearch));
+                AddNumber("PerceptionRadius", "感知半径", BoidConfig.RadiusRange, config.PerceptionRadius,
+                    value => { config.PerceptionRadius = (float)value; RefreshRadiusWarning(config); },
+                    threeDimensional ? "使用实际三维坐标和直接距离，包括半径边缘与重合的其他个体。" : "无领队时使用最短环绕距离，有领队时使用直接距离；不包含自身。");
+            }
+            if (features.HasFlag(SimulationFeatures.Flocking))
+            {
+                AddHeading("分离 · 保持间距");
+                AddToggle("SeparationEnabled", "启用分离", config.SeparationEnabled, value => config.SeparationEnabled = value);
+                AddNumber("SeparationRadius", "分离半径", BoidConfig.SeparationRadiusRange, config.SeparationRadius,
+                    value => { config.SeparationRadius = (float)value; RefreshRadiusWarning(config); }, $"单位：{lengthUnit}；实际分离范围不超过感知半径。");
+                _separationRadiusWarning = AddHint("提醒：分离半径大于感知半径，实际分离范围以感知半径为限。");
+                _separationRadiusWarning.Name = "SeparationRadiusWarning";
+                _separationRadiusWarning.AddThemeColorOverride("font_color", new Color("ffc75a"));
+                RefreshRadiusWarning(config);
+                AddNumber("SeparationWeight", "分离权重", BoidConfig.SeparationRange, config.SeparationWeight,
+                    value => config.SeparationWeight = (float)value, "避开近邻；权重为零时不贡献加速度。");
+                AddHeading("对齐 · 协调方向");
+                AddToggle("AlignmentEnabled", "启用对齐", config.AlignmentEnabled, value => config.AlignmentEnabled = value);
+                AddNumber("AlignmentWeight", "对齐权重", BoidConfig.AlignmentRange, config.AlignmentWeight,
+                    value => config.AlignmentWeight = (float)value, "朝邻居的平均速度方向转向。");
+                AddHeading("聚集 · 保持群体");
+                AddToggle("CohesionEnabled", "启用聚集", config.CohesionEnabled, value => config.CohesionEnabled = value);
+                AddNumber("CohesionWeight", "聚集权重", BoidConfig.CohesionRange, config.CohesionWeight,
+                    value => config.CohesionWeight = (float)value, "朝邻居中心靠拢。");
+                AddHint("规则可独立关闭；权重越大，相应转向贡献越强。三条规则的权重范围为 0–50。");
+            }
+        }
 
         if (features.HasFlag(SimulationFeatures.Leader))
         {
-            AddHeading("领队");
+            BeginCategory("Leader", "领队", "身份、跟随队形与操控");
+            AddHeading("领队身份");
+            _leaderStatus = AddHint("未指定领队");
+            _leaderStatus.Name = "LeaderStatus";
+            _leaderStatus.AddThemeColorOverride("font_color", new Color("d69cff"));
             _leaderToggle = new CheckBox
             {
                 Name = "IsLeader", Text = "设为领队", Disabled = true,
-                TooltipText = threeDimensional ? "先选中个体再勾选，自动操控该领队；Esc 释放鼠标后可右键调整视角。领队模式无边界，取消身份后恢复软边界，保留所有位置。" : "先选中一个个体再勾选；勾选其他个体会转移唯一领队，取消普通选择不会清除领队。有领队时地图无限，解除身份后恢复视口环绕。",
+                TooltipText = threeDimensional ? "先选中个体再勾选，自动进入操控；Esc 释放。取消身份恢复软边界，保留个体位置。" : "将选中个体指定为唯一领队；取消普通选择不清除身份。解除领队后恢复视口环绕。",
             };
             _leaderToggle.Toggled += enabled => LeaderAssignmentRequested?.Invoke(enabled);
-            AddChild(_leaderToggle);
-            _leaderStatus = new Label { Name = "LeaderStatus", Text = "未指定领队", AutowrapMode = TextServer.AutowrapMode.WordSmart };
-            _leaderStatus.AddThemeColorOverride("font_color", new Color("d69cff"));
-            _leaderStatus.AddThemeFontSizeOverride("font_size", 13);
-            AddChild(_leaderStatus);
+            _content.AddChild(_leaderToggle);
+            AddHint(threeDimensional ? "点击场景选择个体，再设为领队。指定后自动操控，Esc 释放鼠标。" : "点击场景选择个体，再设为领队。领队将持续跟随鼠标目标。");
             if (threeDimensional && features.HasFlag(SimulationFeatures.DirectLeaderControl))
             {
                 _leaderControlButton = new Button { Name = "ControlLeader", Text = "操控领队（F3）", Disabled = true,
-                    TooltipText = "捕获鼠标：鼠标调整视角，WASD 按相机视角移动；领队朝向跟随实际运动方向。松键刹停，Esc 释放鼠标；空格暂停时仍可调整视角。" };
+                    TooltipText = "鼠标调整相机视角；WASD 以该视角移动，领队朝向跟随运动方向。空格暂停，Esc 释放。" };
                 _leaderControlButton.Pressed += () => LeaderControlRequested?.Invoke();
-                AddChild(_leaderControlButton);
+                _content.AddChild(_leaderControlButton);
+            }
+            if (features.HasFlag(SimulationFeatures.Flocking))
+            {
+                AddHeading("跟随队形");
+                AddNumber("LeaderFollowDistance", "领队后方距离", BoidConfig.LeaderFollowDistanceRange, config.LeaderFollowDistance,
+                    value => config.LeaderFollowDistance = (float)value, $"单位：{lengthUnit}；领队到跟随区域前缘的间隔，区域随跟随数量扩大。");
+                AddNumber("LeaderFollowWeight", "领队跟随权重", BoidConfig.LeaderFollowWeightRange, config.LeaderFollowWeight,
+                    value => config.LeaderFollowWeight = (float)value, "与群集规则共同作用；设为零关闭跟随贡献，避障仍优先。");
+            }
+            if (threeDimensional)
+            {
+                AddHeading("跟随相机");
                 AddNumber("FollowCameraDistance", "跟随视距", BoidConfig.FollowCameraDistanceRange, config.FollowCameraDistance,
-                    value => config.FollowCameraDistance = (float)value, "领队模式滚轮也可调整，Home 恢复默认距离。领队只接受障碍接触阻挡，不主动绕障。");
-                AddToggle("FadeNearbyBoids", "淡化近处个体", config.FadeNearbyBoids, value => config.FadeNearbyBoids = value);
-                GetNode<CheckBox>("FadeNearbyBoids").TooltipText = "仅在领队跟随视角中淡化贴近相机的普通个体，减轻遮挡；领队和选中个体保留高亮。只影响显示，不改变运动或点击选择。";
+                    value => config.FollowCameraDistance = (float)value, "滚轮也可调整；Home 恢复默认 300。释放鼠标后可右键调整视角，暂停时也有效。");
+                AddToggle("FadeNearbyBoids", "淡化近处个体", config.FadeNearbyBoids, value => config.FadeNearbyBoids = value)
+                    .TooltipText = "减轻近镜头普通个体遮挡；领队和选中个体保持高亮，不改变运动或拾取。";
             }
         }
 
         if (features.HasFlag(SimulationFeatures.Obstacles))
         {
-            AddHeading("障碍物");
+            BeginCategory("Obstacles", "障碍", "创建、编辑与避障行为");
+            AddHeading("障碍编辑");
             Obstacles = new ObstaclePanel { Name = "ObstaclePanel", LengthUnit = lengthUnit, ThreeDimensional = threeDimensional };
-            AddChild(Obstacles);
+            _content.AddChild(Obstacles);
+            AddHeading("避障行为");
             AddToggle("AvoidanceEnabled", "启用避障", config.AvoidanceEnabled, value => config.AvoidanceEnabled = value);
             AddNumber("AvoidanceLookAhead", "前瞻时间", BoidConfig.AvoidanceLookAheadRange, config.AvoidanceLookAhead,
-                value => config.AvoidanceLookAhead = (float)value, "单位：秒；沿当前运动方向提前观察障碍物。数值越大，越早开始避让。");
+                value => config.AvoidanceLookAhead = (float)value, "单位：秒；数值越大，越早开始避让。");
             AddNumber("ObstacleClearance", "避障间距", BoidConfig.ObstacleClearanceRange, config.ObstacleClearance,
                 value => config.ObstacleClearance = (float)value, $"单位：{lengthUnit}；个体中心与障碍物之间预留的距离。");
+            AddHint(threeDimensional ? "普通个体主动避障；领队只受接触阻挡和滑动约束，关闭避障后也不会穿过障碍。" : "关闭避障会同时关闭主动转向与接触约束。");
         }
 
-        if (threeDimensional)
+        if (features.HasFlag(SimulationFeatures.DebugDrawing) || threeDimensional)
         {
-            AddHeading("三维观察范围");
-            AddNumber("WorldWidth", "宽度 X", BoidConfig.WorldWidthRange, config.WorldWidth,
-                value => config.WorldWidth = (float)value, "改变软边界范围，保留个体位置；Home 按新范围取景。");
-            AddNumber("WorldHeight", "高度 Y", BoidConfig.WorldHeightRange, config.WorldHeight,
-                value => config.WorldHeight = (float)value);
-            AddNumber("WorldDepth", "深度 Z", BoidConfig.WorldDepthRange, config.WorldDepth,
-                value => config.WorldDepth = (float)value);
-        }
-
-        AddHeading("群体设置");
-        AddPopulationCount(config.BoidCount);
-        AddNumber("RandomSeed", "随机种子", BoidConfig.SeedRange, config.RandomSeed,
-            value => config.RandomSeed = (int)value, "点击重置后生效；相同种子和参数可复现初始位置与速度。");
-
-        if (features.HasFlag(SimulationFeatures.NeighborSearch))
-        {
-            AddHeading("邻居搜索");
-            AddSearchMode(config, features.HasFlag(SimulationFeatures.UniformGridSearch));
-            AddNumber("PerceptionRadius", "感知半径", BoidConfig.RadiusRange, config.PerceptionRadius,
-                value => { config.PerceptionRadius = (float)value; RefreshRadiusWarning(config); }, threeDimensional ? "三维始终使用实际坐标和直接距离，包含半径边缘及重合的其他个体。" : $"单位：{lengthUnit}；环绕世界使用最短环绕距离，无限世界使用直接距离。包含半径边缘和重合的其他个体，不包含自身。");
-        }
-
-        AddHeading("运动参数");
-        AddNumber("MaxSpeed", "最大速度", BoidConfig.SpeedRange, config.MaxSpeed,
-            value => config.MaxSpeed = (float)value, $"速度上限，单位：{lengthUnit}/秒；也用作重置时的初始速率和有转向目标时的目标速率。");
-        AddNumber("MaxForce", "最大加速度", BoidConfig.ForceRange, config.MaxForce,
-            value => config.MaxForce = (float)value, $"线性加速度模长上限，单位：{lengthUnit}/秒²；限制外部输入与转向输入合成后的总加速度；当前没有加速度输入时不会主动改变速度。");
-        AddNumber("MaxAngularSpeed", "最大角速度", BoidConfig.AngularSpeedRange, config.MaxAngularSpeedDegrees,
-            value => config.MaxAngularSpeedDegrees = (float)value, "朝向旋转速度上限，单位：度/秒。");
-        AddNumber("MaxAngularAcceleration", "最大角加速度", BoidConfig.AngularAccelerationRange, config.MaxAngularAccelerationDegrees,
-            value => config.MaxAngularAccelerationDegrees = (float)value, "角速度变化率上限，单位：度/秒²；控制朝向平滑跟随运动方向。");
-
-        if (features.HasFlag(SimulationFeatures.Flocking))
-        {
-            AddHeading("转向规则");
-            if (features.HasFlag(SimulationFeatures.Leader))
-            {
-                AddNumber("LeaderFollowDistance", "领队后方距离", BoidConfig.LeaderFollowDistanceRange, config.LeaderFollowDistance,
-                    value => config.LeaderFollowDistance = (float)value, $"单位：{lengthUnit}；领队到身后跟随区域前缘的间隔；区域随跟随数量扩大，不受发现领队的感知半径限制。");
-                AddNumber("LeaderFollowWeight", "领队跟随权重", BoidConfig.LeaderFollowWeightRange, config.LeaderFollowWeight,
-                    value => config.LeaderFollowWeight = (float)value, "跟随与原有群集规则共同作用；设为零关闭跟随贡献，避障仍优先。");
-            }
-            AddNumber("SeparationRadius", "分离半径", BoidConfig.SeparationRadiusRange, config.SeparationRadius,
-                value => { config.SeparationRadius = (float)value; RefreshRadiusWarning(config); }, $"单位：{lengthUnit}；仅避开此范围内的邻居，实际范围不超过感知半径。");
-            _separationRadiusWarning = new Label
-            {
-                Name = "SeparationRadiusWarning",
-                Text = "提醒：分离半径大于感知半径，实际分离范围以感知半径为限。",
-                AutowrapMode = TextServer.AutowrapMode.WordSmart,
-                MouseFilter = MouseFilterEnum.Ignore,
-            };
-            _separationRadiusWarning.AddThemeColorOverride("font_color", new Color("ffc75a"));
-            _separationRadiusWarning.AddThemeFontSizeOverride("font_size", 13);
-            AddChild(_separationRadiusWarning);
-            RefreshRadiusWarning(config);
-            AddToggle("SeparationEnabled", "启用分离规则", config.SeparationEnabled, value => config.SeparationEnabled = value);
-            AddNumber("SeparationWeight", "分离权重", BoidConfig.SeparationRange, config.SeparationWeight,
-                value => config.SeparationWeight = (float)value, "避开近邻；越近的邻居对分离方向影响越大，权重为零时不贡献加速度。");
-            AddToggle("AlignmentEnabled", "启用对齐规则", config.AlignmentEnabled, value => config.AlignmentEnabled = value);
-            AddNumber("AlignmentWeight", "对齐权重", BoidConfig.AlignmentRange, config.AlignmentWeight,
-                value => config.AlignmentWeight = (float)value, "朝邻居的平均速度方向转向，目标速率为最大速度。");
-            AddToggle("CohesionEnabled", "启用聚集规则", config.CohesionEnabled, value => config.CohesionEnabled = value);
-            AddNumber("CohesionWeight", "聚集权重", BoidConfig.CohesionRange, config.CohesionWeight,
-                value => config.CohesionWeight = (float)value, "朝邻居中心靠拢，按当前地图模式的位移计算中心方向。");
-        }
-
-        if (features.HasFlag(SimulationFeatures.DebugDrawing))
-        {
-            AddHeading("调试可视化");
-            if (!features.HasFlag(SimulationFeatures.Leader) || threeDimensional)
-            {
-                _selectionStatus = new Label { Name = "SelectedBoidStatus", Text = "未选择个体" };
-                AddChild(_selectionStatus);
-            }
-            AddToggle("ShowGrid", "显示网格", config.ShowGrid, value => config.ShowGrid = value);
+            BeginCategory("Display", "显示", "观察范围、参考线与调试可视化");
             if (threeDimensional)
-                AddToggle("ShowBoundary", "显示边界", config.ShowBoundary, value => config.ShowBoundary = value);
-            AddToggle("ShowNeighbors", "显示选中个体的邻居连线", config.ShowNeighbors, value => config.ShowNeighbors = value);
-            AddToggle("ShowPerceptionRadius", "显示选中个体的感知范围", config.ShowPerceptionRadius, value => config.ShowPerceptionRadius = value);
-            if (features.HasFlag(SimulationFeatures.Flocking))
-                AddToggle("ShowSeparationRadius", "显示选中个体的分离半径", config.ShowSeparationRadius, value => config.ShowSeparationRadius = value);
-            AddToggle("ShowVelocity", "显示全体运动方向", config.ShowVelocity, value => config.ShowVelocity = value);
+            {
+                AddHeading("三维观察范围");
+                AddNumber("WorldWidth", "宽度 X", BoidConfig.WorldWidthRange, config.WorldWidth, value => config.WorldWidth = (float)value, "单位：世界单位；立即更新观察范围，保留个体位置与相机视角。Home 重新取景。");
+                AddNumber("WorldHeight", "高度 Y", BoidConfig.WorldHeightRange, config.WorldHeight, value => config.WorldHeight = (float)value, "单位：世界单位；立即更新观察范围，保留个体位置与相机视角。Home 重新取景。");
+                AddNumber("WorldDepth", "深度 Z", BoidConfig.WorldDepthRange, config.WorldDepth, value => config.WorldDepth = (float)value, "单位：世界单位；立即更新观察范围，保留个体位置与相机视角。Home 重新取景。");
+                AddHint("范围独立于相机，修改不搬移个体；Home 重新取景。有领队时暂不约束边界。");
+            }
+            if (features.HasFlag(SimulationFeatures.DebugDrawing))
+            {
+                AddHeading("场景参考");
+                AddToggle("ShowGrid", "显示网格", config.ShowGrid, value => config.ShowGrid = value);
+                if (threeDimensional)
+                    AddToggle("ShowBoundary", "显示边界", config.ShowBoundary, value => config.ShowBoundary = value)
+                        .TooltipText = "只控制边框显示，不关闭软边界；领队模式下边框和网格均隐藏。";
+                AddHeading("选中个体的调试");
+                AddHint("先在场景中选择一个个体，再查看范围和邻居关系。");
+                AddToggle("ShowNeighbors", "显示邻居连线", config.ShowNeighbors, value => config.ShowNeighbors = value);
+                AddToggle("ShowPerceptionRadius", "显示感知范围", config.ShowPerceptionRadius, value => config.ShowPerceptionRadius = value);
+                if (features.HasFlag(SimulationFeatures.Flocking))
+                    AddToggle("ShowSeparationRadius", "显示分离半径", config.ShowSeparationRadius, value => config.ShowSeparationRadius = value);
+                AddHeading("全体个体的调试");
+                AddToggle("ShowVelocity", "显示运动方向", config.ShowVelocity, value => config.ShowVelocity = value);
+            }
         }
-
         if (!features.HasFlag(SimulationFeatures.Flocking))
         {
-            AddHeading("当前阶段");
-            AddChild(new Label
-            {
-                Text = features.HasFlag(SimulationFeatures.NeighborSearch)
-                    ? features.HasFlag(SimulationFeatures.UniformGridSearch)
-                        ? "已实现基础运动、观察以及朴素 / 网格邻居搜索。群体规则、领队和避障尚未实现；邻居关系暂不改变运动。"
-                        : "已实现基础运动、观察与朴素邻居搜索。当前世界未开放网格、群体规则、领队和避障；邻居关系暂不改变运动。"
-                    : "仅实现个体创建与基础运动。邻居搜索、群体规则、领队、避障及调试绘制尚未实现。",
-                AutowrapMode = TextServer.AutowrapMode.WordSmart,
-            });
+            _content = (VBoxContainer)_pages["Basics"].Scroll.GetChild(0);
+            AddHint("当前世界仅开放已实现的能力；未开放的功能不显示。");
         }
+        SelectCategory("Basics");
+    }
+
+    private void BeginCategory(string id, string title, string tooltip)
+    {
+        var button = new Button
+        {
+            Name = "Category" + id, Text = title, TooltipText = tooltip, ToggleMode = true,
+            SizeFlagsHorizontal = SizeFlags.ExpandFill, ThemeTypeVariation = "CategoryButton",
+        };
+        _categories.AddChild(button);
+        var scroll = new ScrollContainer
+        {
+            Name = id + "Page", SizeFlagsVertical = SizeFlags.ExpandFill,
+            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
+            FollowFocus = true, MouseFilter = MouseFilterEnum.Stop, MouseForcePassScrollEvents = false,
+            Visible = false,
+        };
+        AddChild(scroll);
+        _content = new VBoxContainer { Name = "Content", SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        _content.AddThemeConstantOverride("separation", 10);
+        scroll.AddChild(_content);
+        _pages.Add(id, (button, scroll));
+        button.Pressed += () => SelectCategory(id);
+    }
+
+    public void SelectCategory(string id)
+    {
+        if (!_pages.ContainsKey(id)) return;
+        // 隐藏前提交草稿并释放焦点，避免跨页后 WASD 仍被不可见输入框截获。
+        CommitPendingEdits();
+        if (GetViewport().GuiGetFocusOwner() is { } focus)
+            foreach (var page in _pages.Values)
+                if (page.Scroll.IsAncestorOf(focus)) { focus.ReleaseFocus(); break; }
+        CurrentCategory = id;
+        foreach (var (key, page) in _pages)
+        {
+            page.Button.SetPressedNoSignal(key == id);
+            page.Scroll.Visible = key == id;
+        }
+    }
+
+    public void RevealControl(Control control)
+    {
+        foreach (var (id, page) in _pages)
+        {
+            if (!page.Scroll.IsAncestorOf(control)) continue;
+            SelectCategory(id);
+            // 布局完成后再滚动；页签与模拟控制始终固定在滚动区外。
+            Callable.From(() =>
+            {
+                if (IsInstanceValid(control) && control.IsVisibleInTree()) page.Scroll.EnsureControlVisible(control);
+            }).CallDeferred();
+            return;
+        }
+    }
+
+    private Label AddHint(string text)
+    {
+        var hint = new Label { Text = text, AutowrapMode = TextServer.AutowrapMode.WordSmart, MouseFilter = MouseFilterEnum.Ignore };
+        hint.AddThemeColorOverride("font_color", new Color("91a6bb"));
+        hint.AddThemeFontSizeOverride("font_size", 13);
+        _content.AddChild(hint);
+        return hint;
     }
 
     public void RefreshRunState(bool running, bool canStep)
@@ -241,14 +329,14 @@ public partial class ControlPanel : VBoxContainer
         input.GetLineEdit().TextSubmitted += _ => { if (input == _populationInput) SubmitPopulationCount(true); };
         input.GetLineEdit().FocusExited += () => { if (input == _populationInput) SubmitPopulationCount(false); };
         row.AddChild(input);
-        AddChild(row);
+        _content.AddChild(row);
         _populationStatus = new Label
         {
             Name = "PopulationStatus", AutowrapMode = TextServer.AutowrapMode.WordSmart,
             MouseFilter = MouseFilterEnum.Ignore,
         };
         _populationStatus.AddThemeFontSizeOverride("font_size", 13);
-        AddChild(_populationStatus);
+        _content.AddChild(_populationStatus);
     }
 
     private void SubmitPopulationCount(bool explicitSubmit)
@@ -262,7 +350,9 @@ public partial class ControlPanel : VBoxContainer
 
     public void RefreshLeaderState(int? selectedId, int? leaderId, bool hasTarget, bool controlActive = false, bool running = false)
     {
-        if (_selectionStatus is not null) _selectionStatus.Text = selectedId.HasValue ? $"已选择个体：#{selectedId}" : "未选择个体";
+        if (_selectionStatus is not null) _selectionStatus.Text = selectedId.HasValue
+            ? $"已选择个体：#{selectedId} · 领队页设定"
+            : leaderId.HasValue ? $"领队 #{leaderId} · {(_threeDimensional ? controlActive ? "操控中 · Esc 释放" : "待操控 · F3 进入" : "跟随鼠标")}" : "未选择个体 · 点击场景选择";
         if (_leaderToggle is null || _leaderStatus is null) return;
         if (_leaderControlButton is not null)
         {
@@ -311,15 +401,15 @@ public partial class ControlPanel : VBoxContainer
             ConfigurationChanged?.Invoke();
         };
         row.AddChild(input);
-        AddChild(row);
+        _content.AddChild(row);
     }
 
     private void AddHeading(string text)
     {
-        var label = new Label { Text = text };
+        var label = new Label { Text = text, CustomMinimumSize = new Vector2(0, 30), VerticalAlignment = VerticalAlignment.Bottom };
         label.AddThemeColorOverride("font_color", new Color("78dcca"));
         label.AddThemeFontSizeOverride("font_size", 13);
-        AddChild(label);
+        _content.AddChild(label);
     }
 
     private void AddNumber(string name, string title, BoidConfig.NumberRange range, double current,
@@ -338,10 +428,10 @@ public partial class ControlPanel : VBoxContainer
             ConfigurationChanged?.Invoke();
         };
         row.AddChild(input);
-        AddChild(row);
+        _content.AddChild(row);
     }
 
-    private void AddToggle(string name, string title, bool current, Action<bool> setter)
+    private CheckBox AddToggle(string name, string title, bool current, Action<bool> setter)
     {
         var input = new CheckBox { Name = name, Text = title, ButtonPressed = current };
         input.Toggled += value =>
@@ -349,6 +439,7 @@ public partial class ControlPanel : VBoxContainer
             setter(value);
             ConfigurationChanged?.Invoke();
         };
-        AddChild(input);
+        _content.AddChild(input);
+        return input;
     }
 }

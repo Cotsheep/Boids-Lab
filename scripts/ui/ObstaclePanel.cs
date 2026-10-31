@@ -15,6 +15,8 @@ public partial class ObstaclePanel : VBoxContainer
     public bool ThreeDimensional { get; set; }
 
     private Label _status = null!;
+    private HBoxContainer _widthRow = null!;
+    private HBoxContainer _editRow = null!;
     private Label _widthLabel = null!;
     private SpinBox _width = null!;
     private SpinBox _height = null!;
@@ -32,17 +34,17 @@ public partial class ObstaclePanel : VBoxContainer
         AddChild(createRow);
         AddButton(createRow, ThreeDimensional ? "AddBox" : "AddRectangle", ThreeDimensional ? "添加长方体" : "添加矩形",
             () => CreateRequested?.Invoke(ThreeDimensional ? ObstacleShape.Box : ObstacleShape.Rectangle))
-            .TooltipText = ThreeDimensional ? "点击场景，在穿过观察中心的视角平面放置长方体；中心限制在模拟盒内。" : "进入放置模式，在场景中点击创建矩形障碍物。";
+            .TooltipText = ThreeDimensional ? "点击场景，在穿过观察中心的视角平面放置长方体；可放置在观察范围外。" : "进入放置模式，在场景中点击创建矩形障碍物。";
         AddButton(createRow, ThreeDimensional ? "AddSphere" : "AddCircle", ThreeDimensional ? "添加球体" : "添加圆形",
             () => CreateRequested?.Invoke(ThreeDimensional ? ObstacleShape.Sphere : ObstacleShape.Circle))
-            .TooltipText = ThreeDimensional ? "点击场景，在穿过观察中心的视角平面放置球体；中心限制在模拟盒内。" : "进入放置模式，在场景中点击创建圆形障碍物。";
+            .TooltipText = ThreeDimensional ? "点击场景，在穿过观察中心的视角平面放置球体；可放置在观察范围外。" : "进入放置模式，在场景中点击创建圆形障碍物。";
 
         _status = new Label { Name = "ObstacleStatus", AutowrapMode = TextServer.AutowrapMode.WordSmart };
         _status.AddThemeColorOverride("font_color", new Color("91a6bb"));
         _status.AddThemeFontSizeOverride("font_size", 13);
         AddChild(_status);
 
-        var widthRow = new HBoxContainer();
+        var widthRow = _widthRow = new HBoxContainer();
         _widthLabel = new Label { Text = "宽度", SizeFlagsHorizontal = SizeFlags.ExpandFill };
         widthRow.AddChild(_widthLabel);
         _width = AddSizeInput(widthRow, "ObstacleWidth");
@@ -60,7 +62,7 @@ public partial class ObstaclePanel : VBoxContainer
         _height.ValueChanged += OnSizeChanged;
         _depth.ValueChanged += OnSizeChanged;
 
-        var editRow = new HBoxContainer();
+        var editRow = _editRow = new HBoxContainer();
         AddChild(editRow);
         _delete = AddButton(editRow, "DeleteObstacle", "删除选中", () => DeleteRequested?.Invoke());
         _delete.TooltipText = "删除当前选中的障碍物；也可按 Delete，编辑输入框时不会删除。";
@@ -79,10 +81,13 @@ public partial class ObstaclePanel : VBoxContainer
         bool editable = selected.HasValue && !placement.HasValue;
         _status.Text = placement.HasValue
             ? $"正在放置{ShapeName(placement.Value)}：点击场景"
-            : selected.HasValue ? $"已选中{ShapeName(selected.Value.Shape)}障碍物" : "未选择障碍物";
+            : selected.HasValue ? $"已选中{ShapeName(selected.Value.Shape)}障碍物" : "选择上方形状后点击场景放置；选中已有障碍可编辑尺寸。";
         _widthLabel.Text = circle ? "直径" : "宽度";
-        _heightRow.Visible = !circle;
-        _depthRow.Visible = ThreeDimensional && !circle;
+        _widthRow.Visible = editable;
+        _heightRow.Visible = editable && !circle;
+        _depthRow.Visible = editable && ThreeDimensional && !circle;
+        _editRow.Visible = editable || placement.HasValue;
+        _delete.Visible = editable;
         _width.Editable = _height.Editable = _depth.Editable = editable;
         _width.SetValueNoSignal(selected?.Width ?? Obstacle2D.DefaultRectangleSize.X);
         _height.SetValueNoSignal(selected?.Height ?? Obstacle2D.DefaultRectangleSize.Y);

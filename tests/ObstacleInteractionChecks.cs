@@ -31,6 +31,8 @@ public partial class ObstacleInteractionChecks : Node
             _camera = _world.GetNode<SimulationCamera2D>("Camera2D");
             _editor = _world.GetNode<ObstacleEditor2D>("ObstacleEditor");
             var panel = game.GetNode<ControlPanel>("%ControlPanel");
+            panel.SelectCategory("Obstacles");
+            await Frame();
             var help = game.GetNode<HelpOverlay>("%HelpOverlay");
             var hud = game.GetNode<Control>("%UIRoot");
             var addRectangle = (Button)panel.Obstacles!.FindChild("AddRectangle", true, false);

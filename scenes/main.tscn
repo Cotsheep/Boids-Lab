@@ -50,7 +50,7 @@ theme_override_constants/separation = 16
 [node name="Header" type="HBoxContainer" parent="UI/UIRoot/Layout/Column" unique_id=382974600]
 layout_mode = 2
 mouse_filter = 2
-theme_override_constants/separation = 24
+theme_override_constants/separation = 16
 
 [node name="Identity" type="VBoxContainer" parent="UI/UIRoot/Layout/Column/Header" unique_id=600973289]
 layout_mode = 2
@@ -68,7 +68,7 @@ text = "BoidsLab"
 layout_mode = 2
 theme_override_colors/font_color = Color(0.57, 0.65, 0.73, 1)
 theme_override_font_sizes/font_size = 13
-text = "请输入文本"
+text = "群集行为实验室"
 
 [node name="RunStatus" type="Label" parent="UI/UIRoot/Layout/Column/Header" unique_id=953573280]
 unique_name_in_owner = true
@@ -100,7 +100,7 @@ size_flags_vertical = 4
 tooltip_text = "隐藏主界面，按 F1 可重新显示；F2 可打开操作说明。"
 focus_mode = 0
 mouse_force_pass_scroll_events = false
-text = "隐藏UI · F1"
+text = "隐藏界面 · F1"
 
 [node name="HudContent" type="HBoxContainer" parent="UI/UIRoot/Layout/Column" unique_id=1053399029]
 layout_mode = 2
@@ -109,17 +109,11 @@ mouse_filter = 2
 theme_override_constants/separation = 20
 
 [node name="ControlsCard" type="PanelContainer" parent="UI/UIRoot/Layout/Column/HudContent" unique_id=642795156]
-custom_minimum_size = Vector2(340, 0)
+custom_minimum_size = Vector2(360, 0)
 layout_mode = 2
 mouse_force_pass_scroll_events = false
 
-[node name="Scroll" type="ScrollContainer" parent="UI/UIRoot/Layout/Column/HudContent/ControlsCard" unique_id=766896500]
-layout_mode = 2
-mouse_filter = 0
-follow_focus = true
-horizontal_scroll_mode = 0
-
-[node name="ControlPanel" type="VBoxContainer" parent="UI/UIRoot/Layout/Column/HudContent/ControlsCard/Scroll" unique_id=176356882]
+[node name="ControlPanel" type="VBoxContainer" parent="UI/UIRoot/Layout/Column/HudContent/ControlsCard" unique_id=176356882]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
@@ -146,7 +140,7 @@ text = "二维世界"
 layout_mode = 2
 theme_override_colors/font_color = Color(0.57, 0.65, 0.73, 1)
 theme_override_font_sizes/font_size = 12
-text = "调试观察 / 05"
+text = "空格 暂停 / 继续"
 
 [node name="WorldCoordinates" type="Label" parent="UI/UIRoot/Layout/Column/HudContent/WorldInfo" unique_id=121695228]
 unique_name_in_owner = true
@@ -154,6 +148,7 @@ layout_mode = 2
 theme_override_colors/font_color = Color(0.45, 0.56, 0.65, 1)
 theme_override_font_sizes/font_size = 12
 text = "世界坐标"
+autowrap_mode = 3
 
 [node name="CorePlaceholder" type="VBoxContainer" parent="UI/UIRoot/Layout/Column/HudContent/WorldInfo" unique_id=1469265937]
 unique_name_in_owner = true

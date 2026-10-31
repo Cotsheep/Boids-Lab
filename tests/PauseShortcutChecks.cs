@@ -44,6 +44,7 @@ public partial class PauseShortcutChecks : Node
             foreach (Control? focus in new Control?[] { null, start, reset, checkbox, input, mode })
             {
                 GetViewport().GuiGetFocusOwner()?.ReleaseFocus();
+                if (focus is not null) panel.RevealControl(focus);
                 focus?.GrabFocus();
                 world.SetRunning(false);
                 bool previousCheck = checkbox.ButtonPressed;
@@ -67,6 +68,7 @@ public partial class PauseShortcutChecks : Node
                     "Space is consumed before GUI activation and does not save settings");
             }
 
+            panel.SelectCategory("Basics");
             input.GrabFocus();
             KeyEvent(Key.F1, true);
             KeyEvent(Key.F1, false);

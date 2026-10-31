@@ -356,6 +356,12 @@ Godot → BoidManager3D._PhysicsProcess(delta)
 
 `SimulationView3D` 管理跟随视角的近距离淡化：启用时复制并复用一份普通材质，使用 PixelAlpha 在距相机 120～240 世界单位之间渐变。`Boid3D` 的领队和选择外观优先于视图材质；退出跟随或关闭开关后恢复原材质。`FadeNearbyBoids` 默认开启，保存到 `visualization/fade_nearby_boids_3d`，只在三维界面提供开关。显示不改变运动、邻居搜索、拾取或相机距离；新建、转移、取消身份与重置时均刷新。实现选择与图形复现见 [相机淡化说明](camera-fade-3d.md)。
 
+## 参数面板分类
+
+`ControlPanel` 保留统一事件与配置绑定，内部使用固定操作栏、分类按钮和五个独立 `ScrollContainer`；隐藏页不参与布局或键盘遍历。每个世界重新 Bind 时回到基础页，日常切换分类保留各页滚动位置。`SelectCategory()` 在隐藏旧页前提交草稿并释放旧页焦点，`RevealControl()` 切换到控件所属页，等待布局后滚动到目标。外部不再依赖面板父节点是 ScrollContainer。
+
+`ObstaclePanel` 按选择 / 放置状态显示尺寸和操作按钮，不变更障碍编辑事件或碰撞逻辑。界面分组与验证见[界面说明](ui-layout.md)。
+
 ## 开发状态与范围
 
 本轮约定的三维观察与领队、近距离淡化、二维/三维单步控制及数量即时增减均已实现。剩余图形效果与真实键盘操控由维护者验收，见[实机验收清单](manual-acceptance.md)与[计划完成记录](next-development-plan.md)。
@@ -364,7 +370,7 @@ Godot → BoidManager3D._PhysicsProcess(delta)
 
 ## 验证边界
 
-2026-10-31 当前构建零警告、零错误，完整 25 组无图形回归通过，结果见[自动验证与验收状态](3d-implementation-validation.md)。近距离淡化另有此前完成的 16 组同状态画面对比；键盘自动操作的扫描码异常仍单独记录，不将逻辑检查等同于完整飞行手感验收。
+2026-10-31 当前构建零警告、零错误，完整 26 组无图形回归通过，结果见[自动验证与验收状态](3d-implementation-validation.md)。近距离淡化另有此前完成的 16 组同状态画面对比；键盘自动操作的扫描码异常仍单独记录，不将逻辑检查等同于完整飞行手感验收。
 
 以下二维历史检查保持原语义，三维检查以当前直接坐标实现为准。
 

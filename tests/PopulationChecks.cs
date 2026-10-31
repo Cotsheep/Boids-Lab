@@ -101,7 +101,7 @@ public partial class PopulationChecks : Node
         edit.ReleaseFocus();
         Panel.PopulationCountRequested -= CountRequest;
         // 结束焦点引起的面板滚动，后续世界点击从可见画面发出。
-        Panel.GetParent<ScrollContainer>().ScrollVertical = 0;
+        Panel.SelectCategory("Basics");
         await Frame();
     }
 
@@ -314,7 +314,7 @@ public partial class PopulationChecks : Node
 
     private void CheckLimitMessage()
     {
-        var status = Panel.GetNode<Label>("PopulationStatus");
+        var status = (Label)Panel.FindChild("PopulationStatus", true, false);
         var saved = new BoidConfig();
         Check(status.Text.Contains("实际 1") && status.Text.Contains("重试")
             && saved.Load(_app.ConfigurationPath) == Error.Ok && saved.BoidCount == 6,

@@ -28,6 +28,8 @@ public partial class LeaderInteractionChecks : Node
             var camera = world.GetNode<SimulationCamera2D>("Camera2D");
             var editor = world.GetNode<ObstacleEditor2D>("ObstacleEditor");
             var panel = game.GetNode<ControlPanel>("%ControlPanel");
+            panel.SelectCategory("Leader");
+            await Frame();
             var help = game.GetNode<HelpOverlay>("%HelpOverlay");
             var hud = game.GetNode<Control>("%UIRoot");
             var checkbox = (CheckBox)panel.FindChild("IsLeader", true, false);

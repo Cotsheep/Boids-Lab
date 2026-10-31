@@ -42,7 +42,7 @@ public partial class LeaderInteraction3DChecks : Node
             Click(Screen(a));
             Check(_world.SelectedBoid == a, "Observation click selects the future leader");
             Tap(Key.F1);
-            panel.GetParent<ScrollContainer>().EnsureControlVisible(checkbox);
+            panel.RevealControl(checkbox);
             await Frame();
             Click(checkbox.GetGlobalRect().GetCenter());
             Check(_world.Leader == a && control.Disabled && _world.IsLeaderControlActive && !_world.IsRunning
@@ -99,6 +99,8 @@ public partial class LeaderInteraction3DChecks : Node
             CheckReleasedView(a);
             Tap(Key.F1);
             var speed = (SpinBox)panel.FindChild("MaxSpeed", true, false);
+            panel.RevealControl(speed);
+            await Frame();
             speed.GetLineEdit().GrabFocus();
             Tap(Key.F3);
             KeyEvent(Key.W, true);
@@ -107,10 +109,10 @@ public partial class LeaderInteraction3DChecks : Node
             KeyEvent(Key.W, false);
             speed.GetLineEdit().ReleaseFocus();
             await Frame(); // Let the deferred focus-scroll finish before explicitly scrolling back.
-            panel.GetParent<ScrollContainer>().EnsureControlVisible(control);
+            panel.RevealControl(control);
             await Frame();
             Click(control.GetGlobalRect().GetCenter());
-            Check(_world.IsLeaderControlActive && GetViewport().GuiGetFocusOwner() is null, $"Control button clears GUI focus and captures: active={_world.IsLeaderControlActive}, focus={GetViewport().GuiGetFocusOwner()}, hud={hud.Visible}, disabled={control.Disabled}, rect={control.GetGlobalRect()}, scroll={panel.GetParent<ScrollContainer>().ScrollVertical}");
+            Check(_world.IsLeaderControlActive && GetViewport().GuiGetFocusOwner() is null, $"Control button clears GUI focus and captures: active={_world.IsLeaderControlActive}, focus={GetViewport().GuiGetFocusOwner()}, hud={hud.Visible}, disabled={control.Disabled}, rect={control.GetGlobalRect()}, scroll={panel.CurrentCategory}");
             Tap(Key.F2);
             Check(help.Visible && !_world.IsLeaderControlActive, "Help releases control");
             Tap(Key.F3);

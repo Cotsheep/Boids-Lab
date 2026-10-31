@@ -8,7 +8,14 @@ script = ExtResource("1_definition")
 Title = "二维（2D）"
 Scene = ExtResource("2_scene")
 ConfigurationPath = "user://boids_lab.cfg"
-Instructions = "[color=#78dcca][b]键盘与鼠标[/b][/color]
+Instructions = "[color=#78dcca][b]二维观察与鼠标领队[/b][/color]
+[color=#78dcca][b]参数分类[/b][/color]
+开始 / 暂停、单步与重置固定在面板顶部，不随参数滚动。
+基础：个体数量、随机种子和运动上限。群集：邻居感知与分离、对齐、聚集规则。
+领队：身份、跟随队形。障碍：创建、选中编辑与避障。显示：参考网格和调试。
+每页独立滚动；切换分类会提交正在编辑的数字，世界切换后回到基础页。
+
+[color=#78dcca][b]键盘与鼠标[/b][/color]
 空格：暂停 / 继续；弹窗打开时也有效，长按不会重复切换。
 F1：显示 / 隐藏主界面。
 F2：打开 / 关闭操作说明；主界面隐藏时仍然有效。

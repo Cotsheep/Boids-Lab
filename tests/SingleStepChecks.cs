@@ -131,7 +131,7 @@ public partial class SingleStepChecks : Node
         Tap(Key.Enter);
         Check(Snapshot().SequenceEqual(state), "Enter in a numeric editor does not activate single-step");
         StepButton.GrabFocus();
-        _panel.GetParent<ScrollContainer>().EnsureControlVisible(StepButton);
+        _panel.RevealControl(StepButton);
         await Frame();
         Tap(Key.Enter);
         Check(!Snapshot().SequenceEqual(state) && !World.IsRunning, "Enter on the step button advances once and remains paused");

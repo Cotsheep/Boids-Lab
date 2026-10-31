@@ -22,7 +22,7 @@ public partial class CameraFade3DChecks : Node
             var world = app.GetNode<BoidManager3D>("World/BoidsWorld3D");
             var camera = world.GetNode<SimulationCamera3D>("SimulationView/Camera3D");
             var view = world.GetNode<SimulationView3D>("SimulationView");
-            var toggle = app.GetNode<ControlPanel>("%ControlPanel").GetNode<CheckBox>("FadeNearbyBoids");
+            var toggle = (CheckBox)app.GetNode<ControlPanel>("%ControlPanel").FindChild("FadeNearbyBoids", true, false);
             var leader = world.SpawnBoid(Vector3.Zero, Vector3.Zero);
             var ordinary = world.SpawnBoid(Vector3.Back * 180, Vector3.Zero);
             var body = ordinary.GetNode<MeshInstance3D>("Body");

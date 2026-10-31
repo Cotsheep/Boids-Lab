@@ -125,7 +125,6 @@ public partial class MainController : Node
             _world.SetRunning(false);
             _controls.Bind(_config, _world.LengthUnit, _world.Features, _worldNode is Node3D);
             BindWorld();
-            _controls.GetParent<ScrollContainer>().ScrollVertical = 0;
             _help.SetInstructions(definition.Instructions);
             _worldSelector.Select(index);
             GetNode<Label>("%WorldTitle").Text = _world.DisplayName;
@@ -355,6 +354,7 @@ public partial class MainController : Node
             ? (_world.CoreImplemented ? "运行中" : "已请求运行")
             : "已暂停";
         _status.Text = _world.CoreImplemented ? runState : $"{runState} · 核心尚未实现";
+        _status.AddThemeColorOverride("font_color", new Color(_world.IsRunning ? "78dcca" : "ffc75a"));
         _placeholder.Visible = !_world.CoreImplemented;
         _debug.Text = _storageWarning ?? $"请求数量：{_config.BoidCount}  |  随机种子：{_config.RandomSeed}  |  场景：{_world.DisplayName}";
         _stats.Refresh(_world.Stats, Engine.GetFramesPerSecond());

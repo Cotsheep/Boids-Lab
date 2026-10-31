@@ -1,6 +1,6 @@
 # 自动验证与实机验收状态
 
-更新日期：2026-10-31。原三维实施基线为 `9fd3062`，当前最新功能提交为 `3762a3d`，已包含近距离淡化、单步控制、半径提醒和数量即时增减。约定范围内的代码开发已完成；剩余图形效果及真实键盘操控由维护者手动验收，尚未记录最终通过结论。操作项目见[实机验收清单](manual-acceptance.md)，交付范围见[计划完成记录](next-development-plan.md)。实际提交与远程同步状态以 Git 为准。
+更新日期：2026-10-31。原三维实施基线为 `9fd3062`，数量增减基线为 `3762a3d`，后续已加入分类界面；当前代码包含近距离淡化、单步控制、半径提醒和数量即时增减。约定范围内的代码开发已完成；剩余图形效果及真实键盘操控由维护者手动验收，尚未记录最终通过结论。操作项目见[实机验收清单](manual-acceptance.md)，交付范围见[计划完成记录](next-development-plan.md)。实际提交与远程同步状态以 Git 为准。
 
 后续操控调整：领队与普通个体统一按实际速度方向平滑转向，相机目标视角只决定相机和 WASD 的移动参考。侧移、后退时领队转向运动方向；静止时转动相机不会主动改变领队朝向。已同步 F2 与控件说明，并通过构建及 leader_3d、leader_interaction_3d、motion_3d、world_switch 四组回归；其中领队检查为 3549 项，包含静止观察、视角参考下的侧移/后退、角运动限幅及 40/200 个跟随者。
 
@@ -31,12 +31,12 @@ C# 命令行构建通过，零警告、零错误。只在构建进程设置已�
 
 可通过 `-Scenes boundary_3d_checks,leader_3d_checks,leader_interaction_3d_checks` 只运行指定组。运行器按退出码、PASS 标记和 ERROR 输出判定，并在 finally 中还原测试前两套用户配置。日志保存到 `.godot/validation/full-regression/`。
 
-当前全部 25 个场景的最新日志均通过（2026-10-31 完整回归）：
+当前全部 26 个场景的最新日志均通过（2026-10-31 完整回归）：
 
 - 三维：boundary_3d、camera_fade_3d、leader_3d、leader_interaction_3d、motion_3d、observation_3d、obstacle_3d、obstacle_interaction_3d、spatial_3d、steering_3d。
-- 二维及共享：boundary_mode、debug、help_overlay、leader、leader_interaction、leader_spacing、motion、neighbor、obstacle_avoidance、obstacle_interaction、pause_shortcut、population、single_step、steering、world_switch。
+- 二维及共享：boundary_mode、debug、help_overlay、leader、leader_interaction、leader_spacing、motion、neighbor、obstacle_avoidance、obstacle_interaction、pause_shortcut、population、single_step、steering、ui_layout、world_switch。
 
-以上名称均带 `_checks` 后缀。覆盖独立欧氏距离参照、负数与百万级坐标、两种搜索轨迹一致性、六面/边角边界、范围外障碍和连续接触、身份生命周期、真实视口输入、配置隔离；其中单步专项 137 项断言、数量增减专项 84 项断言。无图形耗时不作为桌面性能结论。各阶段原始记录见[历史验证](validation-history.md)。
+以上名称均带 `_checks` 后缀。覆盖独立欧氏距离参照、负数与百万级坐标、两种搜索轨迹一致性、六面/边角边界、范围外障碍和连续接触、身份生命周期、真实视口输入、配置隔离；其中单步专项 137 项断言、数量增减专项 84 项断言，分类界面专项 257 项断言。界面检查覆盖 960×640、1360×860、1920×1080 的五页可达性、固定操作栏、草稿提交、焦点隔离、独立滚动与障碍编辑状态。无图形耗时不作为桌面性能结论。各阶段原始记录见[历史验证](validation-history.md)。
 
 ## 原生窗口检查与剩余视觉验收
 
@@ -54,5 +54,7 @@ C# 命令行构建通过，零警告、零错误。只在构建进程设置已�
 早期取景检查发现：200 个跟随者聚集后，默认 300 视距可能位于群体附近，近处个体会遮挡领队，拉远到约 650 可观察队形。后续已加入默认开启的近距离淡化，保持原视距和群集规则，通过 4694 项逻辑检查及 16 组图形对比，详见 [相机淡化验收](camera-fade-3d.md)。选中对象仍保持不透明；这项改善不保证任意队形都完全无遮挡，也不包含相机碰撞。真实键盘与连续飞行时相机手感仍需人工评估。
 
 无限世界继续使用现有单精度坐标，不引入浮动原点。本次短时窗口检查不代表图形驱动长期稳定性测试。
+
+分类界面改进另见[界面分组说明](ui-layout.md)；该窗口检查只覆盖界面，不补记飞行手感验收。
 
 2026-10-31 交接：维护者已明确接手剩余实机验收。代码完成、自动回归通过与人工验收通过分别记录；本次文档整理未新增图形或真实键盘验收结果。

@@ -72,6 +72,30 @@ corner_radius_top_right = 8
 corner_radius_bottom_right = 8
 corner_radius_bottom_left = 8
 
+[sub_resource type="StyleBoxFlat" id="Category"]
+content_margin_left = 8.0
+content_margin_top = 9.0
+content_margin_right = 8.0
+content_margin_bottom = 9.0
+bg_color = Color(0.09, 0.13, 0.18, 1)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+
+[sub_resource type="StyleBoxFlat" id="CategoryActive"]
+content_margin_left = 8.0
+content_margin_top = 9.0
+content_margin_right = 8.0
+content_margin_bottom = 9.0
+bg_color = Color(0.13, 0.27, 0.29, 1)
+border_width_bottom = 2
+border_color = Color(0.47, 0.86, 0.79, 1)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+
 [resource]
 default_font_size = 15
 Button/colors/font_color = Color(0.87, 0.93, 0.97, 1)
@@ -92,3 +116,12 @@ LineEdit/styles/focus = SubResource("Focus")
 LineEdit/styles/normal = SubResource("Input")
 PanelContainer/styles/panel = SubResource("Panel")
 VBoxContainer/constants/separation = 10
+PrimaryButton/base_type = &"Button"
+PrimaryButton/colors/font_color = Color(0.65, 0.98, 0.88, 1)
+PrimaryButton/styles/normal = SubResource("Hover")
+CategoryButton/base_type = &"Button"
+CategoryButton/font_sizes/font_size = 14
+CategoryButton/styles/normal = SubResource("Category")
+CategoryButton/styles/pressed = SubResource("CategoryActive")
+CategoryButton/styles/hover_pressed = SubResource("CategoryActive")
+CategoryButton/colors/font_pressed_color = Color(0.65, 0.98, 0.88, 1)
