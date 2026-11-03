@@ -43,14 +43,14 @@ layout_mode = 2
 [node name="Title" type="Label" parent="Card/Column/Header"]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.47, 0.86, 0.79, 1)
+theme_type_variation = &"AccentLabel"
 theme_override_font_sizes/font_size = 24
 text = "操作说明"
 
 [node name="Close" type="Button" parent="Card/Column/Header"]
 layout_mode = 2
 text = "关闭"
-tooltip_text = "也可按 Esc、F2，或点击弹窗外关闭。"
+tooltip_text = "也可按 Esc、F2，或点击说明框外关闭。"
 
 [node name="Separator" type="HSeparator" parent="Card/Column"]
 layout_mode = 2

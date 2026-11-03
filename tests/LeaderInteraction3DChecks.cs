@@ -44,6 +44,8 @@ public partial class LeaderInteraction3DChecks : Node
             Tap(Key.F1);
             panel.RevealControl(checkbox);
             await Frame();
+            Check(panel.GetNode<ScrollContainer>("LeaderPage").GetGlobalRect().Encloses(checkbox.GetGlobalRect()),
+                "Revealed leader assignment is fully visible after restoring the HUD");
             Click(checkbox.GetGlobalRect().GetCenter());
             Check(_world.Leader == a && control.Disabled && _world.IsLeaderControlActive && !_world.IsRunning
                 && GetViewport().GuiGetFocusOwner() is null,

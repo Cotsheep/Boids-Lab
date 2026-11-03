@@ -36,6 +36,14 @@ public partial class ObstacleEditor3D : Node3D
         GetViewport().SizeChanged += CancelGesture;
     }
 
+    private LabPalette _palette = LabPalette.Dark;
+    public void ApplyPalette(LabPalette palette)
+    {
+        _palette = palette;
+        foreach (var obstacle in _obstacles) obstacle.ApplyPalette(palette);
+        _preview?.ApplyPalette(palette);
+    }
+
     public void Initialize(BoidManager3D world, SimulationCamera3D camera, Node3D container)
     {
         _world = world;
@@ -61,6 +69,7 @@ public partial class ObstacleEditor3D : Node3D
         _preview.Initialize(shape, DefaultSize(shape));
         _preview.SetPreview(true);
         _container.AddChild(_preview);
+        _preview.ApplyPalette(_palette);
         UpdatePreview(GetViewport().GetMousePosition());
         Changed?.Invoke();
     }
@@ -85,6 +94,7 @@ public partial class ObstacleEditor3D : Node3D
         var obstacle = new Obstacle3D { Name = $"Obstacle_{_nextId++}", Position = position };
         obstacle.Initialize(shape, DefaultSize(shape));
         _container.AddChild(obstacle);
+        obstacle.ApplyPalette(_palette);
         _obstacles.Add(obstacle);
         CancelPlacement();
         Select(obstacle);

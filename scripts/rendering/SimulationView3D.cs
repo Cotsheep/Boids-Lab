@@ -6,6 +6,30 @@ namespace BoidsLab;
 public partial class SimulationView3D : Node3D
 {
     public DebugOverlayGeometry3D DebugGeometry { get; } = new();
+    public LabPalette Palette { get; private set; } = LabPalette.Dark;
+    private readonly BoidThemeMaterials _themeMaterials = new();
+    private bool _privateEnvironment;
+    internal void ApplyBoidPalette(Boid3D boid) => boid.ApplyPalette(_themeMaterials);
+
+    public void ApplyPalette(LabPalette palette)
+    {
+        Palette = palette;
+        _themeMaterials.Update(palette);
+        if (_manager is null) return;
+        var environment = GetNode<WorldEnvironment>("WorldEnvironment");
+        if (!_privateEnvironment)
+        {
+            environment.Environment = (Environment)environment.Environment.Duplicate();
+            _privateEnvironment = true;
+        }
+        environment.Environment.BackgroundColor = palette.Canvas;
+        environment.Environment.AmbientLightColor = new Color("eee4d8");
+        _nearCameraMaterial = null;
+        foreach (Boid3D boid in _manager.Boids) ApplyBoidPalette(boid);
+        _manager.GetNode<ObstacleEditor3D>("ObstacleEditor").ApplyPalette(palette);
+        RebuildReferenceGeometry(_manager.WorldBounds);
+        RefreshDebug();
+    }
     private BoidConfig? _config;
     private BoidManager3D? _manager;
     private BaseMaterial3D? _nearCameraMaterial;
@@ -16,6 +40,23 @@ public partial class SimulationView3D : Node3D
         VertexColorUseAsAlbedo = true,
     };
 
+    public override void _Ready() => ProcessPriority = -10; // 先更新模型显示，再让默认优先级的相机跟随。
+
+    public override void _Process(double delta)
+    {
+        if (_manager is null || !_manager.IsRunning) return;
+        PreparePresentation((float)Engine.GetPhysicsInterpolationFraction());
+        var camera = GetNode<SimulationCamera3D>("Camera3D");
+        // 活动跟随相机稍后通过 ViewChanged 刷新；自由观察与冻结跟随也须更新调试锚点。
+        if (!camera.IsFollowing || camera.IsFollowFrozen) RefreshDebug();
+    }
+
+    internal void PreparePresentation(float fraction)
+    {
+        if (_manager is null) return;
+        foreach (Boid3D boid in _manager.Boids) boid.PreparePresentation(_manager.IsRunning ? fraction : 1);
+    }
+
     public void Bind(BoidConfig config, BoidManager3D manager)
     {
         _config = config;
@@ -25,6 +66,14 @@ public partial class SimulationView3D : Node3D
 
     public void Configure(Aabb bounds, bool resetCamera = true)
     {
+        RebuildReferenceGeometry(bounds);
+        var camera = GetNode<SimulationCamera3D>("Camera3D");
+        if (resetCamera) camera.Configure(bounds);
+        else camera.UpdateHomeBounds(bounds);
+    }
+
+    private void RebuildReferenceGeometry(Aabb bounds)
+    {
         var mesh = new ImmediateMesh();
         var material = new StandardMaterial3D
         {
@@ -32,7 +81,7 @@ public partial class SimulationView3D : Node3D
             VertexColorUseAsAlbedo = true,
         };
         mesh.SurfaceBegin(Mesh.PrimitiveType.Lines, material);
-        mesh.SurfaceSetColor(new Color("36536c"));
+        mesh.SurfaceSetColor(Palette.Frame);
         var corners = new Vector3[8];
         for (int i = 0; i < corners.Length; i++)
             corners[i] = bounds.Position + new Vector3(
@@ -48,7 +97,7 @@ public partial class SimulationView3D : Node3D
 
         var grid = new ImmediateMesh();
         grid.SurfaceBegin(Mesh.PrimitiveType.Lines, material);
-        grid.SurfaceSetColor(new Color("233a4f"));
+        grid.SurfaceSetColor(Palette.Grid);
         for (int i = 1; i < 10; i++)
         {
             float x = bounds.Position.X + bounds.Size.X * i / 10f;
@@ -58,10 +107,6 @@ public partial class SimulationView3D : Node3D
         }
         grid.SurfaceEnd();
         GetNode<MeshInstance3D>("Grid").Mesh = grid;
-
-        var camera = GetNode<SimulationCamera3D>("Camera3D");
-        if (resetCamera) camera.Configure(bounds);
-        else camera.UpdateHomeBounds(bounds);
     }
 
     public void RefreshDebug()
@@ -76,10 +121,10 @@ public partial class SimulationView3D : Node3D
         if (DebugGeometry.RangePoints.Count + DebugGeometry.SeparationRangePoints.Count
             + DebugGeometry.NeighborPoints.Count + DebugGeometry.VelocityPoints.Count == 0) return;
         _debugMesh.SurfaceBegin(Mesh.PrimitiveType.Lines, _debugMaterial);
-        AddPoints(DebugGeometry.RangePoints, new Color("78dcca"));
-        AddPoints(DebugGeometry.SeparationRangePoints, new Color("ff9866"));
-        AddPoints(DebugGeometry.NeighborPoints, new Color("ffc75a"));
-        AddPoints(DebugGeometry.VelocityPoints, new Color("6baeff"));
+        AddPoints(DebugGeometry.RangePoints, Palette.Perception);
+        AddPoints(DebugGeometry.SeparationRangePoints, Palette.Separation);
+        AddPoints(DebugGeometry.NeighborPoints, Palette.Selection);
+        AddPoints(DebugGeometry.VelocityPoints, Palette.Velocity);
         _debugMesh.SurfaceEnd();
     }
 

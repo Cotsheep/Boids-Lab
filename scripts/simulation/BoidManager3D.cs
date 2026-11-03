@@ -15,7 +15,6 @@ public partial class BoidManager3D : Node3D, ISimulationWorld
     public string LengthUnit => "世界单位";
     public SimulationFeatures Features => SimulationFeatures.NeighborSearch | SimulationFeatures.DebugDrawing
         | SimulationFeatures.UniformGridSearch | SimulationFeatures.Flocking | SimulationFeatures.Obstacles | SimulationFeatures.Leader | SimulationFeatures.DirectLeaderControl;
-    public bool CoreImplemented => true; // 基础运动可运行；可选能力由 Features 明确声明。
     public bool CanStep => !IsRunning;
     public bool PopulationSpawnLimited { get; private set; }
     public bool IsRunning { get; private set; }
@@ -87,7 +86,13 @@ public partial class BoidManager3D : Node3D, ISimulationWorld
         if (IsRunning) Step(delta);
     }
 
-    public void SetRunning(bool running) => IsRunning = running;
+    public void SetRunning(bool running)
+    {
+        if (IsRunning == running) return;
+        IsRunning = running;
+        foreach (Boid3D boid in _boids) boid.ResetPresentation();
+        if (_view is not null) RefreshDebug();
+    }
 
     public void Reset()
     {
@@ -142,6 +147,7 @@ public partial class BoidManager3D : Node3D, ISimulationWorld
         boid.Position = position;
         boid.Initialize(Config, _nextBoidId++, velocity);
         _boidsRoot.AddChild(boid);
+        _view.ApplyBoidPalette(boid);
         _boids.Add(boid);
         return boid;
     }
@@ -196,6 +202,7 @@ public partial class BoidManager3D : Node3D, ISimulationWorld
         {
             Boid3D boid = _boids[i];
             Vector3 before = boid.Position;
+            boid.BeginPresentationStep();
             boid.UpdateBoid(deltaSeconds, _steeringAccelerations[i]);
             if ((Config.AvoidanceEnabled || boid == Leader) && _obstacleEditor.Obstacles.Count > 0)
             {
@@ -204,6 +211,7 @@ public partial class BoidManager3D : Node3D, ISimulationWorld
                     _obstacleEditor.Obstacles, Config.ObstacleClearance);
                 boid.ApplyObstacleContact(position, velocity);
             }
+            boid.CommitPresentationStep(IsRunning);
         }
         Stats = new SimulationStats(_boids.Count, Stopwatch.GetElapsedTime(started).TotalMilliseconds,
             NeighborSearch.CandidateChecks, NeighborSearch.AverageNeighbors, NeighborSearch.SearchMilliseconds);
@@ -223,8 +231,8 @@ public partial class BoidManager3D : Node3D, ISimulationWorld
         closest = float.PositiveInfinity;
         foreach (Boid3D boid in _boids)
         {
-            if (!_camera.IsPositionInFrustum(boid.GlobalPosition)) continue;
-            if (boid.HitDistance(origin, direction, _camera.UnitsPerPixelAt(boid.Position) * 10) is not { } distance) continue;
+            if (!_camera.IsPositionInFrustum(boid.DisplayGlobalTransform.Origin)) continue;
+            if (boid.HitDistance(origin, direction, _camera.UnitsPerPixelAt(boid.DisplayPosition) * 10) is not { } distance) continue;
             if (distance > closest || (distance == closest && boid != SelectedBoid)) continue;
             closest = distance;
             target = boid;
@@ -366,6 +374,7 @@ public partial class BoidManager3D : Node3D, ISimulationWorld
     {
         if (leader is not null && !_boids.Contains(leader)) throw new ArgumentException("Leader must belong to this world.", nameof(leader));
         if (Leader == leader) return;
+        foreach (Boid3D boid in _boids) boid.ResetPresentation();
         Vector3 fallback = Leader?.Position ?? WorldBounds.GetCenter();
         Leader?.SetLeader(false);
         Leader = leader;

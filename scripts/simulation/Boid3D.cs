@@ -15,7 +15,23 @@ public partial class Boid3D : Node3D
     private MeshInstance3D? _body;
     private Material? _normalOverride;
     private Material? _viewMaterial;
-    internal Material? NormalMaterial => _normalOverride ?? _body?.Mesh?.SurfaceGetMaterial(0);
+    private Transform3D _bodyRestTransform = Transform3D.Identity;
+    private Transform3D _previousPose, _currentPose, _displayPose;
+    private bool _interpolating;
+    // 根节点始终保存物理位姿；只有 Body 的局部变换补偿为显示位姿。
+    public Transform3D DisplayTransform => _interpolating && Transform == _currentPose ? _displayPose : Transform;
+    public Vector3 DisplayPosition => DisplayTransform.Origin;
+    public Transform3D DisplayGlobalTransform => GetParent() is Node3D parent ? parent.GlobalTransform * DisplayTransform : DisplayTransform;
+    private BoidThemeMaterials? _themeMaterials;
+    internal void ApplyPalette(BoidThemeMaterials materials)
+    {
+        _themeMaterials = materials;
+        SelectionMaterial = materials.Selection;
+        LeaderMaterial = materials.Leader;
+        SelectedLeaderMaterial = materials.SelectedLeader;
+        RefreshAppearance();
+    }
+    internal Material? NormalMaterial => _themeMaterials?.Normal ?? _normalOverride ?? _body?.Mesh?.SurfaceGetMaterial(0);
     // 所有矢量都属于 Boids 容器坐标系，时间单位为秒，角量使用弧度。
     public Vector3 Velocity { get; private set; }
     public Vector3 Acceleration { get; private set; }
@@ -31,7 +47,45 @@ public partial class Boid3D : Node3D
     {
         _body = GetNodeOrNull<MeshInstance3D>("Body");
         _normalOverride = _body?.MaterialOverride;
+        _bodyRestTransform = _body?.Transform ?? Transform3D.Identity;
+        ResetPresentation();
         RefreshAppearance();
+    }
+
+    internal void BeginPresentationStep() => _previousPose = Transform;
+
+    internal void CommitPresentationStep(bool interpolate)
+    {
+        if (!interpolate) { ResetPresentation(); return; }
+        _currentPose = Transform;
+        _interpolating = true;
+        SetDisplayPose(_previousPose);
+    }
+
+    internal void PreparePresentation(float fraction)
+    {
+        // 初始化、手动改位姿等非物理步修改不应从旧位置拖出一条插值轨迹。
+        if (!_interpolating) return;
+        if (Transform != _currentPose) { ResetPresentation(); return; }
+        SetDisplayPose(_previousPose.InterpolateWith(_currentPose, Mathf.Clamp(fraction, 0, 1)));
+    }
+
+    internal void ResetPresentation()
+    {
+        _interpolating = false;
+        _previousPose = _currentPose = _displayPose = Transform;
+        if (_body is not null) _body.Transform = _bodyRestTransform;
+    }
+
+    private void SetDisplayPose(Transform3D pose)
+    {
+        _displayPose = pose;
+        if (_body is not null)
+        {
+            Basis inverse = _currentPose.Basis.Inverse();
+            // 先求相对位移，避免无限坐标下两个大平移分别变换后相减造成额外精度损失。
+            _body.Transform = new Transform3D(inverse * pose.Basis, inverse * (pose.Origin - _currentPose.Origin)) * _bodyRestTransform;
+        }
     }
 
     internal void SetSelected(bool selected)
@@ -50,7 +104,7 @@ public partial class Boid3D : Node3D
     {
         if (_body is not null) _body.MaterialOverride = IsLeader
             ? (IsSelected ? SelectedLeaderMaterial : LeaderMaterial)
-            : IsSelected ? SelectionMaterial : _viewMaterial ?? _normalOverride;
+            : IsSelected ? SelectionMaterial : _viewMaterial ?? _themeMaterials?.Normal ?? _normalOverride;
     }
 
     internal void SetViewMaterial(Material? material)
@@ -63,11 +117,12 @@ public partial class Boid3D : Node3D
     // 用网格包围球进行轻量拾取，无需给每只个体添加碰撞体。保留最小屏幕点击容差。
     internal float? HitDistance(Vector3 rayOrigin, Vector3 rayDirection, float minimumRadius)
     {
-        Vector3 center = _body is null ? GlobalPosition : _body.ToGlobal(_body.GetAabb().GetCenter());
+        Transform3D displayedBody = DisplayGlobalTransform * _bodyRestTransform;
+        Vector3 center = _body is null ? DisplayGlobalTransform.Origin : displayedBody * _body.GetAabb().GetCenter();
         float radius = 14f;
         if (_body is not null)
         {
-            Basis basis = _body.GlobalBasis;
+            Basis basis = displayedBody.Basis;
             float scale = Mathf.Max(basis.X.Length(), Mathf.Max(basis.Y.Length(), basis.Z.Length()));
             radius = _body.GetAabb().Size.Length() * 0.5f * scale;
         }
@@ -95,6 +150,7 @@ public partial class Boid3D : Node3D
             Vector3 up = Mathf.Abs(direction.Dot(Vector3.Up)) > 0.99f ? Vector3.Right : Vector3.Up;
             Quaternion = Basis.LookingAt(direction, up).GetRotationQuaternion();
         }
+        ResetPresentation();
     }
 
     /// <summary>持续施加的外部加速度；传入零撤销。群集规则通过 UpdateBoid 的参数提供当步转向。</summary>

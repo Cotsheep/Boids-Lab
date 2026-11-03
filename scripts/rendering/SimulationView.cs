@@ -7,6 +7,17 @@ public partial class SimulationView : Node2D
 {
     public const float GridSpacing = 40;
     public DebugOverlayGeometry DebugGeometry { get; } = new();
+    public LabPalette Palette { get; private set; } = LabPalette.Dark;
+    public void ApplyPalette(LabPalette palette)
+    {
+        Palette = palette;
+        if (_manager is not null)
+        {
+            foreach (Boid2D boid in _manager.Boids) boid.ApplyPalette(palette);
+            _manager.GetNode<ObstacleEditor2D>("ObstacleEditor").ApplyPalette(palette);
+        }
+        QueueRedraw();
+    }
     private BoidConfig? _config;
     private BoidManager? _manager;
 
@@ -20,7 +31,7 @@ public partial class SimulationView : Node2D
     public override void _Draw()
     {
         if (_manager is null) return;
-        DrawRect(_manager.ViewBounds, new Color("0c1420"));
+        DrawRect(_manager.ViewBounds, Palette.Canvas);
         if (_config?.ShowGrid == true) DrawGrid();
         DrawDebugOverlays();
         DrawLeaderMarkers();
@@ -35,17 +46,17 @@ public partial class SimulationView : Node2D
         // 紫色菱形表示持久的领队身份；金色选择圆环仍表示当前普通选择。
         Vector2[] diamond = { center + Vector2.Up * radius, center + Vector2.Right * radius,
             center + Vector2.Down * radius, center + Vector2.Left * radius, center + Vector2.Up * radius };
-        DrawPolyline(diamond, Boid2D.LeaderColor, 2 * unitsPerPixel, true);
+        DrawPolyline(diamond, Palette.Leader, 2 * unitsPerPixel, true);
         if (_manager.LeaderTarget is not { } target) return;
         float arm = 10 * unitsPerPixel;
-        DrawArc(target, 6 * unitsPerPixel, 0, Mathf.Tau, 32, Boid2D.LeaderColor, 2 * unitsPerPixel, true);
-        DrawLine(target - Vector2.Right * arm, target + Vector2.Right * arm, Boid2D.LeaderColor, unitsPerPixel);
-        DrawLine(target - Vector2.Down * arm, target + Vector2.Down * arm, Boid2D.LeaderColor, unitsPerPixel);
+        DrawArc(target, 6 * unitsPerPixel, 0, Mathf.Tau, 32, Palette.Leader, 2 * unitsPerPixel, true);
+        DrawLine(target - Vector2.Right * arm, target + Vector2.Right * arm, Palette.Leader, unitsPerPixel);
+        DrawLine(target - Vector2.Down * arm, target + Vector2.Down * arm, Palette.Leader, unitsPerPixel);
     }
 
     private void DrawGrid()
     {
-        var color = new Color("1c2b3b");
+        var color = Palette.Grid;
         Rect2 bounds = _manager!.ViewBounds;
         // 可见区域移动时，网格仍固定在世界坐标的整倍数上。
         double firstX = System.Math.Ceiling(bounds.Position.X / (double)GridSpacing) * GridSpacing;
@@ -71,15 +82,15 @@ public partial class SimulationView : Node2D
         float unitsPerPixel = 1 / scale;
         DebugGeometry.Build(_manager.Boids, _manager.SelectedBoid, _config, _manager.ViewBounds, unitsPerPixel, _manager.WrapBounds is not null);
         if (DebugGeometry.RangePoints.Count > 0)
-            DrawMultiline(DebugGeometry.RangePoints.ToArray(), new Color(0.3f, 0.8f, 0.7f, 0.75f), 3 * unitsPerPixel, true);
+            DrawMultiline(DebugGeometry.RangePoints.ToArray(), Palette.Perception, 3 * unitsPerPixel, true);
         if (DebugGeometry.SeparationRangePoints.Count > 0)
-            DrawMultiline(DebugGeometry.SeparationRangePoints.ToArray(), new Color(1f, 0.48f, 0.25f, 0.9f), 2 * unitsPerPixel, true);
+            DrawMultiline(DebugGeometry.SeparationRangePoints.ToArray(), Palette.Separation, 2 * unitsPerPixel, true);
         if (DebugGeometry.NeighborPoints.Count > 0)
-            DrawMultiline(DebugGeometry.NeighborPoints.ToArray(), new Color(1f, 0.78f, 0.3f, 0.85f), 1.5f * unitsPerPixel, true);
+            DrawMultiline(DebugGeometry.NeighborPoints.ToArray(), Palette.Selection, 1.5f * unitsPerPixel, true);
         if (DebugGeometry.VelocityPoints.Count > 0)
-            DrawMultiline(DebugGeometry.VelocityPoints.ToArray(), new Color(0.4f, 0.7f, 1f, 0.8f), unitsPerPixel, true);
+            DrawMultiline(DebugGeometry.VelocityPoints.ToArray(), Palette.Velocity, unitsPerPixel, true);
         if (_manager.SelectedBoid is { } selected)
             DrawArc(selected.Position, Mathf.Max(14, 11 * unitsPerPixel), 0, Mathf.Tau, 64,
-                new Color("ffe394"), 2 * unitsPerPixel, true);
+                Palette.Selection, 2 * unitsPerPixel, true);
     }
 }

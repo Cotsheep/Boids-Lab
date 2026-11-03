@@ -26,7 +26,7 @@ public sealed class DebugOverlayGeometry3D
         PerceptionCount = SeparationCount = NeighborCount = VelocityCount = 0;
         if (selected is not null)
         {
-            Vector3 center = selected.Position;
+            Vector3 center = selected.DisplayPosition;
             if (config.ShowPerceptionRadius)
             {
                 PerceptionCount = 1;
@@ -41,10 +41,10 @@ public sealed class DebugOverlayGeometry3D
                 foreach (Boid3D other in boids)
                 {
                     if (other == selected) continue;
-                    Vector3 offset = other.Position - center;
+                    Vector3 offset = other.Position - selected.Position;
                     if (!WorldGeometry3D.WithinRadius(offset, config.PerceptionRadius)) continue;
                     NeighborCount++;
-                    AddLine(NeighborPoints, center, center + offset);
+                    AddLine(NeighborPoints, center, other.DisplayPosition);
                 }
         }
         if (!config.ShowVelocity) return;
@@ -52,8 +52,8 @@ public sealed class DebugOverlayGeometry3D
         {
             if (boid.Velocity.LengthSquared() <= 0.0001f) continue;
             VelocityCount++;
-            Vector3 origin = boid.Position;
-            float unitsPerPixel = pixelScale(boid.Position);
+            Vector3 origin = boid.DisplayPosition;
+            float unitsPerPixel = pixelScale(origin);
             Vector3 direction = boid.Velocity.Normalized();
             float length = Mathf.Clamp(boid.Velocity.Length() * 0.25f, 8 * unitsPerPixel, 80 * unitsPerPixel);
             Vector3 tip = origin + direction * length;

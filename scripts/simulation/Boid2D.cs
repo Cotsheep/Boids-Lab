@@ -11,7 +11,8 @@ public partial class Boid2D : Node2D
     public bool IsLeader { get; private set; }
     public static readonly Color LeaderColor = new("d69cff");
     private Polygon2D? _body;
-    private Color _normalColor;
+    private LabPalette _palette = LabPalette.Dark;
+    internal void ApplyPalette(LabPalette palette) { _palette = palette; RefreshAppearance(); }
     /// <summary>世界像素/秒；与 Position 同属 Boids 容器坐标系。</summary>
     public Vector2 Velocity { get; private set; }
     /// <summary>本步施加的线性加速度（像素/秒²），受 MaxForce 限制。</summary>
@@ -30,7 +31,6 @@ public partial class Boid2D : Node2D
     public override void _Ready()
     {
         _body = GetNodeOrNull<Polygon2D>("Body");
-        if (_body is not null) _normalColor = _body.Color;
         RefreshAppearance();
     }
 
@@ -49,7 +49,7 @@ public partial class Boid2D : Node2D
     private void RefreshAppearance()
     {
         if (_body is not null)
-            _body.Color = IsLeader ? LeaderColor : IsSelected ? new Color("ffe394") : _normalColor;
+            _body.Color = IsLeader ? _palette.Leader : IsSelected ? _palette.Selection : _palette.Boid;
     }
 
     internal bool HitTest(Vector2 viewportPosition)

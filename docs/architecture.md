@@ -51,7 +51,7 @@ Boid2D (Node2D，Boid2D 脚本)
 
 HUD 使用独立 CanvasLayer，不跟随 Camera2D 的世界变换。UIRoot、纯布局节点和提示文字不拦截鼠标，有交互的参数面板、滚动区域和按钮正常处理输入。
 
-F1 和顶部“隐藏界面”按钮切换整个 `UIRoot.Visible`，包含占位文字、提示和统计。`MainController._Input()` 接收全局 `toggle_ui` 动作，即使输入框有焦点也能隐藏/恢复 HUD，隐藏前释放控件焦点。相机在 `_UnhandledInput()` 中处理滚轮和 `reset_camera`（Home），让 UI 优先处理输入；参数面板关闭 `MouseForcePassScrollEvents`，滚轮不会穿透到相机。快捷键映射位于 `project.godot`。
+F1 和顶部“隐藏界面”按钮切换整个 `UIRoot.Visible`，包含操作提示、参数和统计。`MainController._Input()` 接收全局 `toggle_ui` 动作，即使输入框有焦点也能隐藏/恢复 HUD，隐藏前释放控件焦点。相机在 `_UnhandledInput()` 中处理滚轮和 `reset_camera`（Home），让 UI 优先处理输入；参数面板关闭 `MouseForcePassScrollEvents`，滚轮不会穿透到相机。快捷键映射位于 `project.godot`。
 
 空格映射到 `toggle_pause`，由 `MainController._Input()` 在 GUI 处理前拦截。仅首次按下调用现有 `ToggleRunning()`；长按重复事件与松开事件也标记为已处理，避免触发有焦点控件的 `ui_accept`、改变复选框或在输入框插入空格。HUD 隐藏时同样有效，暂停按钮和状态文字同步刷新。这只切换模拟的运行状态，不暂停整个 SceneTree，所以相机、选择与 UI 继续响应。
 
@@ -199,7 +199,7 @@ MainController               └──> SimulationView
 
 参数范围与默认值只在 `BoidConfig` 中定义。`MainController`、管理器、个体与背景绘制节点引用相同的配置对象。控件改变时更新并保存配置，调用管理器的 `ConfigurationChanged()` 做范围约束并请求重绘；运动上限在下一次运行更新时读取。
 
-界面的「请求个体数量」通过 Enter 或失焦提交给 `ISimulationWorld.ResizePopulation()`，两个管理器立即补齐或缩减差额，保持已有状态；数字草稿不会触发增删。种子仍只在 Reset 生效。`InitializePopulation()` 使用局部随机生成器复现重置结果；即时增量使用另一份随机生成器，Reset 时以种子异或固定常量初始化，之后连续使用，不受未重置的种子编辑影响。
+界面的「目标个体数量」通过 Enter 或失焦提交给 `ISimulationWorld.ResizePopulation()`，两个管理器立即补齐或缩减差额，保持已有状态；数字草稿不会触发增删。种子仍只在 Reset 生效。`InitializePopulation()` 使用局部随机生成器复现重置结果；即时增量使用另一份随机生成器，Reset 时以种子异或固定常量初始化，之后连续使用，不受未重置的种子编辑影响。
 
 缩减从列表末尾移除，优先保留领队，其次是普通选择。新增复用 `SpawnBoid()`，在观察范围或无限世界的群体质心附近采样，用已有障碍的带间距距离函数过滤；每个待新增个体最多尝试 64 次，首次耗尽后结束本次增量并设置 `PopulationSpawnLimited`。UI 保留请求数，显示实际数并允许 Enter 重试。三维批量操作结束后统一刷新调试与材质；两种世界均使旧搜索和统计失效。细节与验收见 [数量即时增减](population-resizing.md)。
 
@@ -263,7 +263,7 @@ MainController               └──> SimulationView
 - `ResizePopulation(requestedCount)`：将请求限制到 0～5000，稳定地增删现有群体，保留运行状态与存活个体；报告新增是否因有限采样未完成。
 - `Step(deltaSeconds)`：明确推进一个时间步，先搜索邻居并计算全部转向，再调用个体运动积分并修正障碍物接触。内部使用或测试可直接调用，运行回调由 IsRunning 控制。
 - `StepOnce()`：仅暂停时调用原有 `Step(1.0 / Engine.PhysicsTicksPerSecond)`，完成后保持暂停；`CanStep = !IsRunning`，运行时拒绝单步。MainController 刷新统计和状态，帮助、世界切换及三维鼠标捕获期间拒绝 UI 单步请求，不增加额外更新路径。详见 [单步控制](single-step.md)。
-- `CoreImplemented`：表示基础运动可运行，两个世界均为 true；可选功能是否实现由 `Features` 分别声明，不能据此判断群集规则已实现。
+- 当前两个世界均提供可运行的模拟；可选功能由 `Features` 声明。已移除早期的 CoreImplemented 开关及未实现占位层，运行状态直接显示为已暂停 / 运行中。
 
 实际数量来自已注册集合，包括空群体的 0。Stopwatch 分别测量搜索耗时与整步耗时：前者包含快照、格子构建、候选距离检查与结果写入；后者还包含三条规则计算、个体运动积分与障碍物接触，不包含渲染。候选检查次数按有向距离检查计数，排除自身，不计格子查找，不把规则中的邻居遍历重复算作搜索检查；平均邻居数为有向邻居总数除以实际数量，空群体测量后为 0。界面显示最近一次物理步的数值，并非 0.25 秒内的累加或平均，FPS 独立来自引擎实测。
 
@@ -330,7 +330,7 @@ Godot → BoidManager3D._PhysicsProcess(delta)
 
 ### 领队、无限世界与群集
 
-`SetLeader` 验证对象属于本世界并管理唯一身份；普通选择与领队相互独立。四种外观分别为普通绿、选中金、领队紫、选中领队粉，使用独立 MaterialOverride，不修改共享材质。
+`SetLeader` 验证对象属于本世界并管理唯一身份；普通选择与领队相互独立。四种外观分别为普通橙、选中金、领队紫、选中领队粉，使用独立 MaterialOverride，不修改共享材质。
 
 存在领队即停用软边界，隐藏边框和底面网格。全体继续使用直接距离和无界网格。取消或删除领队后，观察盒中心取现有群体质心；空群体取原领队位置。所有个体和障碍保持原位置。重置从领队模式退出后在该盒内按种子重新生成并暂停。
 
@@ -341,6 +341,8 @@ Godot → BoidManager3D._PhysicsProcess(delta)
 ### 相机、输入和 UI 接口
 
 `LeaderController3D` 保存有效 WASD 和鼠标目标偏航/俯仰，俯仰限制 ±85°。它不积分个体，管理器每个固定步读取归一化的移动方向，以最大速度为目标速率，0.25 秒响应并限制加速度。无输入或释放后目标速度归零，低速时停止残余漂移。
+
+`Boid3D` 根节点继续保存真实物理位姿；每步记录前一位姿与接触修正后的当前位姿。`SimulationView3D` 以优先级 -10 在显示帧读取 Engine.GetPhysicsInterpolationFraction，只给 Body 子节点补偿插值位姿，不把插值写回模拟。相机随后读取 DisplayGlobalTransform；拾取和调试端点使用相同显示位姿，邻居成员仍按物理坐标判断。暂停、单步、新生、初始化和领队切换清理历史；仅三维生效。细节及 30～144 FPS 回归见[显示与相机插值](follow-camera-jitter.md)。
 
 `SimulationCamera3D` 保留自由正交观察；领队模式为 70° 透视跟随，距离默认 300、范围 80～2000，可滚轮或控件保存。切换立即定位，此后用时间相关的指数平滑跟随。Home 在领队模式只恢复默认距离；返回观察时保留观察角度与缩放，并移至当前群体。
 
@@ -362,6 +364,12 @@ Godot → BoidManager3D._PhysicsProcess(delta)
 
 `ObstaclePanel` 按选择 / 放置状态显示尺寸和操作按钮，不变更障碍编辑事件或碰撞逻辑。界面分组与验证见[界面说明](ui-layout.md)。
 
+## 冰岩主题与外观偏好
+
+`LabPalette : Resource` 导出分组颜色属性；明 / 暗资源为 `themes/bingyan_light.tres` 和 `bingyan_dark.tres`，由主场景的 LightPalette / DarkPalette 槽引用。`LabTheme` 生成原生控件样式。`MainController` 缓存两套 Theme，向 HUD、帮助及当前 SimulationView 应用同一配色；动态控件继承语义角色。`AppearancePreferences` 独立保存到 `user://boids_lab_ui.cfg`，不混入两套 BoidConfig。
+
+资源颜色 setter 发出 Changed；MainController 监听并重建主题缓存，支持 Remote Inspector 即时调色。二维更新绘制颜色；三维两种主题均使用世界内共享的四种无光照身份材质，保持源场景资源不变。明色障碍使用无光照杏橙填色与轮廓，避免灯光导致灰褐色。切换主题或修改资源时重建参考几何与淡化材质缓存，不重新配置相机或修改运动状态；新生个体继承当前主题。障碍、预览、调试颜色同步更新。详见[主题说明](themes.md)。
+
 ## 开发状态与范围
 
 本轮约定的三维观察与领队、近距离淡化、二维/三维单步控制及数量即时增减均已实现。剩余图形效果与真实键盘操控由维护者验收，见[实机验收清单](manual-acceptance.md)与[计划完成记录](next-development-plan.md)。
@@ -370,7 +378,7 @@ Godot → BoidManager3D._PhysicsProcess(delta)
 
 ## 验证边界
 
-2026-10-31 当前构建零警告、零错误，完整 26 组无图形回归通过，结果见[自动验证与验收状态](3d-implementation-validation.md)。近距离淡化另有此前完成的 16 组同状态画面对比；键盘自动操作的扫描码异常仍单独记录，不将逻辑检查等同于完整飞行手感验收。
+2026-11-03 当前构建零警告、零错误，完整 28 组无图形回归通过，结果见[自动验证与验收状态](3d-implementation-validation.md)。近距离淡化另有此前完成的 16 组同状态画面对比；键盘自动操作的扫描码异常仍单独记录，不将逻辑检查等同于完整飞行手感验收。
 
 以下二维历史检查保持原语义，三维检查以当前直接坐标实现为准。
 

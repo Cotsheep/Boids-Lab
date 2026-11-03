@@ -8,6 +8,16 @@ public partial class MainController : Node
     [Export] public SimulationWorldDefinition World2D { get; set; } = null!;
     [Export] public SimulationWorldDefinition World3D { get; set; } = null!;
     [Export] public bool StartIn3D { get; set; }
+    [Export] public LabPalette DarkPalette { get; set; } = null!;
+    [Export] public LabPalette LightPalette { get; set; } = null!;
+    private LabPalette CurrentPalette => IsLightTheme ? LightPalette : DarkPalette;
+
+    [Export] public string AppearanceConfigurationPath { get; set; } = AppearancePreferences.DefaultPath;
+    public bool IsLightTheme => _appearance.LightTheme;
+    private readonly AppearancePreferences _appearance = new();
+    private readonly Theme?[] _themes = new Theme?[2];
+    private Button _themeToggle = null!;
+    private string? _appearanceWarning;
 
     public int CurrentWorldIndex => _activeIndex >= 0 ? _activeIndex : StartIn3D ? 1 : 0;
     public string ConfigurationPath => DefinitionAt(CurrentWorldIndex).ConfigurationPath;
@@ -29,7 +39,8 @@ public partial class MainController : Node
     private StatsPanel _stats = null!;
     private Label _status = null!;
     private Label _debug = null!;
-    private Control _placeholder = null!;
+    private Label _worldTitle = null!;
+    private Label _worldHint = null!;
     private Control _uiRoot = null!;
     private Button _hideUiButton = null!;
     private Button _helpButton = null!;
@@ -44,7 +55,8 @@ public partial class MainController : Node
         _stats = GetNode<StatsPanel>("%StatsPanel");
         _status = GetNode<Label>("%RunStatus");
         _debug = GetNode<Label>("%DebugInfo");
-        _placeholder = GetNode<Control>("%CorePlaceholder");
+        _worldTitle = GetNode<Label>("%WorldTitle");
+        _worldHint = GetNode<Label>("%WorldHint");
         _uiRoot = GetNode<Control>("%UIRoot");
         _hideUiButton = GetNode<Button>("%HideUiButton");
         _hideUiButton.Pressed += ToggleUi;
@@ -56,7 +68,57 @@ public partial class MainController : Node
         _worldSelector.AddItem(World2D.Title, 0);
         _worldSelector.AddItem(World3D.Title, 1);
         _worldSelector.ItemSelected += OnWorldSelected;
+        _themeToggle = GetNode<Button>("%ThemeToggle");
+        _themeToggle.Pressed += ToggleTheme;
+        DarkPalette ??= LabPalette.Dark;
+        LightPalette ??= LabPalette.Light;
+        DarkPalette.Changed += OnPaletteChanged;
+        LightPalette.Changed += OnPaletteChanged;
+        Error appearanceLoad = _appearance.Load(AppearanceConfigurationPath);
+        if (appearanceLoad is not (Error.Ok or Error.FileNotFound))
+            _appearanceWarning = "外观偏好读取失败，已使用冰岩暗色主题。";
+        ApplyTheme();
         ActivateWorld(CurrentWorldIndex);
+    }
+
+    private void ToggleTheme() => SetLightTheme(!IsLightTheme);
+
+    private void OnPaletteChanged()
+    {
+        // Remote Inspector 调色只刷新外观，不提交输入或保存模拟参数。
+        _themes[0] = _themes[1] = null;
+        ApplyTheme();
+    }
+
+    public void SetLightTheme(bool light)
+    {
+        _controls.CommitPendingEdits();
+        _appearance.LightTheme = light;
+        ApplyTheme();
+        Error error = _appearance.Save(AppearanceConfigurationPath);
+        _appearanceWarning = error == Error.Ok ? null : "外观偏好保存失败；本次运行仍保留所选主题。";
+        if (_appearanceWarning is not null) GD.PushWarning(_appearanceWarning);
+        if (_worldNode is not null) RefreshInterface();
+    }
+
+    private void ApplyTheme()
+    {
+        LabPalette palette = CurrentPalette;
+        int index = IsLightTheme ? 1 : 0;
+        Theme theme = _themes[index] ??= LabTheme.Create(palette);
+        _uiRoot.Theme = theme;
+        _help.ApplyTheme(theme, palette);
+        _themeToggle.Text = IsLightTheme ? "明色" : "暗色";
+        _themeToggle.TooltipText = $"{palette.ResourceName}。点击切换{(IsLightTheme ? "暗色" : "明色")}，选择自动保存。";
+        RenderingServer.SetDefaultClearColor(palette.Canvas);
+        ApplyWorldPalette();
+    }
+
+    private void ApplyWorldPalette()
+    {
+        LabPalette palette = CurrentPalette;
+        if (_worldNode is BoidManager two) two.GetNode<SimulationView>("SimulationView").ApplyPalette(palette);
+        else if (_worldNode is BoidManager3D three) three.GetNode<SimulationView3D>("SimulationView").ApplyPalette(palette);
     }
 
     private SimulationWorldDefinition DefinitionAt(int index) => index == 0 ? World2D : World3D;
@@ -68,7 +130,7 @@ public partial class MainController : Node
         Error error = config.Load(DefinitionAt(index).ConfigurationPath);
         if (error != Error.Ok && error != Error.FileNotFound)
         {
-            _storageWarnings[index] = $"配置加载失败（错误代码：{(int)error}）；当前使用默认参数。";
+            _storageWarnings[index] = $"参数读取失败（代码：{(int)error}）；已使用默认参数。";
             GD.PushWarning(_storageWarnings[index]);
         }
         _configurations[index] = config;
@@ -123,12 +185,11 @@ public partial class MainController : Node
             candidate = null;
             GetNode<Node>("%World").AddChild(_worldNode);
             _world.SetRunning(false);
+            ApplyWorldPalette();
             _controls.Bind(_config, _world.LengthUnit, _world.Features, _worldNode is Node3D);
             BindWorld();
             _help.SetInstructions(definition.Instructions);
             _worldSelector.Select(index);
-            GetNode<Label>("%WorldTitle").Text = _world.DisplayName;
-            GetNode<Label>("%WorldCoordinates").Text = $"世界坐标 / {_world.LengthUnit}";
             _statsElapsed = 0;
             RefreshInterface();
         }
@@ -136,8 +197,8 @@ public partial class MainController : Node
         {
             candidate?.Free();
             _worldSelector.Select(CurrentWorldIndex);
-            _debug.Text = $"世界切换失败：{error.Message}";
-            GD.PushError(_debug.Text);
+            _debug.Text = "世界载入失败，请重启项目后重试。";
+            GD.PushError($"世界载入失败：{error}");
         }
         finally
         {
@@ -276,11 +337,36 @@ public partial class MainController : Node
         _uiRoot.Visible = !_uiRoot.Visible;
     }
 
-    private void RefreshObstacleControls() =>
+    private void RefreshObstacleControls()
+    {
         _controls.Obstacles?.Refresh(_world.SelectedObstacleInfo, _world.ObstaclePlacement);
+        RefreshLeaderControls();
+    }
 
-    private void RefreshLeaderControls() =>
-        _controls.RefreshLeaderState(_world.SelectedBoidId, _world.LeaderId, _world.HasLeaderTarget, _world.IsLeaderControlActive, _world.IsRunning);
+    private void RefreshLeaderControls()
+    {
+        _controls.RefreshLeaderState(_world.SelectedBoidId, _world.LeaderId, _world.HasLeaderTarget,
+            _world.IsLeaderControlActive, _world.IsRunning, _world.SelectedObstacleInfo.HasValue);
+        RefreshWorldHints();
+    }
+
+    private void RefreshWorldHints()
+    {
+        bool threeDimensional = _worldNode is Node3D;
+        _worldTitle.Text = $"{_world.DisplayName} · {(_world.LeaderId.HasValue ? "领队模式" : "观察模式")}";
+        if (_world.ObstaclePlacement.HasValue)
+            _worldHint.Text = "移动鼠标预览，左键放置；Esc 或右键取消。";
+        else if (_world.SelectedObstacleInfo.HasValue)
+            _worldHint.Text = "拖动障碍物移动位置；在障碍页修改尺寸，Delete 删除。";
+        else if (_world.IsLeaderControlActive)
+            _worldHint.Text = "鼠标调整视角，WASD 按视角移动；Esc 释放鼠标。" + (_world.IsRunning ? "" : "暂停时可调整视角，空格继续。");
+        else if (_world.LeaderId.HasValue)
+            _worldHint.Text = threeDimensional ? "右键拖动调整视角，滚轮调整视距；F3 操控领队。" : "移动鼠标引导领队；拖动空白处平移，滚轮缩放。";
+        else if (_world.Stats.BoidCount == 0)
+            _worldHint.Text = "暂无个体；在基础页调整数量，或在障碍页创建障碍物。";
+        else
+            _worldHint.Text = threeDimensional ? "右键旋转 · 中键平移 · 滚轮缩放 · Home 重新取景" : "拖动空白处平移 · 滚轮缩放 · Home 重置视角";
+    }
 
     private void AssignSelectedBoidLeader(bool enabled)
     {
@@ -341,7 +427,7 @@ public partial class MainController : Node
     private void SaveConfiguration()
     {
         Error error = _config.Save(ConfigurationPath);
-        _storageWarning = error == Error.Ok ? null : $"配置保存失败（错误代码：{(int)error}）；本次运行仍保留参数。";
+        _storageWarning = error == Error.Ok ? null : $"参数保存失败（代码：{(int)error}）；本次运行继续使用当前设置。";
         if (_storageWarning is not null) GD.PushWarning(_storageWarning);
     }
 
@@ -350,18 +436,17 @@ public partial class MainController : Node
         _controls.RefreshRunState(_world.IsRunning, _world.CanStep);
         _controls.RefreshPopulationState(_config.BoidCount, _world.Stats.BoidCount ?? 0, _world.PopulationSpawnLimited);
         RefreshLeaderControls();
-        string runState = _world.IsRunning
-            ? (_world.CoreImplemented ? "运行中" : "已请求运行")
-            : "已暂停";
-        _status.Text = _world.CoreImplemented ? runState : $"{runState} · 核心尚未实现";
-        _status.AddThemeColorOverride("font_color", new Color(_world.IsRunning ? "78dcca" : "ffc75a"));
-        _placeholder.Visible = !_world.CoreImplemented;
-        _debug.Text = _storageWarning ?? $"请求数量：{_config.BoidCount}  |  随机种子：{_config.RandomSeed}  |  场景：{_world.DisplayName}";
+        _status.Text = _world.IsRunning ? "运行中" : "已暂停";
+        _status.ThemeTypeVariation = _world.IsRunning ? "SuccessLabel" : "WarningLabel";
+        _debug.Text = _storageWarning ?? _appearanceWarning ?? $"目标数量：{_config.BoidCount}  ·  随机种子：{_config.RandomSeed}  ·  长度单位：{_world.LengthUnit}";
         _stats.Refresh(_world.Stats, Engine.GetFramesPerSecond());
     }
 
     public override void _ExitTree()
     {
+        if (DarkPalette is not null) DarkPalette.Changed -= OnPaletteChanged;
+        if (LightPalette is not null) LightPalette.Changed -= OnPaletteChanged;
+        if (_themeToggle is not null) _themeToggle.Pressed -= ToggleTheme;
         if (_worldSelector is not null) _worldSelector.ItemSelected -= OnWorldSelected;
         if (_hideUiButton is not null) _hideUiButton.Pressed -= ToggleUi;
         if (_help is not null)

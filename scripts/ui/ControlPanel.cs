@@ -63,14 +63,14 @@ public partial class ControlPanel : VBoxContainer
         _step.TooltipText = "暂停时推进一个物理时间步，完成后仍保持暂停。"
             + (threeDimensional ? "操控领队时先按 Esc 释放鼠标。" : "");
         AddButton(buttons, "Reset", "重置", () => ResetRequested?.Invoke())
-            .TooltipText = "按当前请求数量与种子重新生成并暂停；清除领队，保留障碍布局。";
+            .TooltipText = "按目标数量、随机种子和当前范围重新生成个体并暂停；清除选择和领队，保留障碍物。";
         _selectionStatus = new Label
         {
-            Name = "SelectedBoidStatus", Text = "未选择个体 · 点击场景选择",
+            Name = "SelectedBoidStatus", Text = "未选中个体 · 点击场景选择",
             AutowrapMode = TextServer.AutowrapMode.WordSmart, MouseFilter = MouseFilterEnum.Ignore,
         };
         _selectionStatus.AddThemeFontSizeOverride("font_size", 13);
-        _selectionStatus.AddThemeColorOverride("font_color", new Color("91a6bb"));
+        _selectionStatus.ThemeTypeVariation = "MutedLabel";
         AddChild(_selectionStatus);
         _categories = new HBoxContainer { Name = "Categories" };
         _categories.AddThemeConstantOverride("separation", 4);
@@ -80,18 +80,18 @@ public partial class ControlPanel : VBoxContainer
         AddHeading("群体生成");
         AddPopulationCount(config.BoidCount);
         AddNumber("RandomSeed", "随机种子", BoidConfig.SeedRange, config.RandomSeed,
-            value => config.RandomSeed = (int)value, "重置后生效；相同种子和参数可复现初始位置与速度。");
-        AddHint("数量在 Enter / 失焦后即时调整；种子在重置后生效。");
+            value => config.RandomSeed = (int)value, "点击重置后使用新种子生成群体；相同生成条件下可复现初始状态。");
+        AddHint("数量在按 Enter 或离开输入框后调整；随机种子在重置后生效。");
         AddHeading("平移运动");
         AddNumber("MaxSpeed", "最大速度", BoidConfig.SpeedRange, config.MaxSpeed,
-            value => config.MaxSpeed = (float)value, $"单位：{lengthUnit}/秒；限制速率，也用作初始速率和目标速率。");
+            value => config.MaxSpeed = (float)value, $"单位：{lengthUnit}/秒；限制移动速度，也用于生成时的初始速度及转向时的目标速度。");
         AddNumber("MaxForce", "最大加速度", BoidConfig.ForceRange, config.MaxForce,
-            value => config.MaxForce = (float)value, $"单位：{lengthUnit}/秒²；限制总加速度，设为零时不能主动转向或刹停。");
+            value => config.MaxForce = (float)value, $"单位：{lengthUnit}/秒²；限制总加速度；设为 0 时不能主动加速、转向或制动。");
         AddHeading("朝向转动");
         AddNumber("MaxAngularSpeed", "最大角速度", BoidConfig.AngularSpeedRange, config.MaxAngularSpeedDegrees,
             value => config.MaxAngularSpeedDegrees = (float)value, "单位：度/秒；朝向旋转速度上限。");
         AddNumber("MaxAngularAcceleration", "最大角加速度", BoidConfig.AngularAccelerationRange, config.MaxAngularAccelerationDegrees,
-            value => config.MaxAngularAccelerationDegrees = (float)value, "单位：度/秒²；朝向平滑跟随实际运动方向。");
+            value => config.MaxAngularAccelerationDegrees = (float)value, "单位：度/秒²；限制转动速度每秒的变化，朝向随实际运动方向调整。");
 
         if (features.HasFlag(SimulationFeatures.NeighborSearch) || features.HasFlag(SimulationFeatures.Flocking))
         {
@@ -102,26 +102,29 @@ public partial class ControlPanel : VBoxContainer
                 AddSearchMode(config, features.HasFlag(SimulationFeatures.UniformGridSearch));
                 AddNumber("PerceptionRadius", "感知半径", BoidConfig.RadiusRange, config.PerceptionRadius,
                     value => { config.PerceptionRadius = (float)value; RefreshRadiusWarning(config); },
-                    threeDimensional ? "使用实际三维坐标和直接距离，包括半径边缘与重合的其他个体。" : "无领队时使用最短环绕距离，有领队时使用直接距离；不包含自身。");
+                    threeDimensional ? "单位：世界单位；按直线距离查找此范围内的邻居，不包含自身。" : "单位：世界像素；查找此范围内的邻居，不包含自身。观察模式考虑边界环绕，领队模式使用直线距离。");
             }
             if (features.HasFlag(SimulationFeatures.Flocking))
             {
                 AddHeading("分离 · 保持间距");
-                AddToggle("SeparationEnabled", "启用分离", config.SeparationEnabled, value => config.SeparationEnabled = value);
+                AddToggle("SeparationEnabled", "启用分离", config.SeparationEnabled, value => config.SeparationEnabled = value)
+                    .TooltipText = "避开分离范围内的近邻，帮助个体保持间距；实际范围不超过感知半径。";
                 AddNumber("SeparationRadius", "分离半径", BoidConfig.SeparationRadiusRange, config.SeparationRadius,
                     value => { config.SeparationRadius = (float)value; RefreshRadiusWarning(config); }, $"单位：{lengthUnit}；实际分离范围不超过感知半径。");
-                _separationRadiusWarning = AddHint("提醒：分离半径大于感知半径，实际分离范围以感知半径为限。");
+                _separationRadiusWarning = AddHint("提醒：分离半径大于感知半径，实际只在感知范围内执行分离。");
                 _separationRadiusWarning.Name = "SeparationRadiusWarning";
-                _separationRadiusWarning.AddThemeColorOverride("font_color", new Color("ffc75a"));
+                _separationRadiusWarning.ThemeTypeVariation = "WarningLabel";
                 RefreshRadiusWarning(config);
                 AddNumber("SeparationWeight", "分离权重", BoidConfig.SeparationRange, config.SeparationWeight,
                     value => config.SeparationWeight = (float)value, "避开近邻；权重为零时不贡献加速度。");
                 AddHeading("对齐 · 协调方向");
-                AddToggle("AlignmentEnabled", "启用对齐", config.AlignmentEnabled, value => config.AlignmentEnabled = value);
+                AddToggle("AlignmentEnabled", "启用对齐", config.AlignmentEnabled, value => config.AlignmentEnabled = value)
+                    .TooltipText = "朝邻居的平均速度方向转向，帮助群体协调移动。";
                 AddNumber("AlignmentWeight", "对齐权重", BoidConfig.AlignmentRange, config.AlignmentWeight,
                     value => config.AlignmentWeight = (float)value, "朝邻居的平均速度方向转向。");
                 AddHeading("聚集 · 保持群体");
-                AddToggle("CohesionEnabled", "启用聚集", config.CohesionEnabled, value => config.CohesionEnabled = value);
+                AddToggle("CohesionEnabled", "启用聚集", config.CohesionEnabled, value => config.CohesionEnabled = value)
+                    .TooltipText = "朝邻居中心靠拢，帮助个体留在群体附近。";
                 AddNumber("CohesionWeight", "聚集权重", BoidConfig.CohesionRange, config.CohesionWeight,
                     value => config.CohesionWeight = (float)value, "朝邻居中心靠拢。");
                 AddHint("规则可独立关闭；权重越大，相应转向贡献越强。三条规则的权重范围为 0–50。");
@@ -134,15 +137,15 @@ public partial class ControlPanel : VBoxContainer
             AddHeading("领队身份");
             _leaderStatus = AddHint("未指定领队");
             _leaderStatus.Name = "LeaderStatus";
-            _leaderStatus.AddThemeColorOverride("font_color", new Color("d69cff"));
+            _leaderStatus.ThemeTypeVariation = "LeaderLabel";
             _leaderToggle = new CheckBox
             {
                 Name = "IsLeader", Text = "设为领队", Disabled = true,
-                TooltipText = threeDimensional ? "先选中个体再勾选，自动进入操控；Esc 释放。取消身份恢复软边界，保留个体位置。" : "将选中个体指定为唯一领队；取消普通选择不清除身份。解除领队后恢复视口环绕。",
+                TooltipText = threeDimensional ? "先选中个体再勾选，自动进入领队操控；按 Esc 恢复鼠标指针。选中领队后取消勾选，可返回观察模式。" : "将选中个体设为唯一领队，领队跟随场景中的鼠标。取消勾选后返回观察模式并恢复边界环绕。",
             };
             _leaderToggle.Toggled += enabled => LeaderAssignmentRequested?.Invoke(enabled);
             _content.AddChild(_leaderToggle);
-            AddHint(threeDimensional ? "点击场景选择个体，再设为领队。指定后自动操控，Esc 释放鼠标。" : "点击场景选择个体，再设为领队。领队将持续跟随鼠标目标。");
+            AddHint(threeDimensional ? "先在场景中选中个体，再勾选设为领队；指定后自动操控，Esc 释放鼠标。" : "先在场景中选中个体，再勾选设为领队；领队将持续跟随鼠标目标。");
             if (threeDimensional && features.HasFlag(SimulationFeatures.DirectLeaderControl))
             {
                 _leaderControlButton = new Button { Name = "ControlLeader", Text = "操控领队（F3）", Disabled = true,
@@ -154,7 +157,7 @@ public partial class ControlPanel : VBoxContainer
             {
                 AddHeading("跟随队形");
                 AddNumber("LeaderFollowDistance", "领队后方距离", BoidConfig.LeaderFollowDistanceRange, config.LeaderFollowDistance,
-                    value => config.LeaderFollowDistance = (float)value, $"单位：{lengthUnit}；领队到跟随区域前缘的间隔，区域随跟随数量扩大。");
+                    value => config.LeaderFollowDistance = (float)value, $"单位：{lengthUnit}；领队与身后跟随区域前缘的间隔；区域随跟随人数扩大。");
                 AddNumber("LeaderFollowWeight", "领队跟随权重", BoidConfig.LeaderFollowWeightRange, config.LeaderFollowWeight,
                     value => config.LeaderFollowWeight = (float)value, "与群集规则共同作用；设为零关闭跟随贡献，避障仍优先。");
             }
@@ -162,7 +165,7 @@ public partial class ControlPanel : VBoxContainer
             {
                 AddHeading("跟随相机");
                 AddNumber("FollowCameraDistance", "跟随视距", BoidConfig.FollowCameraDistanceRange, config.FollowCameraDistance,
-                    value => config.FollowCameraDistance = (float)value, "滚轮也可调整；Home 恢复默认 300。释放鼠标后可右键调整视角，暂停时也有效。");
+                    value => config.FollowCameraDistance = (float)value, "单位：世界单位；滚轮也可调整，Home 恢复默认视距 300。释放鼠标后可右键转动视角，暂停时也有效。");
                 AddToggle("FadeNearbyBoids", "淡化近处个体", config.FadeNearbyBoids, value => config.FadeNearbyBoids = value)
                     .TooltipText = "减轻近镜头普通个体遮挡；领队和选中个体保持高亮，不改变运动或拾取。";
             }
@@ -175,12 +178,13 @@ public partial class ControlPanel : VBoxContainer
             Obstacles = new ObstaclePanel { Name = "ObstaclePanel", LengthUnit = lengthUnit, ThreeDimensional = threeDimensional };
             _content.AddChild(Obstacles);
             AddHeading("避障行为");
-            AddToggle("AvoidanceEnabled", "启用避障", config.AvoidanceEnabled, value => config.AvoidanceEnabled = value);
+            AddToggle("AvoidanceEnabled", "启用避障", config.AvoidanceEnabled, value => config.AvoidanceEnabled = value)
+                .TooltipText = threeDimensional ? "控制普通个体的主动避障与接触阻挡；领队始终保留接触阻挡，由你操控绕行。" : "控制所有个体的主动避障与接触阻挡；关闭后可穿过障碍物。";
             AddNumber("AvoidanceLookAhead", "前瞻时间", BoidConfig.AvoidanceLookAheadRange, config.AvoidanceLookAhead,
                 value => config.AvoidanceLookAhead = (float)value, "单位：秒；数值越大，越早开始避让。");
             AddNumber("ObstacleClearance", "避障间距", BoidConfig.ObstacleClearanceRange, config.ObstacleClearance,
                 value => config.ObstacleClearance = (float)value, $"单位：{lengthUnit}；个体中心与障碍物之间预留的距离。");
-            AddHint(threeDimensional ? "普通个体主动避障；领队只受接触阻挡和滑动约束，关闭避障后也不会穿过障碍。" : "关闭避障会同时关闭主动转向与接触约束。");
+            AddHint(threeDimensional ? "普通个体开启避障后主动绕开障碍；领队由你操控绕行，接触时会阻挡并沿表面滑动。" : "开启避障后提前转向，接触时阻挡并沿表面滑动；关闭后所有个体均可穿过障碍。");
         }
 
         if (features.HasFlag(SimulationFeatures.DebugDrawing) || threeDimensional)
@@ -192,29 +196,29 @@ public partial class ControlPanel : VBoxContainer
                 AddNumber("WorldWidth", "宽度 X", BoidConfig.WorldWidthRange, config.WorldWidth, value => config.WorldWidth = (float)value, "单位：世界单位；立即更新观察范围，保留个体位置与相机视角。Home 重新取景。");
                 AddNumber("WorldHeight", "高度 Y", BoidConfig.WorldHeightRange, config.WorldHeight, value => config.WorldHeight = (float)value, "单位：世界单位；立即更新观察范围，保留个体位置与相机视角。Home 重新取景。");
                 AddNumber("WorldDepth", "深度 Z", BoidConfig.WorldDepthRange, config.WorldDepth, value => config.WorldDepth = (float)value, "单位：世界单位；立即更新观察范围，保留个体位置与相机视角。Home 重新取景。");
-                AddHint("范围独立于相机，修改不搬移个体；Home 重新取景。有领队时暂不约束边界。");
+                AddHint("范围独立于相机；修改后保留个体位置，Home 按新范围重新取景。领队模式不受边界约束。");
             }
             if (features.HasFlag(SimulationFeatures.DebugDrawing))
             {
                 AddHeading("场景参考");
-                AddToggle("ShowGrid", "显示网格", config.ShowGrid, value => config.ShowGrid = value);
+                AddToggle("ShowGrid", "显示网格", config.ShowGrid, value => config.ShowGrid = value)
+                    .TooltipText = threeDimensional ? "显示观察范围底面的参考网格；领队模式下隐藏，与邻居搜索方式无关。" : "显示背景参考网格，与邻居搜索方式无关。";
                 if (threeDimensional)
                     AddToggle("ShowBoundary", "显示边界", config.ShowBoundary, value => config.ShowBoundary = value)
-                        .TooltipText = "只控制边框显示，不关闭软边界；领队模式下边框和网格均隐藏。";
+                        .TooltipText = "显示观察范围的边框；取消勾选后软边界仍生效。领队模式下边框和网格均隐藏。";
                 AddHeading("选中个体的调试");
-                AddHint("先在场景中选择一个个体，再查看范围和邻居关系。");
-                AddToggle("ShowNeighbors", "显示邻居连线", config.ShowNeighbors, value => config.ShowNeighbors = value);
-                AddToggle("ShowPerceptionRadius", "显示感知范围", config.ShowPerceptionRadius, value => config.ShowPerceptionRadius = value);
+                AddHint("先在场景中选中一个个体；范围和邻居连线跟随该个体显示。");
+                AddToggle("ShowNeighbors", "显示邻居连线", config.ShowNeighbors, value => config.ShowNeighbors = value)
+                    .TooltipText = "连接选中个体与感知范围内的邻居；未选中个体时不显示。";
+                AddToggle("ShowPerceptionRadius", "显示感知范围", config.ShowPerceptionRadius, value => config.ShowPerceptionRadius = value)
+                    .TooltipText = "显示选中个体的邻居感知范围；未选中个体时不显示。";
                 if (features.HasFlag(SimulationFeatures.Flocking))
-                    AddToggle("ShowSeparationRadius", "显示分离半径", config.ShowSeparationRadius, value => config.ShowSeparationRadius = value);
+                    AddToggle("ShowSeparationRadius", "显示分离半径", config.ShowSeparationRadius, value => config.ShowSeparationRadius = value)
+                        .TooltipText = "显示选中个体的实际分离范围，取分离半径与感知半径的较小值。";
                 AddHeading("全体个体的调试");
-                AddToggle("ShowVelocity", "显示运动方向", config.ShowVelocity, value => config.ShowVelocity = value);
+                AddToggle("ShowVelocity", "显示运动方向", config.ShowVelocity, value => config.ShowVelocity = value)
+                    .TooltipText = "用箭头显示全体个体的移动方向；箭头长度随速率变化，静止个体不显示。";
             }
-        }
-        if (!features.HasFlag(SimulationFeatures.Flocking))
-        {
-            _content = (VBoxContainer)_pages["Basics"].Scroll.GetChild(0);
-            AddHint("当前世界仅开放已实现的能力；未开放的功能不显示。");
         }
         SelectCategory("Basics");
     }
@@ -258,16 +262,18 @@ public partial class ControlPanel : VBoxContainer
         }
     }
 
-    public void RevealControl(Control control)
+    public async void RevealControl(Control control)
     {
         foreach (var (id, page) in _pages)
         {
             if (!page.Scroll.IsAncestorOf(control)) continue;
             SelectCategory(id);
-            // 布局完成后再滚动；页签与模拟控制始终固定在滚动区外。
+            // 切页的嵌套容器先完成一轮布局，再在下一帧末滚动。
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             Callable.From(() =>
             {
-                if (IsInstanceValid(control) && control.IsVisibleInTree()) page.Scroll.EnsureControlVisible(control);
+                if (IsInstanceValid(page.Scroll) && IsInstanceValid(control) && control.IsVisibleInTree())
+                    page.Scroll.EnsureControlVisible(control);
             }).CallDeferred();
             return;
         }
@@ -276,7 +282,7 @@ public partial class ControlPanel : VBoxContainer
     private Label AddHint(string text)
     {
         var hint = new Label { Text = text, AutowrapMode = TextServer.AutowrapMode.WordSmart, MouseFilter = MouseFilterEnum.Ignore };
-        hint.AddThemeColorOverride("font_color", new Color("91a6bb"));
+        hint.ThemeTypeVariation = "MutedLabel";
         hint.AddThemeFontSizeOverride("font_size", 13);
         _content.AddChild(hint);
         return hint;
@@ -308,15 +314,15 @@ public partial class ControlPanel : VBoxContainer
     public void RefreshPopulationState(int requested, int actual, bool limited)
     {
         _populationStatus.Text = limited
-            ? $"请求 {requested}，实际 {actual}。未找到足够的无障碍位置；调整范围或障碍后按 Enter 重试。"
+            ? $"目标 {requested}，实际 {actual}。未找到足够的生成位置；调整范围或障碍后按 Enter 重试。"
             : $"实际数量：{actual}";
-        _populationStatus.AddThemeColorOverride("font_color", new Color(limited ? "ffc75a" : "91a6bb"));
+        _populationStatus.ThemeTypeVariation = limited ? "WarningLabel" : "MutedLabel";
     }
 
     private void AddPopulationCount(int current)
     {
         var row = new HBoxContainer();
-        row.AddChild(new Label { Text = "请求个体数量", SizeFlagsHorizontal = SizeFlags.ExpandFill });
+        row.AddChild(new Label { Text = "目标个体数量", SizeFlagsHorizontal = SizeFlags.ExpandFill });
         _populationInput = new SpinBox
         {
             Name = "BoidCount", MinValue = BoidConfig.CountRange.Min, MaxValue = BoidConfig.CountRange.Max,
@@ -348,11 +354,13 @@ public partial class ControlPanel : VBoxContainer
         PopulationCountRequested?.Invoke(requested);
     }
 
-    public void RefreshLeaderState(int? selectedId, int? leaderId, bool hasTarget, bool controlActive = false, bool running = false)
+    public void RefreshLeaderState(int? selectedId, int? leaderId, bool hasTarget, bool controlActive = false, bool running = false, bool obstacleSelected = false)
     {
         if (_selectionStatus is not null) _selectionStatus.Text = selectedId.HasValue
-            ? $"已选择个体：#{selectedId} · 领队页设定"
-            : leaderId.HasValue ? $"领队 #{leaderId} · {(_threeDimensional ? controlActive ? "操控中 · Esc 释放" : "待操控 · F3 进入" : "跟随鼠标")}" : "未选择个体 · 点击场景选择";
+            ? selectedId == leaderId ? $"已选领队 #{selectedId} · 在领队页取消身份"
+                : $"已选个体 #{selectedId}" + (_leaderToggle is null ? "" : " · 在领队页设为领队")
+            : obstacleSelected ? "已选障碍物 · 在障碍页编辑"
+                : leaderId.HasValue ? $"领队 #{leaderId} · {(_threeDimensional ? controlActive ? "操控中 · Esc 释放" : "跟随视角 · F3 操控" : "跟随鼠标")}" : "未选中个体 · 点击场景选择";
         if (_leaderToggle is null || _leaderStatus is null) return;
         if (_leaderControlButton is not null)
         {
@@ -362,7 +370,8 @@ public partial class ControlPanel : VBoxContainer
         _leaderToggle.Disabled = !selectedId.HasValue;
         _leaderToggle.SetPressedNoSignal(selectedId.HasValue && selectedId == leaderId);
         _leaderStatus.Text = leaderId.HasValue
-            ? (_threeDimensional ? $"当前领队：#{leaderId} · {(controlActive ? "操控中" : "待操控")}{(running ? "" : " · 已暂停")}" : $"当前领队：#{leaderId} · {(hasTarget ? "跟随鼠标" : "鼠标移入场景后跟随")}") : "未指定领队";
+            ? $"当前领队：#{leaderId} · {(_threeDimensional ? controlActive ? "操控中" : "跟随视角 · F3 操控" : hasTarget ? "跟随鼠标" : "鼠标移入场景后跟随")}{(running ? "" : " · 已暂停")}"
+            : "未指定领队 · 先在场景中选择一个个体";
     }
 
     public void RefreshViewConfiguration(BoidConfig config)
@@ -388,7 +397,7 @@ public partial class ControlPanel : VBoxContainer
             Name = "NeighborSearchMode",
             TooltipText = supportsGrid
                 ? "朴素遍历检查所有其他个体；均匀网格只检查相邻格内的候选。搜索耗时包含快照、建格和结果写入。"
-                : "当前世界只开放朴素遍历，逐一检查其他个体。",
+                : "逐一检查其他个体是否位于感知范围内。",
             Disabled = !supportsGrid,
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
         };
@@ -407,13 +416,13 @@ public partial class ControlPanel : VBoxContainer
     private void AddHeading(string text)
     {
         var label = new Label { Text = text, CustomMinimumSize = new Vector2(0, 30), VerticalAlignment = VerticalAlignment.Bottom };
-        label.AddThemeColorOverride("font_color", new Color("78dcca"));
+        label.ThemeTypeVariation = "AccentLabel";
         label.AddThemeFontSizeOverride("font_size", 13);
         _content.AddChild(label);
     }
 
     private void AddNumber(string name, string title, BoidConfig.NumberRange range, double current,
-        Action<double> setter, string tooltip = "修改后在下一次运行更新时生效。")
+        Action<double> setter, string tooltip = "修改后自动保存，在下一次模拟更新时生效；暂停时可用单步查看效果。")
     {
         var row = new HBoxContainer { TooltipText = tooltip };
         row.AddChild(new Label { Text = title, SizeFlagsHorizontal = SizeFlags.ExpandFill });

@@ -11,13 +11,35 @@ public partial class HelpOverlay : Control
     private PanelContainer _card = null!;
     private Button _closeButton = null!;
     private bool _outsidePress;
+    private string _instructions = "";
+    private LabPalette _palette = LabPalette.Dark;
 
     public void SetInstructions(string text)
     {
         var instructions = GetNode<RichTextLabel>("Card/Column/Instructions");
-        instructions.Text = text;
+        _instructions = text;
+        instructions.Text = ColorInstructions();
         instructions.ScrollToLine(0);
     }
+
+    public void ApplyTheme(Theme theme, LabPalette palette)
+    {
+        Theme = theme;
+        _palette = palette;
+        GetNode<ColorRect>("Shade").Color = new Color("17110bd0");
+        var instructions = GetNode<RichTextLabel>("Card/Column/Instructions");
+        double scroll = instructions.GetVScrollBar().Value;
+        instructions.Text = ColorInstructions();
+        instructions.GetVScrollBar().Value = scroll;
+    }
+
+    private string ColorInstructions() => _instructions
+        .Replace("[color=#78dcca][b]", $"[color=#{_palette.AccentText.ToHtml(false)}][b]")
+        .Replace("#78dcca", "#" + _palette.Perception.ToHtml(false))
+        .Replace("#d69cff", "#" + _palette.Leader.ToHtml(false))
+        .Replace("#ffad5c", "#" + _palette.Separation.ToHtml(false))
+        .Replace("#70baff", "#" + _palette.Velocity.ToHtml(false))
+        .Replace("#ffd36b", "#" + _palette.Selection.ToHtml(false));
 
     public override void _Ready()
     {

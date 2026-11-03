@@ -27,7 +27,7 @@ public partial class CameraFade3DChecks : Node
             var ordinary = world.SpawnBoid(Vector3.Back * 180, Vector3.Zero);
             var body = ordinary.GetNode<MeshInstance3D>("Body");
             var source = (BaseMaterial3D)body.Mesh.SurfaceGetMaterial(0);
-            Check(toggle.ButtonPressed && body.MaterialOverride is null, "Default fade setting leaves observation rendering unchanged");
+            Check(toggle.ButtonPressed && body.MaterialOverride == ordinary.NormalMaterial, "Default fade setting leaves observation rendering unchanged");
             world.SetLeader(leader);
             Vector2 pointer = GetViewport().GetVisibleRect().Size * 0.5f;
             ordinary.Position = camera.ProjectRayOrigin(pointer) + camera.ProjectRayNormal(pointer) * 30;
@@ -42,7 +42,7 @@ public partial class CameraFade3DChecks : Node
             Check(world.PickBoid(pointer, out _) == ordinary, "Near-camera fading preserves geometric selection");
             toggle.ButtonPressed = false;
             var loaded = new BoidConfig();
-            Check(body.MaterialOverride is null && loaded.Load(path) == Error.Ok && !loaded.FadeNearbyBoids,
+            Check(body.MaterialOverride == ordinary.NormalMaterial && loaded.Load(path) == Error.Ok && !loaded.FadeNearbyBoids,
                 "UI disables fading immediately and persists the choice");
             Check(world.PickBoid(pointer, out _) == ordinary && world.Stats.Equals(stats)
                 && position == ordinary.Position && velocity == ordinary.Velocity && facing == ordinary.Quaternion
@@ -63,12 +63,12 @@ public partial class CameraFade3DChecks : Node
             Check(body.MaterialOverride == ordinary.SelectedLeaderMaterial, "Selected leader retains its distinct opaque appearance");
             world.SetLeader(null);
             ordinary.SetSelected(false);
-            Check(body.MaterialOverride is null && spawned.GetNode<MeshInstance3D>("Body").MaterialOverride is null,
+            Check(body.MaterialOverride == ordinary.NormalMaterial && spawned.GetNode<MeshInstance3D>("Body").MaterialOverride == spawned.NormalMaterial,
                 "Leaving follow mode restores original materials for all boids");
             world.SetLeader(ordinary);
             world.Config.BoidCount = 3;
             world.Reset();
-            Check(world.Leader is null && world.Boids[0].GetNode<MeshInstance3D>("Body").MaterialOverride is null,
+            Check(world.Leader is null && world.Boids[0].GetNode<MeshInstance3D>("Body").MaterialOverride == world.Boids[0].NormalMaterial,
                 "Reset restores observation appearance even when population count stays unchanged");
             using var old = new ConfigFile();
             old.SetValue("simulation", "boid_count", 0);

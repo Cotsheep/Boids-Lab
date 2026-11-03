@@ -1,6 +1,6 @@
 # 自动验证与实机验收状态
 
-更新日期：2026-10-31。原三维实施基线为 `9fd3062`，数量增减基线为 `3762a3d`，后续已加入分类界面；当前代码包含近距离淡化、单步控制、半径提醒和数量即时增减。约定范围内的代码开发已完成；剩余图形效果及真实键盘操控由维护者手动验收，尚未记录最终通过结论。操作项目见[实机验收清单](manual-acceptance.md)，交付范围见[计划完成记录](next-development-plan.md)。实际提交与远程同步状态以 Git 为准。
+更新日期：2026-11-03。原三维实施基线为 `9fd3062`，数量增减基线为 `3762a3d`，后续已加入分类界面及冰岩明暗主题；当前代码包含近距离淡化、单步控制、半径提醒和数量即时增减。约定范围内的代码开发已完成；剩余图形效果及真实键盘操控由维护者手动验收，尚未记录最终通过结论。操作项目见[实机验收清单](manual-acceptance.md)，交付范围见[计划完成记录](next-development-plan.md)。实际提交与远程同步状态以 Git 为准。
 
 后续操控调整：领队与普通个体统一按实际速度方向平滑转向，相机目标视角只决定相机和 WASD 的移动参考。侧移、后退时领队转向运动方向；静止时转动相机不会主动改变领队朝向。已同步 F2 与控件说明，并通过构建及 leader_3d、leader_interaction_3d、motion_3d、world_switch 四组回归；其中领队检查为 3549 项，包含静止观察、视角参考下的侧移/后退、角运动限幅及 40/200 个跟随者。
 
@@ -29,14 +29,16 @@ C# 命令行构建通过，零警告、零错误。只在构建进程设置已�
 ./tests/run-headless.ps1 -GodotExecutable 'D:/app/Godot4.7.2/Godot_v4.7.2-stable_mono_win64_console.exe'
 ```
 
-可通过 `-Scenes boundary_3d_checks,leader_3d_checks,leader_interaction_3d_checks` 只运行指定组。运行器按退出码、PASS 标记和 ERROR 输出判定，并在 finally 中还原测试前两套用户配置。日志保存到 `.godot/validation/full-regression/`。
+可通过 `-Scenes boundary_3d_checks,leader_3d_checks,leader_interaction_3d_checks` 只运行指定组。运行器按退出码、PASS 标记和 ERROR 输出判定，并在 finally 中还原测试前两套模拟配置和独立外观偏好。日志保存到 `.godot/validation/full-regression/`。
 
-当前全部 26 个场景的最新日志均通过（2026-10-31 完整回归）：
+当前全部 28 个场景的最新日志均通过（2026-11-03 完整回归）：
 
-- 三维：boundary_3d、camera_fade_3d、leader_3d、leader_interaction_3d、motion_3d、observation_3d、obstacle_3d、obstacle_interaction_3d、spatial_3d、steering_3d。
-- 二维及共享：boundary_mode、debug、help_overlay、leader、leader_interaction、leader_spacing、motion、neighbor、obstacle_avoidance、obstacle_interaction、pause_shortcut、population、single_step、steering、ui_layout、world_switch。
+- 三维：boundary_3d、camera_fade_3d、leader_3d、leader_interaction_3d、motion_3d、observation_3d、obstacle_3d、obstacle_interaction_3d、presentation_3d、spatial_3d、steering_3d。
+- 二维及共享：boundary_mode、debug、help_overlay、leader、leader_interaction、leader_spacing、motion、neighbor、obstacle_avoidance、obstacle_interaction、pause_shortcut、population、single_step、steering、theme、ui_layout、world_switch。
 
-以上名称均带 `_checks` 后缀。覆盖独立欧氏距离参照、负数与百万级坐标、两种搜索轨迹一致性、六面/边角边界、范围外障碍和连续接触、身份生命周期、真实视口输入、配置隔离；其中单步专项 137 项断言、数量增减专项 84 项断言，分类界面专项 257 项断言。界面检查覆盖 960×640、1360×860、1920×1080 的五页可达性、固定操作栏、草稿提交、焦点隔离、独立滚动与障碍编辑状态。无图形耗时不作为桌面性能结论。各阶段原始记录见[历史验证](validation-history.md)。
+以上名称均带 `_checks` 后缀。覆盖独立欧氏距离参照、负数与百万级坐标、两种搜索轨迹一致性、六面/边角边界、范围外障碍和连续接触、身份生命周期、真实视口输入、配置隔离；其中单步专项 137 项断言、数量增减专项 84 项断言，分类界面专项 270 项断言，主题专项 169 项断言，三维显示与相机插值专项 1746 项断言。界面检查覆盖 960×640、1360×860、1920×1080 的五页可达性、固定操作栏、草稿提交、焦点隔离、独立滚动与障碍编辑状态。无图形耗时不作为桌面性能结论。各阶段原始记录见[历史验证](validation-history.md)。
+
+主题检查覆盖明暗对比度、偏好兼容与保存、界面按钮、帮助重着色、世界切换及新生个体、身份与近距离淡化，并验证主题切换不推进运动、不改变相机和运行状态。配色及本轮窗口检查边界见[主题说明](themes.md)。
 
 ## 原生窗口检查与剩余视觉验收
 
@@ -58,3 +60,7 @@ C# 命令行构建通过，零警告、零错误。只在构建进程设置已�
 分类界面改进另见[界面分组说明](ui-layout.md)；该窗口检查只覆盖界面，不补记飞行手感验收。
 
 2026-10-31 交接：维护者已明确接手剩余实机验收。代码完成、自动回归通过与人工验收通过分别记录；本次文档整理未新增图形或真实键盘验收结果。
+
+相机修复（2026-11-02）：三维个体显示、跟随相机、拾取和调试锚点现已统一使用显示插值，固定时间步的模拟保持不变；见[复现与对照结果](follow-camera-jitter.md)。
+
+2026-11-03 界面文字整理：移除旧模拟占位层，统一数量、选择、领队、障碍及统计文字，重写二维 / 三维 F2 说明；加入动态场景引导。构建零警告、零错误，完整 28 组回归通过，分类界面专项增至 270 项断言，覆盖放置 / 选择 / 领队操控 / 空群体引导。Godot MCP 的 4 张固定界面渲染检查通过，详见[界面说明](ui-layout.md)。

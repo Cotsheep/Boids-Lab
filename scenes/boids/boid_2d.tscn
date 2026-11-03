@@ -6,6 +6,6 @@
 script = ExtResource("1_boid")
 
 [node name="Body" type="Polygon2D" parent="." unique_id=499013883]
-color = Color(0.61511844, 0.84219694, 0.6533163, 1)
+color = Color(1, 0.6627451, 0.30196078, 1)
 polygon = PackedVector2Array(10, 0, -6, -5, -6, 5)
 uv = PackedVector2Array(10, 0, -6, -5, -6, 5)

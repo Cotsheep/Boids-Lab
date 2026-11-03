@@ -10,7 +10,7 @@ public partial class CameraFadeVisual : Node
 {
     private const string Output = "res://.godot/validation/camera-fade";
     private Label _caption = null!;
-    private readonly List<string> _metrics = new() { "scenario,distance,fade,green_pixels,leader_pixels" };
+    private readonly List<string> _metrics = new() { "scenario,distance,fade,boid_pixels,leader_pixels" };
 
     public override async void _Ready()
     {
@@ -86,7 +86,7 @@ public partial class CameraFadeVisual : Node
         var blocker = world.SpawnBoid(camera.Position + direction * 20, Vector3.Zero);
         var before = await Capture(world, "near-blocker", false);
         var after = await Capture(world, "near-blocker", true);
-        if (before.Green < 4000 || after.Green > before.Green / 10 || after.Leader <= before.Leader)
+        if (before.Boid < 4000 || after.Boid > before.Boid / 10 || after.Leader <= before.Leader)
             throw new InvalidOperationException($"Near-camera rendering did not clear occlusion: {before} -> {after}");
         blocker.SetSelected(true);
         await Capture(world, "near-selected", true);
@@ -101,7 +101,7 @@ public partial class CameraFadeVisual : Node
         world.Free();
     }
 
-    private async Task<(int Green, int Leader)> Capture(BoidManager3D world, string scenario, bool fade)
+    private async Task<(int Boid, int Leader)> Capture(BoidManager3D world, string scenario, bool fade)
     {
         world.Config.FadeNearbyBoids = fade;
         world.ConfigurationChanged();
@@ -111,15 +111,15 @@ public partial class CameraFadeVisual : Node
         using Image image = GetViewport().GetTexture().GetImage();
         Error error = image.SavePng(Output + "/" + name + ".png");
         if (error != Error.Ok) throw new InvalidOperationException($"Could not save render: {error}");
-        int green = 0, leader = 0;
+        int boid = 0, leader = 0;
         for (int y = 50; y < image.GetHeight(); y++)
             for (int x = 0; x < image.GetWidth(); x++)
             {
                 Color c = image.GetPixel(x, y);
-                if (c.G > 0.12f && c.G > c.R * 1.2f && c.G > c.B * 1.05f) green++;
+                if (c.R > 0.25f && c.R > c.G * 1.2f && c.G > c.B * 1.25f) boid++;
                 if (c.R > 0.4f && c.B > 0.5f && c.R > c.G * 1.2f && c.B > c.G * 1.2f) leader++;
             }
-        _metrics.Add($"{scenario},{world.Config.FollowCameraDistance},{fade},{green},{leader}");
-        return (green, leader);
+        _metrics.Add($"{scenario},{world.Config.FollowCameraDistance},{fade},{boid},{leader}");
+        return (boid, leader);
     }
 }

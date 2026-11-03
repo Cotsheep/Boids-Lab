@@ -34,6 +34,14 @@ public partial class ObstacleEditor2D : Node2D
 
     public ObstacleEditor2D() => Obstacles = _obstacles.AsReadOnly();
 
+    private LabPalette _palette = LabPalette.Dark;
+    public void ApplyPalette(LabPalette palette)
+    {
+        _palette = palette;
+        foreach (var obstacle in _obstacles) obstacle.ApplyPalette(palette);
+        QueueRedraw();
+    }
+
     public void Initialize(BoidManager world, SimulationCamera2D camera, Node2D container)
     {
         _world = world;
@@ -74,6 +82,7 @@ public partial class ObstacleEditor2D : Node2D
         obstacle.Initialize(shape, shape == ObstacleShape.Circle
             ? Obstacle2D.DefaultCircleSize : Obstacle2D.DefaultRectangleSize);
         _container.AddChild(obstacle);
+        obstacle.ApplyPalette(_palette);
         _obstacles.Add(obstacle);
         PlacementShape = null;
         Select(obstacle);
@@ -249,7 +258,7 @@ public partial class ObstacleEditor2D : Node2D
     {
         if (PlacementShape is not { } shape) return;
         float unitsPerPixel = 1 / Mathf.Max(0.001f, GetGlobalTransformWithCanvas().X.Length());
-        var color = new Color(0.45f, 0.85f, 1, 0.7f);
+        var color = _palette.ObstaclePreview;
         if (shape == ObstacleShape.Circle)
             DrawArc(_previewPosition, Obstacle2D.DefaultCircleSize.X / 2, 0, Mathf.Tau, 64,
                 color, 2 * unitsPerPixel, true);

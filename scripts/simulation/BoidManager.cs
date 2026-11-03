@@ -13,7 +13,7 @@ public partial class BoidManager : Node2D, ISimulationWorld
     [Export] public PackedScene BoidScene { get; set; } = null!;
 
     public string DisplayName => "二维世界";
-    public string LengthUnit => "像素";
+    public string LengthUnit => "世界像素";
     public SimulationFeatures Features => SimulationFeatures.All & ~SimulationFeatures.DirectLeaderControl;
     public BoidConfig Config => _config
         ?? throw new InvalidOperationException("Initialize the world with a shared configuration first.");
@@ -33,8 +33,6 @@ public partial class BoidManager : Node2D, ISimulationWorld
     public event Action? BoidControlStateChanged;
     public SimulationStats Stats { get; private set; }
     public bool IsRunning { get; private set; }
-    // 基础运动、邻居搜索与分离/对齐/聚集规则均已可运行。
-    public bool CoreImplemented => true;
     public bool CanStep => !IsRunning;
     public bool PopulationSpawnLimited { get; private set; }
     public ObstacleSelection? SelectedObstacleInfo => _obstacleEditor.SelectionInfo;
@@ -338,6 +336,7 @@ public partial class BoidManager : Node2D, ISimulationWorld
         boid.Position = WorldGeometry2D.Wrap(position, WrapBounds);
         boid.Initialize(Config, _nextBoidId++, velocity);
         _boidsRoot.AddChild(boid);
+        boid.ApplyPalette(_view.Palette);
         _boids.Add(boid);
         InvalidateNeighborResults();
         _view.QueueRedraw();

@@ -6,6 +6,8 @@ namespace BoidsLab;
 /// <summary>轴对齐长方体或球体；用真实尺寸管理解析几何，不使用节点缩放或刚体。</summary>
 public partial class Obstacle3D : Node3D
 {
+    private LabPalette _palette = LabPalette.Dark;
+    internal void ApplyPalette(LabPalette palette) { _palette = palette; RefreshAppearance(); }
     public static readonly Vector3 DefaultBoxSize = new(160, 100, 100);
     public static readonly Vector3 DefaultSphereSize = Vector3.One * 100;
     public ObstacleShape Shape { get; private set; }
@@ -51,8 +53,11 @@ public partial class Obstacle3D : Node3D
 
     private void RefreshAppearance()
     {
-        _material.AlbedoColor = new Color(_preview ? "548e92" : IsSelected ? "aa7b37" : "52657a");
-        if (_outline is not null) _outline.Visible = IsSelected || _preview;
+        // 明色使用干净的平面填色与轮廓，避免场景灯光把杏橙压成灰褐色。
+        _material.ShadingMode = _palette.IsLight ? BaseMaterial3D.ShadingModeEnum.Unshaded : BaseMaterial3D.ShadingModeEnum.PerPixel;
+        _material.AlbedoColor = _preview ? _palette.ObstaclePreview : IsSelected ? _palette.ObstacleSelected : _palette.Obstacle;
+        _lineMaterial.AlbedoColor = _preview ? _palette.ObstaclePreviewOutline : IsSelected ? _palette.Selection : _palette.ObstacleOutline;
+        if (_outline is not null) _outline.Visible = IsSelected || _preview || _palette.IsLight;
     }
 
     private void RebuildMesh()

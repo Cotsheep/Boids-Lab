@@ -9,7 +9,6 @@ public interface ISimulationWorld
     string LengthUnit { get; }
     SimulationFeatures Features { get; }
     bool IsRunning { get; }
-    bool CoreImplemented { get; }
     bool CanStep { get; }
     SimulationStats Stats { get; }
     bool PopulationSpawnLimited { get; }

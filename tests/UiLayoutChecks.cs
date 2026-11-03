@@ -161,9 +161,12 @@ public partial class UiLayoutChecks : Node
             ((BoidManager3D)World).GetNode<ObstacleEditor3D>("ObstacleEditor").AddObstacle(ObstacleShape.Box, Vector3.Zero);
         await Frame();
         Check(width.IsVisibleInTree() && width.Editable, "Selecting an obstacle reveals editable dimensions");
+        Check(_app.GetNode<Label>("%WorldHint").Text.Contains("障碍页")
+            && Find<Label>("SelectedBoidStatus").Text.Contains("障碍物"), "Selection hints describe the selected obstacle rather than asking to select a boid");
         World.BeginObstaclePlacement(World is BoidManager ? ObstacleShape.Circle : ObstacleShape.Sphere);
         await Frame();
         Check(!width.IsVisibleInTree() && Find<Button>("CancelObstaclePlacement").IsVisibleInTree(), "Placement shows cancellation rather than inactive size editors");
+        Check(_app.GetNode<Label>("%WorldHint").Text.Contains("取消"), "Placement replaces camera hints with placement guidance");
         World.CancelObstaclePlacement();
         Panel.SelectCategory("Flocking");
         Find<SpinBox>("SeparationRadius").Value = 150;
@@ -171,6 +174,24 @@ public partial class UiLayoutChecks : Node
         Check(Find<Label>("SeparationRadiusWarning").IsVisibleInTree(), "Related radii and warning are available together");
         Find<SpinBox>("PerceptionRadius").Value = 150;
         Check(!Find<Label>("SeparationRadiusWarning").Visible, "Warning clears when the radii match");
+        if (World is BoidManager twoD) twoD.SetLeader(twoD.Boids[0]);
+        else ((BoidManager3D)World).SetLeader(((BoidManager3D)World).Boids[0]);
+        Check(_app.GetNode<Label>("%WorldTitle").Text.Contains("领队模式"), "Scene title reflects the leader mode");
+        if (World is BoidManager3D threeD)
+        {
+            Check(_app.GetNode<Label>("%WorldHint").Text.Contains("F3"), "Released following offers the capture shortcut");
+            threeD.SetLeaderControlActive(true);
+            Check(_app.GetNode<Label>("%WorldHint").Text.Contains("WASD"), "Captured following offers flight guidance");
+            threeD.SetLeaderControlActive(false);
+            Check(_app.GetNode<Label>("%WorldHint").Text.Contains("F3"), "Release restores follow-view guidance immediately");
+            threeD.SetLeader(null);
+        }
+        else ((BoidManager)World).SetLeader(null);
+        Check(_app.GetNode<Label>("%WorldTitle").Text.Contains("观察模式"), "Removing the leader restores observation guidance");
+        var count = Find<SpinBox>("BoidCount");
+        count.GetLineEdit().Text = "0";
+        count.GetLineEdit().EmitSignal(LineEdit.SignalName.TextSubmitted, "0");
+        Check(_app.GetNode<Label>("%WorldHint").Text.Contains("暂无个体"), "An empty world offers population guidance");
     }
 
     private void Tap(Key key)

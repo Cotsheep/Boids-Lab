@@ -11,7 +11,7 @@ public partial class ObstaclePanel : VBoxContainer
     public event Action<float, float, float>? ResizeRequested;
     public event Action? CancelPlacementRequested;
 
-    public string LengthUnit { get; set; } = "像素";
+    public string LengthUnit { get; set; } = "世界像素";
     public bool ThreeDimensional { get; set; }
 
     private Label _status = null!;
@@ -34,13 +34,13 @@ public partial class ObstaclePanel : VBoxContainer
         AddChild(createRow);
         AddButton(createRow, ThreeDimensional ? "AddBox" : "AddRectangle", ThreeDimensional ? "添加长方体" : "添加矩形",
             () => CreateRequested?.Invoke(ThreeDimensional ? ObstacleShape.Box : ObstacleShape.Rectangle))
-            .TooltipText = ThreeDimensional ? "点击场景，在穿过观察中心的视角平面放置长方体；可放置在观察范围外。" : "进入放置模式，在场景中点击创建矩形障碍物。";
+            .TooltipText = ThreeDimensional ? "进入放置模式，移动鼠标预览，左键放置长方体；Esc 或右键取消。放置平面固定，可超出观察范围。" : "进入放置模式，移动鼠标预览，左键放置矩形；Esc 或右键取消。";
         AddButton(createRow, ThreeDimensional ? "AddSphere" : "AddCircle", ThreeDimensional ? "添加球体" : "添加圆形",
             () => CreateRequested?.Invoke(ThreeDimensional ? ObstacleShape.Sphere : ObstacleShape.Circle))
-            .TooltipText = ThreeDimensional ? "点击场景，在穿过观察中心的视角平面放置球体；可放置在观察范围外。" : "进入放置模式，在场景中点击创建圆形障碍物。";
+            .TooltipText = ThreeDimensional ? "进入放置模式，移动鼠标预览，左键放置球体；Esc 或右键取消。放置平面固定，可超出观察范围。" : "进入放置模式，移动鼠标预览，左键放置圆形；Esc 或右键取消。";
 
         _status = new Label { Name = "ObstacleStatus", AutowrapMode = TextServer.AutowrapMode.WordSmart };
-        _status.AddThemeColorOverride("font_color", new Color("91a6bb"));
+        _status.ThemeTypeVariation = "MutedLabel";
         _status.AddThemeFontSizeOverride("font_size", 13);
         AddChild(_status);
 
@@ -51,11 +51,11 @@ public partial class ObstaclePanel : VBoxContainer
         AddChild(widthRow);
 
         _heightRow = new HBoxContainer();
-        _heightRow.AddChild(new Label { Text = "高度", SizeFlagsHorizontal = SizeFlags.ExpandFill });
+        _heightRow.AddChild(new Label { Text = ThreeDimensional ? "高度 Y" : "高度", SizeFlagsHorizontal = SizeFlags.ExpandFill });
         _height = AddSizeInput(_heightRow, "ObstacleHeight");
         AddChild(_heightRow);
         _depthRow = new HBoxContainer();
-        _depthRow.AddChild(new Label { Text = "深度", SizeFlagsHorizontal = SizeFlags.ExpandFill });
+        _depthRow.AddChild(new Label { Text = "深度 Z", SizeFlagsHorizontal = SizeFlags.ExpandFill });
         _depth = AddSizeInput(_depthRow, "ObstacleDepth");
         AddChild(_depthRow);
         _width.ValueChanged += OnSizeChanged;
@@ -64,10 +64,10 @@ public partial class ObstaclePanel : VBoxContainer
 
         var editRow = _editRow = new HBoxContainer();
         AddChild(editRow);
-        _delete = AddButton(editRow, "DeleteObstacle", "删除选中", () => DeleteRequested?.Invoke());
+        _delete = AddButton(editRow, "DeleteObstacle", "删除障碍物", () => DeleteRequested?.Invoke());
         _delete.TooltipText = "删除当前选中的障碍物；也可按 Delete，编辑输入框时不会删除。";
         _cancel = AddButton(editRow, "CancelObstaclePlacement", "取消放置", () => CancelPlacementRequested?.Invoke());
-        _cancel.TooltipText = "取消尚未完成的放置；也可按 Esc 或鼠标右键。";
+        _cancel.TooltipText = "结束当前放置预览；也可按 Esc 或鼠标右键。";
         Refresh(_selection, _placement);
     }
 
@@ -80,9 +80,9 @@ public partial class ObstaclePanel : VBoxContainer
         bool circle = selected?.Shape is ObstacleShape.Circle or ObstacleShape.Sphere;
         bool editable = selected.HasValue && !placement.HasValue;
         _status.Text = placement.HasValue
-            ? $"正在放置{ShapeName(placement.Value)}：点击场景"
-            : selected.HasValue ? $"已选中{ShapeName(selected.Value.Shape)}障碍物" : "选择上方形状后点击场景放置；选中已有障碍可编辑尺寸。";
-        _widthLabel.Text = circle ? "直径" : "宽度";
+            ? $"正在放置{ShapeName(placement.Value)} · 左键确认，Esc 或右键取消"
+            : selected.HasValue ? $"已选中{ShapeName(selected.Value.Shape)}障碍物" : "选择上方形状开始放置；点击已有障碍物可编辑尺寸。";
+        _widthLabel.Text = circle ? "直径" : ThreeDimensional ? "宽度 X" : "宽度";
         _widthRow.Visible = editable;
         _heightRow.Visible = editable && !circle;
         _depthRow.Visible = editable && ThreeDimensional && !circle;

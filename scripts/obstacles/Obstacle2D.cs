@@ -8,6 +8,8 @@ public partial class Obstacle2D : Node2D
 {
     public const float MinSize = ObstacleSize.Min;
     public const float MaxSize = ObstacleSize.Max;
+    private LabPalette _palette = LabPalette.Dark;
+    internal void ApplyPalette(LabPalette palette) { _palette = palette; QueueRedraw(); }
     public static readonly Vector2 DefaultRectangleSize = new(160, 100);
     public static readonly Vector2 DefaultCircleSize = new(100, 100);
 
@@ -57,8 +59,8 @@ public partial class Obstacle2D : Node2D
     {
         float scale = GetGlobalTransformWithCanvas().X.Length();
         float unitsPerPixel = scale > 0 ? 1 / scale : 1;
-        Color fill = IsSelected ? new Color("75603a") : new Color("3b4659");
-        Color border = IsSelected ? new Color("ffe394") : new Color("91a6bb");
+        Color fill = IsSelected ? _palette.ObstacleSelected : _palette.Obstacle;
+        Color border = IsSelected ? _palette.Selection : _palette.ObstacleOutline;
         float width = (IsSelected ? 3 : 2) * unitsPerPixel;
         if (Shape == ObstacleShape.Circle)
         {
@@ -74,7 +76,7 @@ public partial class Obstacle2D : Node2D
         if (IsSelected)
         {
             Vector2 handleSize = Vector2.One * 10 * unitsPerPixel;
-            DrawRect(new Rect2(HandlePosition - handleSize * 0.5f, handleSize), new Color("fff4d2"));
+            DrawRect(new Rect2(HandlePosition - handleSize * 0.5f, handleSize), _palette.Selection);
         }
     }
 }

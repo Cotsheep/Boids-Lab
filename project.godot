@@ -92,4 +92,4 @@ reset_camera={
 
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
-environment/defaults/default_clear_color=Color(0.035, 0.05, 0.075, 1)
+environment/defaults/default_clear_color=Color(0.090196, 0.098039, 0.109804, 1)

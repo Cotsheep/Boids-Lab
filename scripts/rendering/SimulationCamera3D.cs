@@ -21,6 +21,7 @@ public partial class SimulationCamera3D : Camera3D
     public event Action? ManualViewChanged;
     public event Action<float>? FollowDistanceRequested;
     public bool IsFollowing => _leader is not null;
+    public bool IsFollowFrozen => _followFrozen;
     private Boid3D? _leader;
     private LeaderController3D? _leaderController;
     private BoidConfig? _followConfig;
@@ -75,7 +76,7 @@ public partial class SimulationCamera3D : Camera3D
         float distance = _followConfig.FollowCameraDistance;
         Quaternion target = _leaderController.TargetOrientation;
         Vector3 up = target * Vector3.Up;
-        OrbitCenter = GetParent<Node3D>().ToLocal(_leader.GlobalPosition);
+        OrbitCenter = GetParent<Node3D>().ToLocal(_leader.DisplayGlobalTransform.Origin);
         Vector3 desired = OrbitCenter - _leaderController.Forward * distance + up * distance * 0.15f;
         float blend = snap ? 1f : 1f - Mathf.Exp(-8f * dt);
         Position = Position.Lerp(desired, blend);

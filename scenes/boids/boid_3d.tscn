@@ -3,20 +3,21 @@
 [ext_resource type="Script" path="res://scripts/simulation/Boid3D.cs" id="1_boid"]
 
 [sub_resource type="StandardMaterial3D" id="Material_boid"]
-albedo_color = Color(0.36, 0.89, 0.65, 1)
+shading_mode = 0
+albedo_color = Color(1, 0.6627451, 0.30196078, 1)
 roughness = 0.8
 
 [sub_resource type="StandardMaterial3D" id="Material_selection"]
 shading_mode = 0
-albedo_color = Color(1, 0.89, 0.58, 1)
+albedo_color = Color(1, 0.89019608, 0.58039216, 1)
 
 [sub_resource type="StandardMaterial3D" id="Material_leader"]
 shading_mode = 0
-albedo_color = Color(0.75, 0.39, 1, 1)
+albedo_color = Color(0.83921569, 0.61176471, 1, 1)
 
 [sub_resource type="StandardMaterial3D" id="Material_selected_leader"]
 shading_mode = 0
-albedo_color = Color(1, 0.63, 0.92, 1)
+albedo_color = Color(1, 0.63137255, 0.92156863, 1)
 
 [sub_resource type="CylinderMesh" id="Mesh_boid"]
 material = SubResource("Material_boid")

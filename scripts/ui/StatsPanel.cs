@@ -15,13 +15,15 @@ public partial class StatsPanel : HFlowContainer
     public override void _Ready()
     {
         _count = AddMetric("BoidCount", "实际个体数量");
+        _count.TooltipText = "当前场景中的个体数；生成位置受限时可能少于目标数量。";
         _fps = AddMetric("Fps", "帧率（帧/秒）");
+        _fps.TooltipText = "当前画面的显示帧率；暂停模拟后，界面和相机仍可刷新。";
         _time = AddMetric("UpdateTime", "模拟更新耗时（毫秒）");
-        _time.TooltipText = "最近一次物理步中当前世界已实现的模拟计算总耗时；不含绘制与界面刷新。未实现或尚未测量的指标显示为 --。";
+        _time.TooltipText = "最近一次模拟更新的总计算耗时，包含搜索、转向和运动更新；不含绘制与界面刷新。-- 表示暂无读数，暂停时保留上次结果。";
         _searchTime = AddMetric("SearchTime", "邻居搜索耗时（毫秒）");
         _searchTime.TooltipText = "最近一次搜索的实测耗时，包含状态快照、网格构建（网格模式）、距离判定和结果写入。";
         _checks = AddMetric("NeighborChecks", "邻居候选检查次数");
-        _checks.TooltipText = "每步实际距离检查次数，不含自身；甲检查乙和乙检查甲各计一次。";
+        _checks.TooltipText = "最近一次搜索实际进行的距离检查次数，不包含自身；A 检查 B 和 B 检查 A 各计一次。";
         _neighbors = AddMetric("AverageNeighbors", "平均邻居数量");
         _neighbors.TooltipText = "每个个体在感知半径内的邻居数量的平均值；空群体测量后为零。";
     }
@@ -45,7 +47,7 @@ public partial class StatsPanel : HFlowContainer
             MouseFilter = MouseFilterEnum.Ignore,
         };
         var heading = new Label { Text = title };
-        heading.AddThemeColorOverride("font_color", new Color("91a6bb"));
+        heading.ThemeTypeVariation = "MutedLabel";
         heading.AddThemeFontSizeOverride("font_size", 12);
         var value = new Label { Name = name, Text = "--" };
         value.AddThemeFontSizeOverride("font_size", 23);

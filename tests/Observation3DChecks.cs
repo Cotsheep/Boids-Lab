@@ -180,12 +180,12 @@ public partial class Observation3DChecks : Node
         await Click(Screen(a));
         Check(_world.SelectedBoid == a && a.IsSelected && !b.IsSelected, "Paused left click selects exactly one individual");
         Check(a.GetNode<MeshInstance3D>("Body").MaterialOverride == a.SelectionMaterial
-            && b.GetNode<MeshInstance3D>("Body").MaterialOverride is null, "Highlight does not change the shared normal material");
+            && b.GetNode<MeshInstance3D>("Body").MaterialOverride == b.NormalMaterial, "Highlight does not change the shared normal material");
         Check(view.DebugGeometry.PerceptionCount == 1 && view.DebugGeometry.NeighborCount == 1
             && view.DebugGeometry.VelocityCount == 2, "Local range/links and all moving velocity arrows are independent");
         Check(((Label)panel.FindChild("SelectedBoidStatus", true, false)).Text.Contains($"#{a.Id}"), "Shared UI shows the selected ID");
         await Click(Screen(a));
-        Check(_world.SelectedBoid is null && !a.IsSelected && a.GetNode<MeshInstance3D>("Body").MaterialOverride is null,
+        Check(_world.SelectedBoid is null && !a.IsSelected && a.GetNode<MeshInstance3D>("Body").MaterialOverride == a.NormalMaterial,
             "Repeated click deselects and restores the original appearance");
         Check(view.DebugGeometry.RangePoints.Count == 0 && view.DebugGeometry.NeighborPoints.Count == 0
             && view.DebugGeometry.VelocityCount == 2, "Deselection removes only local debug overlays");

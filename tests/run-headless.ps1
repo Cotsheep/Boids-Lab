@@ -11,13 +11,16 @@ $previousResolver = $env:MSBuildEnableWorkloadResolver
 $previousNotification = $env:DOTNET_CLI_WORKLOAD_UPDATE_NOTIFY_DISABLE
 $preferenceDirectory = Join-Path $env:APPDATA 'Godot/app_userdata/BoidsLab'
 $preferences = @{}
-foreach ($name in @('boids_lab.cfg', 'boids_lab_3d.cfg')) {
+foreach ($name in @('boids_lab.cfg', 'boids_lab_3d.cfg', 'boids_lab_ui.cfg')) {
     $path = Join-Path $preferenceDirectory $name
     $preferences[$path] = if (Test-Path -LiteralPath $path) { [System.IO.File]::ReadAllBytes($path) } else { $null }
 }
 
 try {
     Set-Location -LiteralPath $projectDirectory
+    # Existing appearance assertions use the default dark palette, independent of user preferences.
+    [System.IO.Directory]::CreateDirectory($preferenceDirectory) | Out-Null
+    [System.IO.File]::WriteAllText((Join-Path $preferenceDirectory 'boids_lab_ui.cfg'), "[appearance]`nlight_theme=false`n")
     # Process-local workaround for the existing machine workload resolver issue.
     $env:MSBuildEnableWorkloadResolver = 'false'
     $env:DOTNET_CLI_WORKLOAD_UPDATE_NOTIFY_DISABLE = 'true'
