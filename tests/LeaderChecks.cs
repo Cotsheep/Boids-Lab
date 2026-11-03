@@ -183,8 +183,7 @@ public partial class LeaderChecks : Node
             {
                 world.Step(Dt);
                 Vector2 offset = leader.Position - obstacle.Position;
-                Check(Mathf.Abs(offset.X) >= 8 + config.ObstacleClearance - 0.02f
-                    || Mathf.Abs(offset.Y) >= 50 + config.ObstacleClearance - 0.02f,
+                Check((offset.Abs() - new Vector2(8, 50)).Max(Vector2.Zero).Length() >= config.ObstacleClearance - 0.02f,
                     "Leader never tunnels into obstacle while seeking target");
             }
             Check(leader.Position.DistanceTo(world.LeaderTarget!.Value) < 2.1f,

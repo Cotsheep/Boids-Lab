@@ -12,9 +12,12 @@ public partial class ObstacleEditor2D : Node2D
     public Obstacle2D? SelectedObstacle { get; private set; }
     public ObstacleShape? PlacementShape { get; private set; }
     public IReadOnlyList<Obstacle2D> Obstacles { get; }
+    public ObstacleQuery2D Query { get; } = new();
+    public void SynchronizeQuery(Rect2? bounds = null) =>
+        Query.Synchronize(Obstacles, bounds, _world.GetNode<Node2D>("Boids").GlobalTransform);
     public bool IsEditing => PlacementShape is not null || _dragTarget is not null || _swallowPlacementRelease;
     public ObstacleSelection? SelectionInfo => SelectedObstacle is { } selected
-        ? new ObstacleSelection(selected.Shape, selected.Dimensions.X, selected.Dimensions.Y) : null;
+        ? new ObstacleSelection(selected.IsCustom ? ObstacleShape.Custom : selected.Shape, selected.Dimensions.X, selected.Dimensions.Y) : null;
 
     private readonly List<Obstacle2D> _obstacles = new();
     private BoidManager _world = null!;
@@ -47,6 +50,8 @@ public partial class ObstacleEditor2D : Node2D
         _world = world;
         _camera = camera;
         _container = container;
+        foreach (Node child in container.GetChildren())
+            if (child is Obstacle2D obstacle) RegisterObstacle(obstacle);
     }
 
     public override void _Ready()
@@ -82,12 +87,27 @@ public partial class ObstacleEditor2D : Node2D
         obstacle.Initialize(shape, shape == ObstacleShape.Circle
             ? Obstacle2D.DefaultCircleSize : Obstacle2D.DefaultRectangleSize);
         _container.AddChild(obstacle);
-        obstacle.ApplyPalette(_palette);
-        _obstacles.Add(obstacle);
+        RegisterObstacle(obstacle);
         PlacementShape = null;
         Select(obstacle);
-        GeometryChanged?.Invoke();
+        GeometryEdited();
         return obstacle;
+    }
+
+    public void RegisterObstacle(Obstacle2D obstacle)
+    {
+        if (_obstacles.Contains(obstacle)) return;
+        if (obstacle.GetParent() is null) _container.AddChild(obstacle);
+        obstacle.ApplyPalette(_palette);
+        _obstacles.Add(obstacle);
+        obstacle.TreeExiting += () => { Query.Remove(obstacle.GetInstanceId()); _obstacles.Remove(obstacle); };
+        GeometryEdited();
+    }
+
+    private void GeometryEdited()
+    {
+        SynchronizeQuery(); // 暂停编辑也立即提交几何；不推进个体或物理空间。
+        GeometryChanged?.Invoke();
     }
 
     public void ClearSelection() => Select(null);
@@ -108,14 +128,16 @@ public partial class ObstacleEditor2D : Node2D
         CancelGesture();
         _obstacles.Remove(obstacle);
         Select(null);
-        _container.RemoveChild(obstacle);
+        Query.Remove(obstacle.GetInstanceId());
+        obstacle.GetParent().RemoveChild(obstacle);
         obstacle.QueueFree();
-        GeometryChanged?.Invoke();
+        GeometryEdited();
     }
 
     public void ResizeSelected(float width, float height)
     {
         if (!_interactionEnabled || SelectedObstacle is not { } obstacle) return;
+        if (obstacle.IsCustom) return;
         obstacle.SetDimensions(new Vector2(width, height));
         NotifyChanged(true);
     }
@@ -163,7 +185,7 @@ public partial class ObstacleEditor2D : Node2D
             _dragging = true;
         if (_dragging)
         {
-            Vector2 pointer = ToWorld(motion.Position);
+            Vector2 pointer = target.GetParent<Node2D>().GetGlobalTransformWithCanvas().AffineInverse() * motion.Position;
             if (_resizing)
             {
                 Vector2 dimensions = target.Shape == ObstacleShape.Circle
@@ -187,7 +209,7 @@ public partial class ObstacleEditor2D : Node2D
             return;
         }
         if (mouse.ButtonIndex is MouseButton.WheelUp or MouseButton.WheelDown
-            && mouse.ShiftPressed && SelectedObstacle is { } selected
+            && mouse.ShiftPressed && SelectedObstacle is { IsCustom: false } selected
             && (selected.HitTest(mouse.Position) || selected.HitResizeHandle(mouse.Position)))
         {
             CancelGesture();
@@ -215,7 +237,7 @@ public partial class ObstacleEditor2D : Node2D
         if (handle) hit = SelectedObstacle;
         else
             for (int i = _obstacles.Count - 1; i >= 0; i--)
-                if (_obstacles[i].HitTest(mouse.Position)) { hit = _obstacles[i]; break; }
+                if (HitObstacle(_obstacles[i], mouse.Position)) { hit = _obstacles[i]; break; }
         if (hit is null) return; // 世界空白与 Boid 点击继续交给原来的相机/选择流程。
         _camera.CancelPointerGesture();
         Select(hit);
@@ -223,7 +245,7 @@ public partial class ObstacleEditor2D : Node2D
         _resizing = handle;
         _dragging = false;
         _pressScreen = mouse.Position;
-        _pressWorld = ToWorld(mouse.Position);
+        _pressWorld = hit.GetParent<Node2D>().GetGlobalTransformWithCanvas().AffineInverse() * mouse.Position;
         _startPosition = hit.Position;
         _startDimensions = hit.Dimensions;
         GetViewport().SetInputAsHandled();
@@ -246,11 +268,19 @@ public partial class ObstacleEditor2D : Node2D
         _swallowPlacementRelease = false;
     }
 
+    private bool HitObstacle(Obstacle2D obstacle, Vector2 screen)
+    {
+        if (!obstacle.IsCustom) return obstacle.HitTest(screen);
+        SynchronizeQuery();
+        Vector2 point = _world.GetNode<Node2D>("Boids").GetGlobalTransformWithCanvas().AffineInverse() * screen;
+        return Query.ContainsPoint(point, obstacle.GetInstanceId());
+    }
+
     private Vector2 ToWorld(Vector2 screen) => GetGlobalTransformWithCanvas().AffineInverse() * screen;
     private void NotifyChanged(bool geometryChanged = false)
     {
         QueueRedraw();
-        if (geometryChanged) GeometryChanged?.Invoke();
+        if (geometryChanged) GeometryEdited();
         Changed?.Invoke();
     }
 
@@ -268,6 +298,7 @@ public partial class ObstacleEditor2D : Node2D
 
     public override void _ExitTree()
     {
+        Query.Dispose();
         GetWindow().FocusExited -= CancelGesture;
         GetViewport().SizeChanged -= CancelGesture;
     }

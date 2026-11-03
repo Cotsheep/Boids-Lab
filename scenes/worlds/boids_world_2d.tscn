@@ -1,28 +1,31 @@
-[gd_scene load_steps=6 format=3]
+[gd_scene format=3 uid="uid://lw22a67ie8hb"]
 
 [ext_resource type="Script" uid="uid://b3s30e04dtug5" path="res://scripts/simulation/BoidManager.cs" id="1_world"]
 [ext_resource type="Script" uid="uid://h583hdm6217o" path="res://scripts/rendering/SimulationView.cs" id="2_view"]
-[ext_resource type="PackedScene" path="res://scenes/boids/boid_2d.tscn" id="3_boid"]
-[ext_resource type="Script" path="res://scripts/rendering/SimulationCamera2D.cs" id="4_camera"]
-[ext_resource type="Script" path="res://scripts/obstacles/ObstacleEditor2D.cs" id="5_obstacles"]
+[ext_resource type="PackedScene" uid="uid://e0c4wsdkl48e" path="res://scenes/boids/boid_2d.tscn" id="3_boid"]
+[ext_resource type="Script" uid="uid://d2d8xpjgkujb2" path="res://scripts/rendering/SimulationCamera2D.cs" id="4_camera"]
+[ext_resource type="PackedScene" path="res://scenes/obstacles/l_shape_2d.tscn" id="4_gy6mg"]
+[ext_resource type="Script" uid="uid://b0w85us7yjae0" path="res://scripts/obstacles/ObstacleEditor2D.cs" id="5_obstacles"]
 
-[node name="BoidsWorld2D" type="Node2D"]
+[node name="BoidsWorld2D" type="Node2D" unique_id=1290065526]
 script = ExtResource("1_world")
 BoidScene = ExtResource("3_boid")
 
-[node name="SimulationView" type="Node2D" parent="."]
+[node name="SimulationView" type="Node2D" parent="." unique_id=1341688116]
 script = ExtResource("2_view")
 
-[node name="Boids" type="Node2D" parent="."]
+[node name="Boids" type="Node2D" parent="." unique_id=90495453]
 
-[node name="Obstacles" type="Node2D" parent="."]
+[node name="Obstacles" type="Node2D" parent="." unique_id=41747220]
 z_index = 1
 
-[node name="Camera2D" type="Camera2D" parent="."]
+[node name="SolidL" parent="Obstacles" unique_id=2055008158 instance=ExtResource("4_gy6mg")]
+
+[node name="Camera2D" type="Camera2D" parent="." unique_id=451854507]
 position = Vector2(640, 360)
 limit_enabled = false
 script = ExtResource("4_camera")
 
-[node name="ObstacleEditor" type="Node2D" parent="."]
+[node name="ObstacleEditor" type="Node2D" parent="." unique_id=2017935802]
 z_index = 2
 script = ExtResource("5_obstacles")

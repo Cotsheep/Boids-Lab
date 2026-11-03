@@ -30,6 +30,7 @@ public partial class ObstacleInteractionChecks : Node
             _world = game.GetNode<BoidManager>("World/BoidsWorld2D");
             _camera = _world.GetNode<SimulationCamera2D>("Camera2D");
             _editor = _world.GetNode<ObstacleEditor2D>("ObstacleEditor");
+            ObstacleHarness2D.ClearLayout(_world);
             var panel = game.GetNode<ControlPanel>("%ControlPanel");
             panel.SelectCategory("Obstacles");
             await Frame();

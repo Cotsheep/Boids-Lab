@@ -18,6 +18,8 @@ public partial class Leader3DChecks : Node
             CheckGroup(40, 1.5f, NeighborSearchMode.Naive);
             CheckGroup(200, 1.5f, NeighborSearchMode.UniformGrid);
             CheckGroup(40, 5, NeighborSearchMode.UniformGrid);
+            CheckGroup(40, 1.5f, NeighborSearchMode.UniformGrid, true);
+            CheckGroup(200, 1.5f, NeighborSearchMode.UniformGrid, true);
             GD.Print($"PASS: {_checks} 3D leader/motion/spacing assertions (headless).");
             GetTree().Quit();
         }
@@ -174,7 +176,7 @@ public partial class Leader3DChecks : Node
         world.Free();
     }
 
-    private void CheckGroup(int count, float weight, NeighborSearchMode mode)
+    private void CheckGroup(int count, float weight, NeighborSearchMode mode, bool obstacles = false)
     {
         var world = World(new BoidConfig { BoidCount = 0, LeaderFollowWeight = weight, NeighborSearchMode = mode });
         var leader = world.SpawnBoid(Vector3.Zero, Vector3.Zero);
@@ -188,12 +190,21 @@ public partial class Leader3DChecks : Node
         world.SetLeader(leader);
         for (int i = 0; i < 1200; i++) world.Step(1.0 / 60);
         Spacing(world, count, "rest");
+        Obstacle3D? obstacle = null;
+        if (obstacles)
+        {
+            obstacle = world.GetNode<ObstacleEditor3D>("ObstacleEditor").AddObstacle(ObstacleShape.Sphere, new Vector3(90, 0, -300));
+            obstacle.SetDimensions(Vector3.One * 120);
+        }
         world.SetLeaderControlActive(true);
         Move(world, "leader_forward", true);
         for (int i = 0; i < 1800; i++)
         {
             world.LeaderController._Input(new InputEventMouseMotion { Relative = new Vector2(0.25f, Mathf.Sin(i / 120f) * 0.05f) });
             world.Step(1.0 / 60);
+            if (obstacle is not null)
+                foreach (var boid in world.Boids)
+                    Check(boid.Position.DistanceTo(obstacle.Position) >= 60 + world.Config.ObstacleClearance - 0.1f, "3D group detour preserves sphere clearance");
             if (i >= 600 && i % 120 == 0) Spacing(world, count, "moving");
         }
         Spacing(world, count, "final");
@@ -202,7 +213,6 @@ public partial class Leader3DChecks : Node
         float radius = LeaderSteering3D.FollowRadius(count, world.Config);
         Check(center.DistanceTo(leader.Position) < world.Config.LeaderFollowDistance + 2 * radius + 240,
             $"Followers remain with a moving leader: count={count}, distance={center.DistanceTo(leader.Position)}");
-        GD.Print($"Leader 3D spacing passed: count={count}, weight={weight}, center distance={center.DistanceTo(leader.Position):F1}");
         world.Free();
     }
 

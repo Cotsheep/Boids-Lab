@@ -32,6 +32,7 @@ public partial class WorldSwitchChecks : Node
             _panel = _app.GetNode<ControlPanel>("%ControlPanel");
             _selector = _app.GetNode<OptionButton>("%WorldSelector");
             var old2D = _app.GetNode<BoidManager>("World/BoidsWorld2D");
+            int authoredObstacleCount = old2D.GetNode<ObstacleEditor2D>("ObstacleEditor").Obstacles.Count;
             Check(_app.CurrentWorldIndex == 0 && _selector.Selected == 0 && old2D.Boids.Count == 6, "2D entry and selector agree");
             Check(_selector.GetGlobalRect().End.X <= GetViewport().GetVisibleRect().Size.X, "Selector fits the desktop header");
             old2D.GetNode<ObstacleEditor2D>("ObstacleEditor").AddObstacle(ObstacleShape.Circle, new Vector2(200, 200));
@@ -74,7 +75,8 @@ public partial class WorldSwitchChecks : Node
             Check(!world2D.IsRunning && world2D.Boids.Count == 15 && world2D.Config.PerceptionRadius == 70,
                 "Returning to 2D rebuilds from the preserved 2D parameters");
             Check(world2D.Leader is null && world2D.SelectedBoid is null
-                && world2D.GetNode<ObstacleEditor2D>("ObstacleEditor").Obstacles.Count == 0, "Leader, selection and obstacle layout are discarded");
+                && world2D.GetNode<ObstacleEditor2D>("ObstacleEditor").Obstacles.Count == authoredObstacleCount,
+                "Leader, selection and runtime obstacles are discarded; authored layout is restored");
             Check(_panel.Obstacles is not null && _panel.FindChild("IsLeader", true, false) is CheckBox, "2D controls are restored");
             Check(GetViewport().GetCamera3D() is null && GetViewport().GetCamera2D() is not null, "3D camera no longer affects the viewport");
             Check(!HelpText().Contains("三维观察与领队飞行"), "2D instructions are restored");

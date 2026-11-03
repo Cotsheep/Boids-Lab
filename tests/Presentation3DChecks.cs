@@ -166,7 +166,6 @@ public partial class Presentation3DChecks : Node
         _afterFrame = null;
         Check(intermediateFrames > 10, "The real engine supplies interpolation fractions between ticks");
         Check(meshError < 0.002f && followError < 0.002f, $"Real process order presents the same pose to mesh and camera: mesh={meshError}, camera={followError}");
-        GD.Print($"PRESENTATION-RUNTIME: intermediate_frames={intermediateFrames}, mesh_error={meshError:F6}, follow_error={followError:F6}");
         world.Free();
     }
 
@@ -215,7 +214,6 @@ public partial class Presentation3DChecks : Node
             }
         }
         float range = leaderX.Max() - leaderX.Min(), followerRange = followerX.Max() - followerX.Min();
-        GD.Print($"PRESENTATION: render={fps}, leader_range={range:F6}px, follower_range={followerRange:F6}px");
         Check(range < 0.01f && followerRange < 0.01f, $"Steady formation must not jitter at {fps} FPS: leader={range}, follower={followerRange}");
         Check(Mathf.Abs(leader.Position.X - 480) < 0.001f, "The 60 Hz physical trajectory remains unchanged");
         world.Free();

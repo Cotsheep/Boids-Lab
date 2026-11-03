@@ -183,6 +183,7 @@ public partial class SteeringChecks : Node
         BoidManager manager = GD.Load<PackedScene>("res://scenes/worlds/boids_world_2d.tscn").Instantiate<BoidManager>();
         manager.Initialize(config);
         AddChild(manager);
+        ObstacleHarness2D.ClearLayout(manager);
         Vector2 origin = manager.ViewBounds.Position + new Vector2(100, 100);
         Boid2D a = manager.SpawnBoid(origin, new Vector2(100, 0));
         Boid2D b = manager.SpawnBoid(origin + new Vector2(10, 0), new Vector2(0, 100));

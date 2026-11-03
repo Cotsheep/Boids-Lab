@@ -34,7 +34,21 @@ public partial class SimulationView : Node2D
         DrawRect(_manager.ViewBounds, Palette.Canvas);
         if (_config?.ShowGrid == true) DrawGrid();
         DrawDebugOverlays();
+        DrawAvoidance();
         DrawLeaderMarkers();
+    }
+
+    private void DrawAvoidance()
+    {
+        if (_manager?.SelectedBoid is not { } boid || _config?.ShowVelocity != true) return;
+        var debug = _manager.AvoidanceDebug;
+        if (debug.BoidId != boid.Id) return;
+        Vector2 origin = boid.Position;
+        foreach (var candidate in debug.Candidates)
+            DrawLine(origin, origin + candidate.Motion, candidate.Blocked ? Palette.ObstacleOutline : Palette.Perception, 1, true);
+        if (debug.Probe.LengthSquared() > 0) DrawLine(origin, origin + debug.Probe, Palette.Velocity, 2, true);
+        if (debug.Choice.LengthSquared() > 0) DrawLine(origin, origin + debug.Choice, Palette.Selection, 3, true);
+        foreach (Vector2 normal in debug.Normals) DrawLine(origin, origin + normal * 30, Palette.Separation, 2, true);
     }
 
     private void DrawLeaderMarkers()

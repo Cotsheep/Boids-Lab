@@ -1,0 +1,33 @@
+[gd_scene load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://scripts/obstacles/Obstacle3D.cs" id="1"]
+[ext_resource type="Script" path="res://scripts/obstacles/ObstaclePart3D.cs" id="2"]
+
+[sub_resource type="ConvexPolygonShape3D" id="convex"]
+points = PackedVector3Array(-20, -100, -40, 20, -100, -40, -20, 100, -40, 20, 100, -40, -20, -100, 40, 20, -100, 40, -20, 100, 40, 20, 100, 40)
+
+[sub_resource type="Resource" id="left"]
+script = ExtResource("2")
+Shape = SubResource("convex")
+Transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -80, 0, 0)
+
+[sub_resource type="Resource" id="top"]
+script = ExtResource("2")
+Shape = SubResource("convex")
+Transform = Transform3D(0, 1, 0, -1, 0, 0, 0, 0, 1, 0, 80, 0)
+
+[sub_resource type="BoxMesh" id="mesh"]
+size = Vector3(40, 200, 80)
+
+[node name="CompoundL" type="Node3D"]
+script = ExtResource("1")
+CollisionParts = Array[ExtResource("2")]([SubResource("left"), SubResource("top")])
+
+[node name="Left" type="MeshInstance3D" parent="."]
+position = Vector3(-80, 0, 0)
+mesh = SubResource("mesh")
+
+[node name="Top" type="MeshInstance3D" parent="."]
+position = Vector3(0, 80, 0)
+rotation = Vector3(0, 0, 1.5707963)
+mesh = SubResource("mesh")

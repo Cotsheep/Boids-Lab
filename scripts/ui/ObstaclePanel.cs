@@ -83,9 +83,10 @@ public partial class ObstaclePanel : VBoxContainer
             ? $"正在放置{ShapeName(placement.Value)} · 左键确认，Esc 或右键取消"
             : selected.HasValue ? $"已选中{ShapeName(selected.Value.Shape)}障碍物" : "选择上方形状开始放置；点击已有障碍物可编辑尺寸。";
         _widthLabel.Text = circle ? "直径" : ThreeDimensional ? "宽度 X" : "宽度";
-        _widthRow.Visible = editable;
-        _heightRow.Visible = editable && !circle;
-        _depthRow.Visible = editable && ThreeDimensional && !circle;
+        bool dimensionsEditable = editable && selected?.Shape != ObstacleShape.Custom;
+        _widthRow.Visible = dimensionsEditable;
+        _heightRow.Visible = dimensionsEditable && !circle;
+        _depthRow.Visible = dimensionsEditable && ThreeDimensional && !circle;
         _editRow.Visible = editable || placement.HasValue;
         _delete.Visible = editable;
         _width.Editable = _height.Editable = _depth.Editable = editable;
@@ -123,6 +124,7 @@ public partial class ObstaclePanel : VBoxContainer
 
     private static string ShapeName(ObstacleShape shape) => shape switch
     {
+        ObstacleShape.Custom => "自定义",
         ObstacleShape.Box => "长方体",
         ObstacleShape.Sphere => "球体",
         ObstacleShape.Circle => "圆形",

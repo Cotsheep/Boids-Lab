@@ -32,6 +32,10 @@ public partial class BoidManager : Node2D, ISimulationWorld
     public event Action? ConfigurationEdited { add { } remove { } }
     public event Action? BoidControlStateChanged;
     public SimulationStats Stats { get; private set; }
+    public ObstacleQuery2D ObstacleQuery => _obstacleEditor.Query;
+    public ObstacleDebug2D AvoidanceDebug { get; } = new();
+    public int UnresolvedContacts { get; private set; }
+    public int ExhaustedContactBudgets { get; private set; }
     public bool IsRunning { get; private set; }
     public bool CanStep => !IsRunning;
     public bool PopulationSpawnLimited { get; private set; }
@@ -224,6 +228,7 @@ public partial class BoidManager : Node2D, ISimulationWorld
 
     private void SelectBoid(Boid2D? boid)
     {
+        AvoidanceDebug.Clear();
         if (SelectedBoid == boid) return;
         SelectedBoid?.SetSelected(false);
         SelectedBoid = boid;
@@ -262,6 +267,7 @@ public partial class BoidManager : Node2D, ISimulationWorld
 
     public void ConfigurationChanged()
     {
+        AvoidanceDebug.Clear();
         Config.Normalize();
         if (NeighborSearch.HasResults && (NeighborSearch.Mode != Config.NeighborSearchMode
             || NeighborSearch.Radius != Config.PerceptionRadius))
@@ -276,6 +282,7 @@ public partial class BoidManager : Node2D, ISimulationWorld
         Config.BoidCount = (int)BoidConfig.CountRange.Constrain(requestedCount);
         PopulationSpawnLimited = false;
         if (_boids.Count == Config.BoidCount) return;
+        _obstacleEditor.SynchronizeQuery(); // 新增始终查询全部障碍，不使用环绕过滤或避障开关。
         // 稳定地从列表末尾缩减，先保留领队，再保留普通选择。
         for (int i = _boids.Count - 1; i >= 0 && _boids.Count > Config.BoidCount; i--)
             if (_boids[i] != Leader && _boids[i] != SelectedBoid) RemoveBoid(_boids[i]);
@@ -297,13 +304,7 @@ public partial class BoidManager : Node2D, ISimulationWorld
             {
                 Vector2 position = region.Position + new Vector2(_populationRandom.Randf(), _populationRandom.Randf()) * region.Size;
                 position = WorldGeometry2D.Wrap(position, WrapBounds);
-                bool clear = true;
-                foreach (Obstacle2D obstacle in _obstacleEditor.Obstacles)
-                {
-                    ObstacleAvoidance.Surface(position, obstacle, Config.ObstacleClearance, out float distance, out _);
-                    if (distance <= 0) { clear = false; break; }
-                }
-                if (!clear) continue;
+                if (ObstacleQuery.Occupied(position, Config.ObstacleClearance)) continue;
                 Vector2 velocity = Vector2.FromAngle(_populationRandom.RandfRange(-Mathf.Pi, Mathf.Pi)) * Config.MaxSpeed;
                 SpawnBoid(position, velocity);
                 placed = true;
@@ -369,6 +370,9 @@ public partial class BoidManager : Node2D, ISimulationWorld
         long started = Stopwatch.GetTimestamp();
         bool changed = WrapPopulation();
         Rect2? wrapBounds = WrapBounds;
+        _obstacleEditor.SynchronizeQuery(wrapBounds);
+        AvoidanceDebug.Clear(Config.ShowVelocity ? SelectedBoid?.Id ?? -1 : -1);
+        UnresolvedContacts = ExhaustedContactBudgets = 0;
         NeighborSearch.Search(_boids, Config.PerceptionRadius, Config.NeighborSearchMode, wrapBounds);
         if (_steeringAccelerations.Length != _boids.Count)
             _steeringAccelerations = new Vector2[_boids.Count];
@@ -384,7 +388,8 @@ public partial class BoidManager : Node2D, ISimulationWorld
         {
             BoidSnapshot self = NeighborSearch.Snapshots[i];
             Vector2 avoidance = ObstacleAvoidance.Calculate(self,
-                _obstacleEditor.Obstacles, Config, wrapBounds);
+                ObstacleQuery, Config, Vector2.FromAngle(_boids[i].Rotation),
+                AvoidanceDebug.BoidId == self.Id ? AvoidanceDebug : null);
             // 优先给避障留出完整的转向能力，避免群集规则抵消避障方向。
             if (avoidance != Vector2.Zero) _steeringAccelerations[i] = avoidance;
             else if (i == leaderIndex)
@@ -414,8 +419,10 @@ public partial class BoidManager : Node2D, ISimulationWorld
             {
                 Vector2 position = boid.Position;
                 Vector2 velocity = boid.Velocity;
-                ObstacleAvoidance.ResolveMotion(before, ref position, ref velocity,
-                    _obstacleEditor.Obstacles, Config.ObstacleClearance, wrapBounds);
+                var contact = ObstacleContact2D.Resolve(before, ref position, ref velocity,
+                    ObstacleQuery, Config.ObstacleClearance, AvoidanceDebug.BoidId == boid.Id ? AvoidanceDebug : null);
+                if (!contact.Recovered) UnresolvedContacts++;
+                if (contact.MotionBudgetExhausted || contact.ContactsSaturated) ExhaustedContactBudgets++;
                 changed |= boid.ApplyObstacleContact(position, velocity);
             }
             else
@@ -434,6 +441,7 @@ public partial class BoidManager : Node2D, ISimulationWorld
 
     private void InvalidateNeighborResults()
     {
+        AvoidanceDebug.Clear();
         NeighborSearch.Invalidate();
         Stats = new SimulationStats(_boids.Count, null, null, null);
     }

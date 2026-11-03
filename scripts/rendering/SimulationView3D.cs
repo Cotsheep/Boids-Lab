@@ -118,13 +118,31 @@ public partial class SimulationView3D : Node3D
         var camera = GetNode<SimulationCamera3D>("Camera3D");
         DebugGeometry.Build(_manager.Boids, _manager.SelectedBoid, _config, camera.UnitsPerPixelAt);
         _debugMesh.ClearSurfaces();
+        bool avoidance = _config.ShowVelocity && _manager.SelectedBoid is { } selected
+            && _manager.AvoidanceDebug.BoidId == selected.Id;
         if (DebugGeometry.RangePoints.Count + DebugGeometry.SeparationRangePoints.Count
-            + DebugGeometry.NeighborPoints.Count + DebugGeometry.VelocityPoints.Count == 0) return;
+            + DebugGeometry.NeighborPoints.Count + DebugGeometry.VelocityPoints.Count == 0 && !avoidance) return;
         _debugMesh.SurfaceBegin(Mesh.PrimitiveType.Lines, _debugMaterial);
         AddPoints(DebugGeometry.RangePoints, Palette.Perception);
         AddPoints(DebugGeometry.SeparationRangePoints, Palette.Separation);
         AddPoints(DebugGeometry.NeighborPoints, Palette.Selection);
         AddPoints(DebugGeometry.VelocityPoints, Palette.Velocity);
+        if (avoidance)
+        {
+            var debug = _manager.AvoidanceDebug;
+            Vector3 origin = _manager.SelectedBoid!.DisplayPosition;
+            foreach (var candidate in debug.Candidates)
+            {
+                _debugMesh.SurfaceSetColor(candidate.Blocked ? Palette.ObstacleOutline : Palette.Perception);
+                AddLine(_debugMesh, origin, origin + candidate.Motion);
+            }
+            _debugMesh.SurfaceSetColor(Palette.Velocity);
+            AddLine(_debugMesh, origin, origin + debug.Probe);
+            _debugMesh.SurfaceSetColor(Palette.Selection);
+            AddLine(_debugMesh, origin, origin + debug.Choice);
+            _debugMesh.SurfaceSetColor(Palette.Separation);
+            foreach (Vector3 normal in debug.Normals) AddLine(_debugMesh, origin, origin + normal * 30);
+        }
         _debugMesh.SurfaceEnd();
     }
 

@@ -84,6 +84,11 @@ reset_camera={
 ]
 }
 
+[layer_names]
+
+2d_physics/layer_8="Boids obstacles"
+3d_physics/layer_8="Boids obstacles"
+
 [physics]
 
 3d/physics_engine="Jolt Physics"

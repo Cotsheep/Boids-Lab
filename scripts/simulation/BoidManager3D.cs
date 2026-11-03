@@ -19,6 +19,10 @@ public partial class BoidManager3D : Node3D, ISimulationWorld
     public bool PopulationSpawnLimited { get; private set; }
     public bool IsRunning { get; private set; }
     public SimulationStats Stats { get; private set; }
+    public ObstacleQuery3D ObstacleQuery => _obstacleEditor.Query;
+    public ObstacleDebug3D AvoidanceDebug { get; } = new();
+    public int UnresolvedContacts { get; private set; }
+    public int ExhaustedContactBudgets { get; private set; }
     public Aabb WorldBounds { get; private set; }
     public IReadOnlyList<Boid3D> Boids { get; }
     public NeighborSearch3D NeighborSearch { get; } = new();
@@ -174,6 +178,9 @@ public partial class BoidManager3D : Node3D, ISimulationWorld
         float dt = (float)deltaSeconds;
         if (!float.IsFinite(dt) || dt <= 0f) throw new ArgumentOutOfRangeException(nameof(deltaSeconds));
         long started = Stopwatch.GetTimestamp();
+        _obstacleEditor.SynchronizeQuery();
+        AvoidanceDebug.Clear(Config.ShowVelocity ? SelectedBoid?.Id ?? -1 : -1);
+        UnresolvedContacts = ExhaustedContactBudgets = 0;
         NeighborSearch.Search(Boids, Config.PerceptionRadius, Config.NeighborSearchMode);
         if (_steeringAccelerations.Length != _boids.Count) _steeringAccelerations = new Vector3[_boids.Count];
         int leaderIndex = Leader is null ? -1 : _boids.IndexOf(Leader);
@@ -189,7 +196,8 @@ public partial class BoidManager3D : Node3D, ISimulationWorld
                 _steeringAccelerations[i] = LeaderSteering3D.Arrive(self, self.Position, LeaderController.MovementDirection * Config.MaxSpeed, Config, dt);
                 continue;
             }
-            Vector3 avoidance = ObstacleAvoidance3D.Calculate(self, _obstacleEditor.Obstacles, Config);
+            Vector3 avoidance = ObstacleAvoidance3D.Calculate(self, ObstacleQuery, Config,
+                _boids[i].Quaternion * Vector3.Forward, AvoidanceDebug.BoidId == self.Id ? AvoidanceDebug : null);
             if (avoidance != Vector3.Zero) { _steeringAccelerations[i] = avoidance; continue; }
             bool following = leaderIndex >= 0 && Config.LeaderFollowWeight > 0;
             Vector3 guidance = following
@@ -207,8 +215,10 @@ public partial class BoidManager3D : Node3D, ISimulationWorld
             if ((Config.AvoidanceEnabled || boid == Leader) && _obstacleEditor.Obstacles.Count > 0)
             {
                 Vector3 position = boid.Position, velocity = boid.Velocity;
-                ObstacleAvoidance3D.ResolveMotion(before, ref position, ref velocity,
-                    _obstacleEditor.Obstacles, Config.ObstacleClearance);
+                var contact = ObstacleContact3D.Resolve(before, ref position, ref velocity,
+                    ObstacleQuery, Config.ObstacleClearance, AvoidanceDebug.BoidId == boid.Id ? AvoidanceDebug : null);
+                if (!contact.Recovered) UnresolvedContacts++;
+                if (contact.MotionBudgetExhausted || contact.ContactsSaturated) ExhaustedContactBudgets++;
                 boid.ApplyObstacleContact(position, velocity);
             }
             boid.CommitPresentationStep(IsRunning);
@@ -251,6 +261,7 @@ public partial class BoidManager3D : Node3D, ISimulationWorld
 
     private void SelectBoid(Boid3D? boid)
     {
+        AvoidanceDebug.Clear();
         if (SelectedBoid == boid) return;
         SelectedBoid?.SetSelected(false);
         SelectedBoid = boid;
@@ -272,6 +283,7 @@ public partial class BoidManager3D : Node3D, ISimulationWorld
         Config.BoidCount = (int)BoidConfig.CountRange.Constrain(requestedCount);
         PopulationSpawnLimited = false;
         if (_boids.Count == Config.BoidCount) return;
+        _obstacleEditor.SynchronizeQuery(); // 新增始终查询全部障碍，不使用环绕过滤或避障开关。
         _resizingPopulation = true;
         try
         {
@@ -294,13 +306,7 @@ public partial class BoidManager3D : Node3D, ISimulationWorld
                 for (int attempt = 0; attempt < 64; attempt++)
                 {
                     Vector3 position = region.Position + new Vector3(_populationRandom.Randf(), _populationRandom.Randf(), _populationRandom.Randf()) * region.Size;
-                    bool clear = true;
-                    foreach (Obstacle3D obstacle in _obstacleEditor.Obstacles)
-                    {
-                        ObstacleAvoidance3D.Surface(position, obstacle, Config.ObstacleClearance, out float distance, out _);
-                        if (distance <= 0) { clear = false; break; }
-                    }
-                    if (!clear) continue;
+                    if (ObstacleQuery.Occupied(position, Config.ObstacleClearance)) continue;
                     float y = _populationRandom.RandfRange(-1, 1);
                     float angle = _populationRandom.RandfRange(-Mathf.Pi, Mathf.Pi);
                     float horizontal = Mathf.Sqrt(Mathf.Max(0, 1 - y * y));
@@ -321,12 +327,14 @@ public partial class BoidManager3D : Node3D, ISimulationWorld
 
     private void InvalidateStats()
     {
+        AvoidanceDebug.Clear();
         NeighborSearch.Invalidate();
         Stats = new SimulationStats(_boids.Count, null, null, null);
     }
 
     public void ConfigurationChanged()
     {
+        AvoidanceDebug.Clear();
         NormalizeConfiguration();
         if (WorldBounds.Size != WorldSize)
         {

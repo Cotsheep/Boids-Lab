@@ -6,6 +6,7 @@ public enum ObstacleShape
     Circle,
     Box,
     Sphere,
+    Custom,
 }
 
 /// <summary>面板需要的尺寸；圆/球的各轴均为直径，二维不使用 Depth。</summary>

@@ -8,10 +8,13 @@ namespace BoidsLab;
 public partial class ObstacleEditor3D : Node3D
 {
     public IReadOnlyList<Obstacle3D> Obstacles { get; }
+    public ObstacleQuery3D Query { get; } = new();
+    public void SynchronizeQuery() =>
+        Query.Synchronize(Obstacles, _world.GetNode<Node3D>("Boids").GlobalTransform);
     public Obstacle3D? SelectedObstacle { get; private set; }
     public ObstacleShape? PlacementShape { get; private set; }
     public ObstacleSelection? SelectionInfo => SelectedObstacle is { } selected
-        ? new(selected.Shape, selected.Dimensions.X, selected.Dimensions.Y, selected.Dimensions.Z) : null;
+        ? new(selected.IsCustom ? ObstacleShape.Custom : selected.Shape, selected.Dimensions.X, selected.Dimensions.Y, selected.Dimensions.Z) : null;
     public event Action? Changed;
     public event Action? GeometryChanged;
     private readonly List<Obstacle3D> _obstacles = new();
@@ -49,6 +52,8 @@ public partial class ObstacleEditor3D : Node3D
         _world = world;
         _camera = camera;
         _container = container;
+        foreach (Node child in container.GetChildren())
+            if (child is Obstacle3D obstacle) RegisterObstacle(obstacle);
         _camera.ManualViewChanged += OnViewChanged;
     }
 
@@ -94,12 +99,27 @@ public partial class ObstacleEditor3D : Node3D
         var obstacle = new Obstacle3D { Name = $"Obstacle_{_nextId++}", Position = position };
         obstacle.Initialize(shape, DefaultSize(shape));
         _container.AddChild(obstacle);
-        obstacle.ApplyPalette(_palette);
-        _obstacles.Add(obstacle);
+        RegisterObstacle(obstacle);
         CancelPlacement();
         Select(obstacle);
-        GeometryChanged?.Invoke();
+        GeometryEdited();
         return obstacle;
+    }
+
+    public void RegisterObstacle(Obstacle3D obstacle)
+    {
+        if (_obstacles.Contains(obstacle)) return;
+        if (obstacle.GetParent() is null) _container.AddChild(obstacle);
+        obstacle.ApplyPalette(_palette);
+        _obstacles.Add(obstacle);
+        obstacle.TreeExiting += () => { Query.Remove(obstacle.GetInstanceId()); _obstacles.Remove(obstacle); };
+        GeometryEdited();
+    }
+
+    private void GeometryEdited()
+    {
+        SynchronizeQuery(); // 暂停编辑也立即提交几何；不推进个体或物理空间。
+        GeometryChanged?.Invoke();
     }
 
     public void ClearSelection() => Select(null);
@@ -120,16 +140,18 @@ public partial class ObstacleEditor3D : Node3D
         CancelGesture();
         Select(null);
         _obstacles.Remove(obstacle);
-        _container.RemoveChild(obstacle);
+        Query.Remove(obstacle.GetInstanceId());
+        obstacle.GetParent().RemoveChild(obstacle);
         obstacle.QueueFree();
-        GeometryChanged?.Invoke();
+        GeometryEdited();
     }
 
     public void ResizeSelected(float width, float height, float depth)
     {
         if (!_interactionEnabled || SelectedObstacle is not { } obstacle) return;
+        if (obstacle.IsCustom) return;
         obstacle.SetDimensions(new Vector3(width, height, depth));
-        GeometryChanged?.Invoke();
+        GeometryEdited();
         Changed?.Invoke();
     }
 
@@ -162,8 +184,8 @@ public partial class ObstacleEditor3D : Node3D
         if (_dragged)
         {
             Vector3 pointer = PointOnPlane(motion.Position, _planePoint, _planeNormal);
-            target.Position = _startPosition + _container.ToLocal(pointer) - _container.ToLocal(_startPointer);
-            GeometryChanged?.Invoke();
+            target.Position = _startPosition + target.GetParent<Node3D>().ToLocal(pointer) - target.GetParent<Node3D>().ToLocal(_startPointer);
+            GeometryEdited();
         }
         GetViewport().SetInputAsHandled();
     }
@@ -178,7 +200,7 @@ public partial class ObstacleEditor3D : Node3D
             return;
         }
         if (mouse.ButtonIndex is MouseButton.WheelUp or MouseButton.WheelDown
-            && mouse.ShiftPressed && SelectedObstacle is { } selected && Pick(mouse.Position, out _) == selected)
+            && mouse.ShiftPressed && SelectedObstacle is { IsCustom: false } selected && Pick(mouse.Position, out _) == selected)
         {
             CancelGesture();
             float amount = mouse.Factor > 0 ? mouse.Factor : 1;
@@ -187,7 +209,7 @@ public partial class ObstacleEditor3D : Node3D
             factor = Mathf.Clamp(factor, ObstacleSize.Min / Mathf.Min(size.X, Mathf.Min(size.Y, size.Z)),
                 ObstacleSize.Max / Mathf.Max(size.X, Mathf.Max(size.Y, size.Z)));
             selected.SetDimensions(size * factor);
-            GeometryChanged?.Invoke();
+            GeometryEdited();
             Changed?.Invoke();
             GetViewport().SetInputAsHandled();
             return;
@@ -231,12 +253,11 @@ public partial class ObstacleEditor3D : Node3D
         Obstacle3D? target = null;
         Vector3 origin = _container.ToLocal(_camera.ProjectRayOrigin(screen));
         Vector3 direction = (_container.GlobalBasis.Inverse() * _camera.ProjectRayNormal(screen)).Normalized();
-        foreach (Obstacle3D obstacle in _obstacles)
+        Query.Synchronize(Obstacles, coordinates: _container.GlobalTransform);
+        if (Query.HitDistance(origin, direction, _camera.Far, out ulong id, SelectedObstacle?.GetInstanceId() ?? 0) is { } distance)
         {
-            if (ObstacleAvoidance3D.HitDistance(origin, direction, obstacle, _camera.Far) is not { } distance) continue;
-            if (distance > closest || (distance == closest && obstacle != SelectedObstacle)) continue;
-            target = obstacle;
             closest = distance;
+            foreach (var obstacle in _obstacles) if (obstacle.GetInstanceId() == id) { target = obstacle; break; }
         }
         return target;
     }
@@ -265,6 +286,7 @@ public partial class ObstacleEditor3D : Node3D
 
     public override void _ExitTree()
     {
+        Query.Dispose();
         GetWindow().FocusExited -= CancelGesture;
         GetWindow().MouseExited -= CancelGesture;
         GetViewport().SizeChanged -= CancelGesture;

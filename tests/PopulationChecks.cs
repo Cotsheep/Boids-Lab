@@ -33,6 +33,7 @@ public partial class PopulationChecks : Node
             foreach (int mode in new[] { 0, 1 })
             {
                 if (mode != _app.CurrentWorldIndex) { _app.RequestWorldSwitch(mode); await Frame(); }
+                if (World is BoidManager two) ObstacleHarness2D.ClearLayout(two);
                 await CheckSubmission();
                 CheckPreservationAndRandomness();
                 CheckSelectionAndLeader();
