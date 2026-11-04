@@ -389,7 +389,8 @@ public partial class BoidManager : Node2D, ISimulationWorld
             BoidSnapshot self = NeighborSearch.Snapshots[i];
             Vector2 avoidance = ObstacleAvoidance.Calculate(self,
                 ObstacleQuery, Config, Vector2.FromAngle(_boids[i].Rotation),
-                AvoidanceDebug.BoidId == self.Id ? AvoidanceDebug : null);
+                AvoidanceDebug.BoidId == self.Id ? AvoidanceDebug : null,
+                i == leaderIndex ? LeaderTarget : null);
             // 优先给避障留出完整的转向能力，避免群集规则抵消避障方向。
             if (avoidance != Vector2.Zero) _steeringAccelerations[i] = avoidance;
             else if (i == leaderIndex)

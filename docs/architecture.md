@@ -144,6 +144,8 @@ Godot → BoidManager._PhysicsProcess(delta)
 
 `ObstacleAvoidance` / `ObstacleAvoidance3D` 只消费统一圆/球查询结果：前方危险时才展开按偏角排序的缓存方向；不再识别 Rectangle、Circle、Box、Sphere。障碍物检测与两种 Boid 邻居搜索独立。需要避让时优先采用避障转向，其他时间沿用三条群集规则。`AvoidanceEnabled` 默认开启，`AvoidanceLookAhead` 默认为 0.75 秒，`ObstacleClearance` 默认为 12 世界像素，旧配置没有这些键时保留默认值。障碍物布局、选中对象与放置状态不保存；Reset 保留布局，只重建鸟群。
 
+二维管理器只给鼠标领队传入 `LeaderTarget`。策略用目标距离限制远期前瞻，同时保留当前速度的制动检测；危险或近表面时优先检查精确目标方向，畅通则沿用到达转向，制动范围内有障碍则先刹车，目标方向受阻才展开相对目标的候选。近表面缓冲范围不等于实际碰撞半径，可通行窄缝和已到达目标不会因此触发横向驱赶。普通个体与三维策略不受这一目标参数影响。
+
 `ObstacleQuery2D/3D` 持有不激活的静态 PhysicsServer 空间、每个凸部件的静态 body 与局部 Shape 资源（共同映射到逻辑障碍身份）；同步不推进物理。每步开始统一提交障碍变换/资源，暂停新增和拾取也先同步。圆/球查询半径就是 ObstacleClearance，零间距使用 0.001 的数值点近似，未叠加 Boid 网格半径。盒角现为圆/球扫掠的真实圆角。`ObstacleContact2D/3D` 独立扫描完整位移、投影速度和剩余位移以沿面滑动；初始重叠用真实重叠查询及原生接触法线恢复。接触修正不受 MaxForce 限制。二维关闭避障仍同时关闭主动转向与接触。
 
 `ObstacleBoundary2D` 截断第一次边界前的预测，并把实际位移按出口/入口拆段。`ObstacleQuery2D.Synchronize` 在观察模式只注册变换后碰撞部件包围范围与边界相交的障碍；无限模式和即时新增检查全部障碍。三维无视野/观察盒过滤。障碍不传送、不生成周期副本。运动最多 64 段、重叠恢复最多 8 轮；耗尽时丢弃未完成位移或报告未恢复，不能把封闭布局当成成功。预算、方向数与响应时间集中在 `ObstacleTuning`。详细同步和资源接入见[统一避障架构](obstacle-query-refactor.md)。
