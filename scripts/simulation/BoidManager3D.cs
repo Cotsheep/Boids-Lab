@@ -336,6 +336,9 @@ public partial class BoidManager3D : Node3D, ISimulationWorld
     {
         AvoidanceDebug.Clear();
         NormalizeConfiguration();
+        bool facingChanged = false;
+        foreach (Boid3D boid in _boids) facingChanged |= boid.RefreshFacingConfiguration();
+        if (facingChanged) InvalidateStats();
         if (WorldBounds.Size != WorldSize)
         {
             WorldBounds = new Aabb(WorldBounds.GetCenter() - WorldSize * 0.5f, WorldSize);

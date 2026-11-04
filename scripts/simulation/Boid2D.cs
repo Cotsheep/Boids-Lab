@@ -24,9 +24,10 @@ public partial class Boid2D : Node2D
 
     // 临界阻尼跟随的响应频率（1/秒）；角速度反馈让朝向接近目标时减速。
     private const float FacingResponse = 6f;
-    private const float DirectionSpeedSquared = 0.0001f;
     private BoidConfig? _config;
     private Vector2 _accelerationInput;
+    private bool _angularLimitsEnabled;
+    private bool _trackingVelocityFacing;
 
     public override void _Ready()
     {
@@ -69,7 +70,10 @@ public partial class Boid2D : Node2D
         _config = config;
         Id = id;
         Velocity = velocity.LimitLength(config.MaxSpeed);
-        Rotation = Velocity.LengthSquared() > DirectionSpeedSquared ? Velocity.Angle() : 0f;
+        _angularLimitsEnabled = config.AngularMotionLimitsEnabled;
+        _trackingVelocityFacing = false;
+        Rotation = _angularLimitsEnabled && Velocity.LengthSquared() > VelocityFacing.StopSpeedSquared ? Velocity.Angle() : 0f;
+        if (!_angularLimitsEnabled) AlignWithVelocity();
         _accelerationInput = Vector2.Zero;
         Acceleration = Vector2.Zero;
         AngularVelocity = 0f;
@@ -115,11 +119,13 @@ public partial class Boid2D : Node2D
 
     private void UpdateFacing(float dt)
     {
+        SynchronizeFacingMode();
+        if (!_angularLimitsEnabled) { AlignWithVelocity(); return; }
         float maxSpeed = Mathf.DegToRad(_config!.MaxAngularSpeedDegrees);
         float maxAcceleration = Mathf.DegToRad(_config.MaxAngularAccelerationDegrees);
         // 下调速度上限属于硬限制；先裁剪旧值，再积分本步受限的角加速度。
         float previousVelocity = Mathf.Clamp(AngularVelocity, -maxSpeed, maxSpeed);
-        float angleError = Velocity.LengthSquared() > DirectionSpeedSquared
+        float angleError = Velocity.LengthSquared() > VelocityFacing.StopSpeedSquared
             ? Mathf.AngleDifference(Rotation, Velocity.Angle())
             : 0f; // 静止时没有目标方向，只制动已有旋转。
 
@@ -132,12 +138,41 @@ public partial class Boid2D : Node2D
             Rotation = Mathf.Wrap(Rotation + AngularVelocity * dt, -Mathf.Pi, Mathf.Pi);
     }
 
+    private bool SynchronizeFacingMode()
+    {
+        if (_angularLimitsEnabled == _config!.AngularMotionLimitsEnabled) return false;
+        _angularLimitsEnabled = _config.AngularMotionLimitsEnabled;
+        AngularVelocity = AngularAcceleration = 0;
+        _trackingVelocityFacing = false;
+        return true;
+    }
+
+    internal bool RefreshFacingConfiguration()
+    {
+        if (!SynchronizeFacingMode()) return false;
+        if (!_angularLimitsEnabled) AlignWithVelocity();
+        return true;
+    }
+
+    private void AlignWithVelocity()
+    {
+        AngularVelocity = AngularAcceleration = 0;
+        _trackingVelocityFacing = VelocityFacing.ShouldTrack(Velocity.LengthSquared(), _trackingVelocityFacing);
+        if (_trackingVelocityFacing) Rotation = Velocity.Angle();
+    }
+
     /// <summary>避障接触兜底：修正穿透位置并去掉朝障碍物内部的速度，不重置个体状态。</summary>
     internal bool ApplyObstacleContact(Vector2 position, Vector2 velocity)
     {
         bool changed = Position != position || Velocity != velocity;
+        float previousRotation = Rotation;
         Position = position;
         Velocity = velocity.LimitLength(_config!.MaxSpeed);
-        return changed;
+        if (!_config.AngularMotionLimitsEnabled)
+        {
+            SynchronizeFacingMode();
+            AlignWithVelocity();
+        }
+        return changed || previousRotation != Rotation;
     }
 }

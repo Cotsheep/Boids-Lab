@@ -281,6 +281,9 @@ public partial class BoidManager : Node2D, ISimulationWorld
     {
         AvoidanceDebug.Clear();
         Config.Normalize();
+        bool facingChanged = false;
+        foreach (Boid2D boid in _boids) facingChanged |= boid.RefreshFacingConfiguration();
+        if (facingChanged) InvalidateNeighborResults();
         if (_viewportBoundaryEnabled != Config.ViewportBoundaryEnabled)
         {
             _viewportBoundaryEnabled = Config.ViewportBoundaryEnabled;

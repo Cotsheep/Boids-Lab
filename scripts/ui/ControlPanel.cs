@@ -88,10 +88,16 @@ public partial class ControlPanel : VBoxContainer
         AddNumber("MaxForce", "最大加速度", BoidConfig.ForceRange, config.MaxForce,
             value => config.MaxForce = (float)value, $"单位：{lengthUnit}/秒²；限制总加速度；设为 0 时不能主动加速、转向或制动。");
         AddHeading("朝向转动");
-        AddNumber("MaxAngularSpeed", "最大角速度", BoidConfig.AngularSpeedRange, config.MaxAngularSpeedDegrees,
+        var angularLimits = AddToggle("AngularMotionLimits", "限制角速度与角加速度", config.AngularMotionLimitsEnabled,
+            value => config.AngularMotionLimitsEnabled = value);
+        angularLimits.TooltipText = "同时启用或关闭两个角运动上限。关闭后外观直接朝向实际速度，极低速度时保持稳定朝向；不改变线性速度或加速度限制，暂停时也可立即切换。";
+        var angularSpeed = AddNumber("MaxAngularSpeed", "最大角速度", BoidConfig.AngularSpeedRange, config.MaxAngularSpeedDegrees,
             value => config.MaxAngularSpeedDegrees = (float)value, "单位：度/秒；朝向旋转速度上限。");
-        AddNumber("MaxAngularAcceleration", "最大角加速度", BoidConfig.AngularAccelerationRange, config.MaxAngularAccelerationDegrees,
+        var angularAcceleration = AddNumber("MaxAngularAcceleration", "最大角加速度", BoidConfig.AngularAccelerationRange, config.MaxAngularAccelerationDegrees,
             value => config.MaxAngularAccelerationDegrees = (float)value, "单位：度/秒²；限制转动速度每秒的变化，朝向随实际运动方向调整。");
+        void RefreshAngularInputs(bool enabled) => angularSpeed.Editable = angularAcceleration.Editable = enabled;
+        angularLimits.Toggled += RefreshAngularInputs;
+        RefreshAngularInputs(config.AngularMotionLimitsEnabled);
 
         if (features.HasFlag(SimulationFeatures.NeighborSearch) || features.HasFlag(SimulationFeatures.Flocking))
         {
@@ -427,7 +433,7 @@ public partial class ControlPanel : VBoxContainer
         _content.AddChild(label);
     }
 
-    private void AddNumber(string name, string title, BoidConfig.NumberRange range, double current,
+    private SpinBox AddNumber(string name, string title, BoidConfig.NumberRange range, double current,
         Action<double> setter, string tooltip = "修改后自动保存，在下一次模拟更新时生效；暂停时可用单步查看效果。")
     {
         var row = new HBoxContainer { TooltipText = tooltip };
@@ -444,6 +450,7 @@ public partial class ControlPanel : VBoxContainer
         };
         row.AddChild(input);
         _content.AddChild(row);
+        return input;
     }
 
     private CheckBox AddToggle(string name, string title, bool current, Action<bool> setter)

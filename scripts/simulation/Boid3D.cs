@@ -39,9 +39,10 @@ public partial class Boid3D : Node3D
     public Vector3 AngularAcceleration { get; private set; }
 
     private const float FacingResponse = 6f;
-    private const float DirectionSpeedSquared = 0.0001f;
     private BoidConfig? _config;
     private Vector3 _accelerationInput;
+    private bool _angularLimitsEnabled;
+    private bool _trackingVelocityFacing;
 
     public override void _Ready()
     {
@@ -79,6 +80,8 @@ public partial class Boid3D : Node3D
 
     private void SetDisplayPose(Transform3D pose)
     {
+        // 直接朝向模式只插值位置，显示朝向与接触修正后的速度一致。
+        if (!_config!.AngularMotionLimitsEnabled) pose.Basis = _currentPose.Basis;
         _displayPose = pose;
         if (_body is not null)
         {
@@ -142,14 +145,17 @@ public partial class Boid3D : Node3D
         _config = config;
         Id = id;
         Velocity = velocity.LimitLength(config.MaxSpeed);
+        _angularLimitsEnabled = config.AngularMotionLimitsEnabled;
+        _trackingVelocityFacing = false;
         _accelerationInput = Acceleration = AngularVelocity = AngularAcceleration = Vector3.Zero;
         Quaternion = Quaternion.Identity;
-        if (Velocity.LengthSquared() > DirectionSpeedSquared)
+        if (_angularLimitsEnabled && Velocity.LengthSquared() > VelocityFacing.StopSpeedSquared)
         {
             Vector3 direction = Velocity.Normalized();
             Vector3 up = Mathf.Abs(direction.Dot(Vector3.Up)) > 0.99f ? Vector3.Right : Vector3.Up;
             Quaternion = Basis.LookingAt(direction, up).GetRotationQuaternion();
         }
+        if (!_angularLimitsEnabled) AlignWithVelocity();
         ResetPresentation();
     }
 
@@ -160,11 +166,16 @@ public partial class Boid3D : Node3D
         _accelerationInput = acceleration;
     }
 
-    /// <summary>接触修正只更新位置和受限速度；下个物理步继续平滑跟随新的运动方向。</summary>
+    /// <summary>接触修正位置/速度；直接朝向模式立即匹配最终速度，受限模式在后续物理步转向。</summary>
     internal void ApplyObstacleContact(Vector3 position, Vector3 velocity)
     {
         Position = position;
         Velocity = velocity.LimitLength(_config!.MaxSpeed);
+        if (!_config.AngularMotionLimitsEnabled)
+        {
+            SynchronizeFacingMode();
+            AlignWithVelocity();
+        }
     }
 
     // 普通方法，不注册个体 _Process / _PhysicsProcess，避免重复积分。
@@ -184,24 +195,16 @@ public partial class Boid3D : Node3D
 
     private void UpdateFacing(float dt)
     {
+        SynchronizeFacingMode();
+        if (!_angularLimitsEnabled) { AlignWithVelocity(); return; }
         float maxSpeed = Mathf.DegToRad(_config!.MaxAngularSpeedDegrees);
         float maxAcceleration = Mathf.DegToRad(_config.MaxAngularAccelerationDegrees);
         Vector3 previousVelocity = AngularVelocity.LimitLength(maxSpeed);
         Vector3 angleError = Vector3.Zero;
         Quaternion orientation = Quaternion.Normalized();
 
-        if (Velocity.LengthSquared() > DirectionSpeedSquared)
-        {
-            Vector3 forward = orientation * Vector3.Forward;
-            Vector3 target = Velocity.Normalized();
-            Vector3 cross = forward.Cross(target);
-            float sine = cross.Length();
-            float cosine = Mathf.Clamp(forward.Dot(target), -1f, 1f);
-            if (sine > 0.00001f)
-                angleError = cross / sine * Mathf.Atan2(sine, cosine);
-            else if (cosine < 0f)
-                angleError = (orientation * Vector3.Up) * Mathf.Pi; // 恰好掉头时选取稳定的转轴。
-        }
+        if (Velocity.LengthSquared() > VelocityFacing.StopSpeedSquared)
+            angleError = FacingError(orientation, Velocity.Normalized());
 
         // 沿最短转向轴进行阻尼跟随，不锁定欧拉角，也不强制保持世界 Y 为上方。
         Vector3 requested = FacingResponse * FacingResponse * angleError - 2f * FacingResponse * previousVelocity;
@@ -211,5 +214,51 @@ public partial class Boid3D : Node3D
         float speed = AngularVelocity.Length();
         if (speed > 0.000001f)
             Quaternion = (new Quaternion(AngularVelocity / speed, speed * dt) * orientation).Normalized();
+    }
+
+    private static Vector3 FacingError(Quaternion orientation, Vector3 target)
+    {
+        Vector3 forward = orientation * Vector3.Forward;
+        Vector3 cross = forward.Cross(target);
+        float sine = cross.Length();
+        float cosine = Mathf.Clamp(forward.Dot(target), -1f, 1f);
+        if (sine > 0.00001f) return cross / sine * Mathf.Atan2(sine, cosine);
+        return cosine < 0 ? (orientation * Vector3.Up) * Mathf.Pi : Vector3.Zero;
+    }
+
+    private bool SynchronizeFacingMode()
+    {
+        if (_angularLimitsEnabled == _config!.AngularMotionLimitsEnabled) return false;
+        _angularLimitsEnabled = _config.AngularMotionLimitsEnabled;
+        AngularVelocity = AngularAcceleration = Vector3.Zero;
+        _trackingVelocityFacing = false;
+        return true;
+    }
+
+    internal bool RefreshFacingConfiguration()
+    {
+        if (!SynchronizeFacingMode()) return false;
+        if (!_angularLimitsEnabled) AlignWithVelocity();
+        if (_interpolating && Position == _currentPose.Origin)
+        {
+            // 切换只刷新旋转历史，保留当前插值位置，避免跟随相机产生一帧跳动。
+            _previousPose.Basis = Basis;
+            _currentPose = Transform;
+            SetDisplayPose(new Transform3D(Basis, _displayPose.Origin));
+        }
+        else ResetPresentation();
+        return true;
+    }
+
+    private void AlignWithVelocity()
+    {
+        AngularVelocity = AngularAcceleration = Vector3.Zero;
+        _trackingVelocityFacing = VelocityFacing.ShouldTrack(Velocity.LengthSquared(), _trackingVelocityFacing);
+        if (!_trackingVelocityFacing) return;
+        Quaternion orientation = Quaternion.Normalized();
+        Vector3 error = FacingError(orientation, Velocity.Normalized());
+        float angle = error.Length();
+        if (angle > 0.000001f)
+            Quaternion = (new Quaternion(error / angle, angle) * orientation).Normalized();
     }
 }

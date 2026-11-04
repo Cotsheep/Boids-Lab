@@ -44,6 +44,7 @@ public sealed class BoidConfig
     public float MaxForce { get; set; } = (float)ForceRange.Default;
     public float MaxAngularSpeedDegrees { get; set; } = (float)AngularSpeedRange.Default;
     public float MaxAngularAccelerationDegrees { get; set; } = (float)AngularAccelerationRange.Default;
+    public bool AngularMotionLimitsEnabled { get; set; } = true;
     public float SeparationWeight { get; set; } = (float)SeparationRange.Default;
     public float AlignmentWeight { get; set; } = (float)AlignmentRange.Default;
     public float CohesionWeight { get; set; } = (float)CohesionRange.Default;
@@ -122,6 +123,7 @@ public sealed class BoidConfig
         MaxForce = (float)ForceRange.Constrain(Number("max_force", MaxForce));
         MaxAngularSpeedDegrees = (float)AngularSpeedRange.Constrain(Number("max_angular_speed_degrees", MaxAngularSpeedDegrees));
         MaxAngularAccelerationDegrees = (float)AngularAccelerationRange.Constrain(Number("max_angular_acceleration_degrees", MaxAngularAccelerationDegrees));
+        AngularMotionLimitsEnabled = Flag("simulation", "angular_motion_limits_enabled", AngularMotionLimitsEnabled);
         SeparationWeight = (float)SeparationRange.Constrain(Number("separation_weight", SeparationWeight));
         AlignmentWeight = (float)AlignmentRange.Constrain(Number("alignment_weight", AlignmentWeight));
         CohesionWeight = (float)CohesionRange.Constrain(Number("cohesion_weight", CohesionWeight));
@@ -161,6 +163,7 @@ public sealed class BoidConfig
         file.SetValue("simulation", "max_force", MaxForce);
         file.SetValue("simulation", "max_angular_speed_degrees", MaxAngularSpeedDegrees);
         file.SetValue("simulation", "max_angular_acceleration_degrees", MaxAngularAccelerationDegrees);
+        file.SetValue("simulation", "angular_motion_limits_enabled", AngularMotionLimitsEnabled);
         file.SetValue("simulation", "separation_weight", SeparationWeight);
         file.SetValue("simulation", "alignment_weight", AlignmentWeight);
         file.SetValue("simulation", "cohesion_weight", CohesionWeight);
