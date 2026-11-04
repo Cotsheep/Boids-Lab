@@ -2,7 +2,7 @@ using Godot;
 
 namespace BoidsLab;
 
-/// <summary>共用的世界几何：null 表示无限世界，有矩形时表示首尾相接的环绕区域。</summary>
+/// <summary>共用的世界几何：null 使用实际非周期坐标，有矩形时表示环绕区域；软边界转向由管理器独立施加。</summary>
 public static class WorldGeometry2D
 {
     public static Vector2 Wrap(Vector2 point, Rect2? bounds)

@@ -102,7 +102,7 @@ public partial class ControlPanel : VBoxContainer
                 AddSearchMode(config, features.HasFlag(SimulationFeatures.UniformGridSearch));
                 AddNumber("PerceptionRadius", "感知半径", BoidConfig.RadiusRange, config.PerceptionRadius,
                     value => { config.PerceptionRadius = (float)value; RefreshRadiusWarning(config); },
-                    threeDimensional ? "单位：世界单位；按直线距离查找此范围内的邻居，不包含自身。" : "单位：世界像素；查找此范围内的邻居，不包含自身。观察模式考虑边界环绕，领队模式使用直线距离。");
+                    threeDimensional ? "单位：世界单位；按直线距离查找此范围内的邻居，不包含自身。" : "单位：世界像素；查找此范围内的邻居，不包含自身。环绕模式考虑对侧邻居；视口软边界和领队模式使用直线距离。");
             }
             if (features.HasFlag(SimulationFeatures.Flocking))
             {
@@ -141,7 +141,7 @@ public partial class ControlPanel : VBoxContainer
             _leaderToggle = new CheckBox
             {
                 Name = "IsLeader", Text = "设为领队", Disabled = true,
-                TooltipText = threeDimensional ? "先选中个体再勾选，自动进入领队操控；按 Esc 恢复鼠标指针。选中领队后取消勾选，可返回观察模式。" : "将选中个体设为唯一领队，领队跟随场景中的鼠标。取消勾选后返回观察模式并恢复边界环绕。",
+                TooltipText = threeDimensional ? "先选中个体再勾选，自动进入领队操控；按 Esc 恢复鼠标指针。选中领队后取消勾选，可返回观察模式。" : "将选中个体设为唯一领队，领队跟随场景中的鼠标并进入无限世界。取消勾选后按设置恢复视口软边界或环绕。",
             };
             _leaderToggle.Toggled += enabled => LeaderAssignmentRequested?.Invoke(enabled);
             _content.AddChild(_leaderToggle);
@@ -190,6 +190,12 @@ public partial class ControlPanel : VBoxContainer
         if (features.HasFlag(SimulationFeatures.DebugDrawing) || threeDimensional)
         {
             BeginCategory("Display", "显示", "观察范围、参考线与调试可视化");
+            if (!threeDimensional)
+            {
+                AddHeading("二维观察边界");
+                AddToggle("ViewportBoundary", "使用视口软边界", config.ViewportBoundaryEnabled, value => config.ViewportBoundaryEnabled = value)
+                    .TooltipText = "以相机当前视口为软边界，靠近边缘向内转向，越界后逐步返回；平移和缩放不搬移个体。关闭后恢复原有环绕。领队模式下不生效。";
+            }
             if (threeDimensional)
             {
                 AddHeading("三维观察范围");

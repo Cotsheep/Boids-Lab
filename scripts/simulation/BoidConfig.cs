@@ -59,6 +59,7 @@ public sealed class BoidConfig
     public float WorldHeight { get; set; } = (float)WorldHeightRange.Default;
     public float WorldDepth { get; set; } = (float)WorldDepthRange.Default;
     public float FollowCameraDistance { get; set; } = (float)FollowCameraDistanceRange.Default;
+    public bool ViewportBoundaryEnabled { get; set; }
     public bool FadeNearbyBoids { get; set; } = true;
     public bool ShowGrid { get; set; } = true;
     public bool ShowBoundary { get; set; }
@@ -132,6 +133,7 @@ public sealed class BoidConfig
         ObstacleClearance = (float)ObstacleClearanceRange.Constrain(Number("obstacle_clearance", ObstacleClearance));
         LeaderFollowDistance = (float)LeaderFollowDistanceRange.Constrain(Number("leader_follow_distance", LeaderFollowDistance));
         LeaderFollowWeight = (float)LeaderFollowWeightRange.Constrain(Number("leader_follow_weight", LeaderFollowWeight));
+        ViewportBoundaryEnabled = Flag("simulation", "viewport_boundary_2d", ViewportBoundaryEnabled);
         WorldWidth = (float)WorldWidthRange.Constrain(Number("world_width_3d", WorldWidth));
         WorldHeight = (float)WorldHeightRange.Constrain(Number("world_height_3d", WorldHeight));
         WorldDepth = (float)WorldDepthRange.Constrain(Number("world_depth_3d", WorldDepth));
@@ -170,6 +172,7 @@ public sealed class BoidConfig
         file.SetValue("simulation", "obstacle_clearance", ObstacleClearance);
         file.SetValue("simulation", "leader_follow_distance", LeaderFollowDistance);
         file.SetValue("simulation", "leader_follow_weight", LeaderFollowWeight);
+        file.SetValue("simulation", "viewport_boundary_2d", ViewportBoundaryEnabled);
         file.SetValue("simulation", "world_width_3d", WorldWidth);
         file.SetValue("simulation", "world_height_3d", WorldHeight);
         file.SetValue("simulation", "world_depth_3d", WorldDepth);

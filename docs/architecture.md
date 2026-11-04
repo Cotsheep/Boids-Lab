@@ -41,9 +41,9 @@ Boid2D (Node2D，Boid2D 脚本)
 
 世界场景、配置路径和说明文字由 `MainController.World2D` / `World3D` 引用的 `SimulationWorldDefinition` 资源指定。主控制器将当前世界实例化到 `World` 节点，并支持运行时切换；一次只保留一个世界。世界直接使用根视口，HUD 覆盖在上方。这里只指显示组织方式，没有切换操作系统的独占全屏模式。
 
-`BoidManager.WorldSize` 默认 1280 × 720，仅用于初始与 Home 参考视角。`ViewBounds` 保存可见矩形；`WrapBounds` 根据领队引用计算：无领队时为 ViewBounds，有领队时为 null，表示无限世界。共享的 `WorldGeometry2D` 负责位置规范化与两种距离计算。
+`BoidManager.WorldSize` 默认 1280 × 720，仅用于初始与 Home 参考视角。`ViewBounds` 保存可见矩形；`WrapBounds` 只在无领队且未开启 `ViewportBoundaryEnabled` 时返回该矩形，其余使用非周期坐标。无领队且开启开关时，`IsViewportBoundaryActive` 为 true，管理器独立施加软边界转向；存在领队时为无限世界。共享的 `WorldGeometry2D` 负责位置规范化与两种距离计算。
 
-相机拖动、缩放、Home 或视口尺寸变化后发出 `ViewChanged`。`UpdateViewBounds()` 更新可见矩形：有领队时只刷新绘制；无领队时还立即环绕越界个体并使邻居结果失效。暂停也执行这一步，保留速度、旋转和身份。
+相机拖动、缩放、Home 或视口尺寸变化后发出 `ViewChanged`。`UpdateViewBounds()` 更新可见矩形：领队模式只刷新绘制；观察模式使旧邻居统计失效，环绕模式立即规范化越界位置，软边界模式保留全部位置。暂停也同步新范围，但软边界回归只在下一次模拟更新或单步发生。
 
 参考矩形与 `ViewBounds` 分开保存；可见范围不传回 `Configure()`，缩放上下限保持 0.25–8 倍。平移无地图范围限制；大坐标仍存在单精度精度损失，尚未使用浮动原点。
 
@@ -120,7 +120,7 @@ Godot → BoidManager._PhysicsProcess(delta)
 
 ## 领队、目标与跟随
 
-地图模式仅取决于 `Leader` 是否为 null，与暂停、选择和跟随权重无关。`SetLeader` 只在有/无领队的切换上更新边界模式：清除邻居统计，返回环绕模式时立即规范化全体位置。更换领队不会传送个体。删除领队和 Reset 使用同一入口；恢复环绕不修改速度、朝向或运行开关，Reset 自身仍按原规则暂停。
+观察模式由 `ViewportBoundaryEnabled` 选择软边界或环绕，默认关闭；领队身份优先，存在时停用两类边界。`SetLeader` 在有/无领队的切换上清除邻居统计，返回环绕时立即规范化位置，返回软边界时保留位置。转移身份不经过中间观察模式。关闭软边界立即恢复环绕；切换开关不重置群体、速度、朝向或运行状态。`BoundarySteering2D` 使用视口外侧 20% 缓冲带和 0.5 秒响应，群集同轴向外分量不能抵消回归请求，避障优先，合力限幅；详见[二维视口软边界](viewport-boundary-2d.md)。
 
 `BoidManager.Leader` 保存唯一领队引用，`SelectedBoid` 仍只表示普通选择。`SetSelectedBoidLeader(bool)` 是 UI 请求入口，`SetLeader(Boid2D?)` 验证个体属于本世界、转移标记并清空旧目标。移除领队、Reset 或解除身份时清空引用和目标，不能只记录可能在重置后复用的 ID。`Boid2D.IsLeader` 管理持久的紫色本体，`SimulationView` 绘制紫色菱形和目标标记；金色选择圆环可以与身份标记同时出现。
 
@@ -148,7 +148,7 @@ Godot → BoidManager._PhysicsProcess(delta)
 
 `ObstacleQuery2D/3D` 持有不激活的静态 PhysicsServer 空间、每个凸部件的静态 body 与局部 Shape 资源（共同映射到逻辑障碍身份）；同步不推进物理。每步开始统一提交障碍变换/资源，暂停新增和拾取也先同步。圆/球查询半径就是 ObstacleClearance，零间距使用 0.001 的数值点近似，未叠加 Boid 网格半径。盒角现为圆/球扫掠的真实圆角。`ObstacleContact2D/3D` 独立扫描完整位移、投影速度和剩余位移以沿面滑动；初始重叠用真实重叠查询及原生接触法线恢复。接触修正不受 MaxForce 限制。二维关闭避障仍同时关闭主动转向与接触。
 
-`ObstacleBoundary2D` 截断第一次边界前的预测，并把实际位移按出口/入口拆段。`ObstacleQuery2D.Synchronize` 在观察模式只注册变换后碰撞部件包围范围与边界相交的障碍；无限模式和即时新增检查全部障碍。三维无视野/观察盒过滤。障碍不传送、不生成周期副本。运动最多 64 段、重叠恢复最多 8 轮；耗尽时丢弃未完成位移或报告未恢复，不能把封闭布局当成成功。预算、方向数与响应时间集中在 `ObstacleTuning`。详细同步和资源接入见[统一避障架构](obstacle-query-refactor.md)。
+`ObstacleBoundary2D` 仅在环绕模式截断第一次边界前的预测，并把实际位移按出口/入口拆段。`ObstacleQuery2D.Synchronize` 在环绕模式只注册变换后碰撞部件包围范围与边界相交的障碍；软边界、领队无限模式和即时新增检查全部障碍。三维无视野/观察盒过滤。障碍不传送、不生成周期副本。运动最多 64 段、重叠恢复最多 8 轮；耗尽时丢弃未完成位移或报告未恢复，不能把封闭布局当成成功。预算、方向数与响应时间集中在 `ObstacleTuning`。详细同步和资源接入见[统一避障架构](obstacle-query-refactor.md)。
 
 ## 速度、加速度与朝向
 

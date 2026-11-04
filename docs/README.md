@@ -14,6 +14,7 @@
 | [冰岩明暗主题](themes.md) | 可编辑配色资源、Remote Inspector 调色、主题与世界显示 |
 | [领队跟随抖动诊断](follow-camera-jitter.md) | 复现、显示插值修复、时序与生命周期回归 |
 | [世界切换](world-switching.md) | 两套配置隔离、切换顺序与清理语义 |
+| [二维视口软边界](viewport-boundary-2d.md) | 可选视口软边界、环绕/领队衔接及相机变化 |
 | [三维邻居搜索](neighbor-search-3d.md) | 直接距离、无界网格、快照和一致性 |
 | [统一避障查询与资源接入](obstacle-query-refactor.md) | 不规则实心障碍、同步、策略、接触与调试显示 |
 | [三维障碍与避障](obstacles-3d.md) | 放置、选择、拖动、尺寸与模式行为 |

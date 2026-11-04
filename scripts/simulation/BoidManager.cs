@@ -8,7 +8,7 @@ namespace BoidsLab;
 /// <summary>2D 世界管理器：统一调度个体更新、管理实例和相机，不引用 UI。</summary>
 public partial class BoidManager : Node2D, ISimulationWorld
 {
-    // 初始化及 Home 复位的参考尺寸；无领队时，ViewBounds 也作为环绕边界。
+    // 初始化及 Home 复位的参考尺寸；观察模式按配置以 ViewBounds 作为环绕或软边界。
     [Export] public Vector2 WorldSize { get; set; } = new(1280, 720);
     [Export] public PackedScene BoidScene { get; set; } = null!;
 
@@ -18,7 +18,8 @@ public partial class BoidManager : Node2D, ISimulationWorld
     public BoidConfig Config => _config
         ?? throw new InvalidOperationException("Initialize the world with a shared configuration first.");
     public Rect2 ViewBounds { get; private set; }
-    public Rect2? WrapBounds => Leader is null ? ViewBounds : null;
+    public bool IsViewportBoundaryActive => Leader is null && Config.ViewportBoundaryEnabled;
+    public Rect2? WrapBounds => Leader is null && !Config.ViewportBoundaryEnabled ? ViewBounds : null;
     public IReadOnlyList<Boid2D> Boids { get; }
     public NeighborSearch2D NeighborSearch { get; } = new();
     public Boid2D? SelectedBoid { get; private set; }
@@ -55,6 +56,7 @@ public partial class BoidManager : Node2D, ISimulationWorld
     private Boid2D? _pressedBoid;
     private Vector2 _leaderHeading = Vector2.Right;
     private bool _interactionEnabled = true;
+    private bool _viewportBoundaryEnabled;
 
     public BoidManager()
     {
@@ -71,6 +73,7 @@ public partial class BoidManager : Node2D, ISimulationWorld
 
         _config = config;
         Config.Normalize();
+        _viewportBoundaryEnabled = Config.ViewportBoundaryEnabled;
         ViewBounds = new Rect2(Vector2.Zero, WorldSize);
         if (IsNodeReady())
         {
@@ -126,7 +129,7 @@ public partial class BoidManager : Node2D, ISimulationWorld
         Rect2 viewportRect = GetViewport().GetVisibleRect();
         if (!viewportRect.HasArea()) return;
 
-        // 无领队时，视口变化同时改变环绕世界；有领队时只改变观察范围。
+        // 观察模式下视口决定环绕/软边界；软边界只更新转向范围，不移动已有个体。
         Rect2 bounds = GetGlobalTransformWithCanvas().AffineInverse() * viewportRect;
         if (!bounds.HasArea() || !bounds.Position.IsFinite() || !bounds.Size.IsFinite()) return;
         if (bounds == ViewBounds) return;
@@ -137,6 +140,7 @@ public partial class BoidManager : Node2D, ISimulationWorld
             WrapPopulation();
             InvalidateNeighborResults();
         }
+        else if (IsViewportBoundaryActive) InvalidateNeighborResults();
         _view.QueueRedraw();
         _obstacleEditor.RefreshVisuals();
     }
@@ -169,17 +173,16 @@ public partial class BoidManager : Node2D, ISimulationWorld
         if (boid is not null && !_boids.Contains(boid))
             throw new ArgumentException("Leader must belong to this world.", nameof(boid));
         if (Leader == boid) return;
-        bool wasWrapping = Leader is null;
+        bool wasWrapping = WrapBounds.HasValue;
+        bool wasSoftBoundary = IsViewportBoundaryActive;
         Leader?.SetLeader(false);
         Leader = boid;
         Leader?.SetLeader(true);
         LeaderTarget = null;
         _leaderHeading = boid is null ? Vector2.Right : Vector2.FromAngle(boid.Rotation);
-        if (wasWrapping != (Leader is null))
-        {
-            WrapPopulation();
+        if (wasWrapping != WrapBounds.HasValue) WrapPopulation();
+        if (wasWrapping != WrapBounds.HasValue || wasSoftBoundary != IsViewportBoundaryActive)
             InvalidateNeighborResults();
-        }
         BoidControlStateChanged?.Invoke();
         _view.QueueRedraw();
     }
@@ -240,6 +243,7 @@ public partial class BoidManager : Node2D, ISimulationWorld
     public void Reset()
     {
         Config.Normalize();
+        _viewportBoundaryEnabled = Config.ViewportBoundaryEnabled;
         PopulationSpawnLimited = false;
         _populationRandom.Seed = (ulong)Config.RandomSeed ^ 0x9e3779b97f4a7c15UL;
         IsRunning = false;
@@ -269,6 +273,12 @@ public partial class BoidManager : Node2D, ISimulationWorld
     {
         AvoidanceDebug.Clear();
         Config.Normalize();
+        if (_viewportBoundaryEnabled != Config.ViewportBoundaryEnabled)
+        {
+            _viewportBoundaryEnabled = Config.ViewportBoundaryEnabled;
+            WrapPopulation(); // 切回环绕时立即沿用原规范化规则；开启软边界不搬移。
+            InvalidateNeighborResults();
+        }
         if (NeighborSearch.HasResults && (NeighborSearch.Mode != Config.NeighborSearchMode
             || NeighborSearch.Radius != Config.PerceptionRadius))
             InvalidateNeighborResults();
@@ -407,6 +417,8 @@ public partial class BoidManager : Node2D, ISimulationWorld
                     guidance = LeaderSteering.Follow(self, followPoint, leaderSnapshot.Velocity,
                         Config, (float)deltaSeconds, followRadius);
                 _steeringAccelerations[i] = BoidSteering.Calculate(NeighborSearch, i, Config, guidance, following);
+                if (IsViewportBoundaryActive)
+                    _steeringAccelerations[i] = BoundarySteering2D.Apply(self, ViewBounds, Config, _steeringAccelerations[i]);
             }
         }
 
