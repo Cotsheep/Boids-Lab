@@ -8,7 +8,7 @@ namespace BoidsLab;
 /// <summary>2D 世界管理器：统一调度个体更新、管理实例和相机，不引用 UI。</summary>
 public partial class BoidManager : Node2D, ISimulationWorld
 {
-    // 初始化及 Home 复位的参考尺寸；观察模式按配置以 ViewBounds 作为环绕或软边界。
+    // 初始化及 Home 复位的参考尺寸；环绕使用视口，软边界在视口四周额外留出余量。
     [Export] public Vector2 WorldSize { get; set; } = new(1280, 720);
     [Export] public PackedScene BoidScene { get; set; } = null!;
 
@@ -18,6 +18,14 @@ public partial class BoidManager : Node2D, ISimulationWorld
     public BoidConfig Config => _config
         ?? throw new InvalidOperationException("Initialize the world with a shared configuration first.");
     public Rect2 ViewBounds { get; private set; }
+    public Rect2 ViewportBoundaryBounds
+    {
+        get
+        {
+            Vector2 margin = ViewBounds.Size * 0.1f;
+            return new Rect2(ViewBounds.Position - margin, ViewBounds.Size + margin * 2);
+        }
+    }
     public bool IsViewportBoundaryActive => Leader is null && Config.ViewportBoundaryEnabled;
     public Rect2? WrapBounds => Leader is null && !Config.ViewportBoundaryEnabled ? ViewBounds : null;
     public IReadOnlyList<Boid2D> Boids { get; }
@@ -418,7 +426,7 @@ public partial class BoidManager : Node2D, ISimulationWorld
                         Config, (float)deltaSeconds, followRadius);
                 _steeringAccelerations[i] = BoidSteering.Calculate(NeighborSearch, i, Config, guidance, following);
                 if (IsViewportBoundaryActive)
-                    _steeringAccelerations[i] = BoundarySteering2D.Apply(self, ViewBounds, Config, _steeringAccelerations[i]);
+                    _steeringAccelerations[i] = BoundarySteering2D.Apply(self, ViewportBoundaryBounds, Config, _steeringAccelerations[i]);
             }
         }
 

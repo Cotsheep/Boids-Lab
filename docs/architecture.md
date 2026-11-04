@@ -41,7 +41,7 @@ Boid2D (Node2D，Boid2D 脚本)
 
 世界场景、配置路径和说明文字由 `MainController.World2D` / `World3D` 引用的 `SimulationWorldDefinition` 资源指定。主控制器将当前世界实例化到 `World` 节点，并支持运行时切换；一次只保留一个世界。世界直接使用根视口，HUD 覆盖在上方。这里只指显示组织方式，没有切换操作系统的独占全屏模式。
 
-`BoidManager.WorldSize` 默认 1280 × 720，仅用于初始与 Home 参考视角。`ViewBounds` 保存可见矩形；`WrapBounds` 只在无领队且未开启 `ViewportBoundaryEnabled` 时返回该矩形，其余使用非周期坐标。无领队且开启开关时，`IsViewportBoundaryActive` 为 true，管理器独立施加软边界转向；存在领队时为无限世界。共享的 `WorldGeometry2D` 负责位置规范化与两种距离计算。
+`BoidManager.WorldSize` 默认 1280 × 720，仅用于初始与 Home 参考视角。`ViewBounds` 保存可见矩形；`WrapBounds` 只在无领队且未开启 `ViewportBoundaryEnabled` 时返回该矩形，其余使用非周期坐标。无领队且开启开关时，`IsViewportBoundaryActive` 为 true，管理器以 `ViewportBoundaryBounds` 独立施加软边界转向：相对视口四周各外扩 10%，中心相同，宽高为视口的 1.2 倍；存在领队时为无限世界。共享的 `WorldGeometry2D` 负责位置规范化与两种距离计算。
 
 相机拖动、缩放、Home 或视口尺寸变化后发出 `ViewChanged`。`UpdateViewBounds()` 更新可见矩形：领队模式只刷新绘制；观察模式使旧邻居统计失效，环绕模式立即规范化越界位置，软边界模式保留全部位置。暂停也同步新范围，但软边界回归只在下一次模拟更新或单步发生。
 
@@ -120,7 +120,7 @@ Godot → BoidManager._PhysicsProcess(delta)
 
 ## 领队、目标与跟随
 
-观察模式由 `ViewportBoundaryEnabled` 选择软边界或环绕，默认关闭；领队身份优先，存在时停用两类边界。`SetLeader` 在有/无领队的切换上清除邻居统计，返回环绕时立即规范化位置，返回软边界时保留位置。转移身份不经过中间观察模式。关闭软边界立即恢复环绕；切换开关不重置群体、速度、朝向或运行状态。`BoundarySteering2D` 使用视口外侧 20% 缓冲带和 0.5 秒响应，群集同轴向外分量不能抵消回归请求，避障优先，合力限幅；详见[二维视口软边界](viewport-boundary-2d.md)。
+观察模式由 `ViewportBoundaryEnabled` 选择软边界或环绕，默认关闭；领队身份优先，存在时停用两类边界。`SetLeader` 在有/无领队的切换上清除邻居统计，返回环绕时立即规范化位置，返回软边界时保留位置。转移身份不经过中间观察模式。关闭软边界立即恢复环绕；切换开关不重置群体、速度、朝向或运行状态。`BoundarySteering2D` 使用扩展边界外侧 20% 缓冲带和 0.5 秒响应，群集同轴向外分量不能抵消回归请求，避障优先，合力限幅；详见[二维视口软边界](viewport-boundary-2d.md)。
 
 `BoidManager.Leader` 保存唯一领队引用，`SelectedBoid` 仍只表示普通选择。`SetSelectedBoidLeader(bool)` 是 UI 请求入口，`SetLeader(Boid2D?)` 验证个体属于本世界、转移标记并清空旧目标。移除领队、Reset 或解除身份时清空引用和目标，不能只记录可能在重置后复用的 ID。`Boid2D.IsLeader` 管理持久的紫色本体，`SimulationView` 绘制紫色菱形和目标标记；金色选择圆环可以与身份标记同时出现。
 

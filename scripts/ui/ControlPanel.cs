@@ -194,7 +194,7 @@ public partial class ControlPanel : VBoxContainer
             {
                 AddHeading("二维观察边界");
                 AddToggle("ViewportBoundary", "使用视口软边界", config.ViewportBoundaryEnabled, value => config.ViewportBoundaryEnabled = value)
-                    .TooltipText = "以相机当前视口为软边界，靠近边缘向内转向，越界后逐步返回；平移和缩放不搬移个体。关闭后恢复原有环绕。领队模式下不生效。";
+                    .TooltipText = "软边界在相机视口四周各外扩 10%，靠近边缘向内转向，越界后逐步返回；平移和缩放不搬移个体。关闭后恢复原有环绕。领队模式下不生效。";
             }
             if (threeDimensional)
             {

@@ -2,7 +2,7 @@ using Godot;
 
 namespace BoidsLab;
 
-/// <summary>视口外侧 20% 内平滑向内转向；只施加加速度，不裁剪或传送位置。</summary>
+/// <summary>给定边界的外侧 20% 内平滑向内转向；只施加加速度，不裁剪或传送位置。</summary>
 public static class BoundarySteering2D
 {
     public static Vector2 Apply(BoidSnapshot self, Rect2 bounds, BoidConfig config, Vector2 flocking)

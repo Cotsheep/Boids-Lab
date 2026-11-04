@@ -52,7 +52,10 @@ public partial class ViewportBoundary2DChecks : Node
         var world = World();
         try
         {
-            Rect2 bounds = world.ViewBounds;
+            Rect2 bounds = world.ViewportBoundaryBounds;
+            Check(bounds.Size.IsEqualApprox(world.ViewBounds.Size * 1.2f)
+                && bounds.GetCenter().IsEqualApprox(world.ViewBounds.GetCenter()),
+                "Soft boundary is centered on the viewport with 10 percent extra space on each side");
             Check(world.IsViewportBoundaryActive && world.WrapBounds is null, "Enabled observation uses direct coordinates");
             foreach (Vector2 direction in new[] { Vector2.Right, Vector2.Left, Vector2.Up, Vector2.Down,
                 new Vector2(1, 1).Normalized(), new Vector2(-1, 1).Normalized(),
@@ -71,7 +74,7 @@ public partial class ViewportBoundary2DChecks : Node
                     Check(boid.Position.DistanceTo(before) <= 1.001f && boid.Velocity.Length() <= 60.001f
                         && boid.Acceleration.Length() <= 120.001f, "Continuous recovery respects motion limits");
                 }
-                Check(bounds.HasPoint(boid.Position), "Every face and corner returns to the current viewport");
+                Check(bounds.HasPoint(boid.Position), "Every face and corner returns inside the expanded soft boundary");
                 world.RemoveBoid(boid);
             }
             var outside = world.SpawnBoid(bounds.End + new Vector2(100, 100), Vector2.Right * 60);
@@ -205,6 +208,9 @@ public partial class ViewportBoundary2DChecks : Node
             camera._UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.WheelUp, Pressed = true });
             Check(world.ViewBounds != oldBounds && original == (boid.Position, boid.Velocity, boid.Rotation, wall.Position),
                 "Paused pan and zoom update the boundary without relocating Boids or obstacles");
+            Check(world.ViewportBoundaryBounds.Size.IsEqualApprox(world.ViewBounds.Size * 1.2f)
+                && world.ViewportBoundaryBounds.GetCenter().IsEqualApprox(world.ViewBounds.GetCenter()),
+                "Pan and zoom keep the proportional boundary margin aligned with the viewport");
             Check(!world.ViewBounds.HasPoint(boid.Position), "Panning can leave the unchanged population outside the new viewport");
             world.StepOnce();
             Check(boid.Position.DistanceTo(original.Item1) <= 1.001f && !world.IsRunning,
@@ -214,6 +220,9 @@ public partial class ViewportBoundary2DChecks : Node
             GetWindow().Size = new(1360, 860);
             await Frame();
             Check(original == (boid.Position, boid.Velocity, boid.Rotation, wall.Position), "Home and viewport resize leave simulation positions intact");
+            Check(world.ViewportBoundaryBounds.Size.IsEqualApprox(world.ViewBounds.Size * 1.2f)
+                && world.ViewportBoundaryBounds.GetCenter().IsEqualApprox(world.ViewBounds.GetCenter()),
+                "Home and resize retain the viewport-centered margin");
             GetWindow().Size = new(960, 640);
             await Frame();
         }
