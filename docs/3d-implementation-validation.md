@@ -1,21 +1,25 @@
 # 自动验证与实机验收状态
 
-更新日期：2026-11-04。当前 C# 构建零警告、零错误，完整 **32 组**无图形回归通过。图形效果及真实键盘操控仍由维护者按[实机验收清单](manual-acceptance.md)确认，尚未记录最终通过结论。功能与职责见[架构](architecture.md)，本文件集中保存验证方法、结果和性能测量。
+更新日期：2026-11-06。本次文档核查在代码基线 `ff920a7` 上重新执行验证：C# 构建零警告、零错误，完整 **32 组**无图形回归通过，并以 SHA-256 核对二维、三维和主题三份配置在测试前后完全一致。图形效果及真实键盘操控仍由维护者按[实机验收清单](manual-acceptance.md)确认，尚未记录最终通过结论。功能与职责见[架构](architecture.md)，本文件集中保存验证方法、结果和性能测量。
 
 ## 构建与无图形回归
 
-环境为 Godot `4.7.2.stable.mono.official.ed1daf0bf`、C# net8.0，二维 GodotPhysics、三维 Jolt，Compatibility 渲染器。运行入口：
+本次环境为 Windows、.NET SDK 8.0.400、Godot `4.7.2.stable.mono.official.ed1daf0bf`、C# net8.0，二维 GodotPhysics、三维 Jolt，Compatibility 渲染器。先在项目根目录（包含 `project.godot` 的 `boids/`）完成包还原，再执行运行器；引擎路径替换为本机 Godot .NET 控制台程序。常规构建与本机还原方式见[项目 README](../README.md#本机构建说明)。运行入口：
 
 ```powershell
 ./tests/run-headless.ps1 -GodotExecutable 'D:/app/Godot4.7.2/Godot_v4.7.2-stable_mono_win64_console.exe'
 ```
 
-运行器先构建，再按退出码、PASS 标记和 ERROR 输出判定；finally 恢复测试前两套模拟配置和独立外观偏好的原始字节。日志保存在 `.godot/validation/full-regression/`。仅在构建进程设置已有 workload resolver 绕过参数，未修改系统 SDK；编辑器 SDK 检测异常仍是环境限制。
+运行器以 `--no-restore` 构建，再按退出码、PASS 标记和 ERROR 输出判定；`finally` 恢复测试前两套模拟配置和独立外观偏好的原始字节，原先不存在的文件会删除。日志保存在 `.godot/validation/full-regression/`。workload resolver 绕过参数只在运行脚本的 PowerShell 进程中临时设置，结束后恢复，未修改系统 SDK。2026-10-29 的编辑器 SDK 检测异常见[历史记录](validation-history.md)；本次未重新验证编辑器内构建。
 
-通过 `-Scenes boundary_3d_checks,leader_3d_checks,leader_interaction_3d_checks` 可运行指定组。完整场景名称如下，均带 `_checks` 后缀：
+通过 `-Scenes boundary_3d_checks,leader_3d_checks,leader_interaction_3d_checks` 可运行指定组（上述数组写法适用于 PowerShell 内调用）。默认发现 `tests/` 直属目录的全部 `*_checks.tscn`；以下为可直接传给 `-Scenes` 的完整名称，不含扩展名：
 
-- 三维：boundary_3d、camera_fade_3d、leader_3d、leader_interaction_3d、motion_3d、observation_3d、obstacle_3d、obstacle_interaction_3d、presentation_3d、spatial_3d、steering_3d。
-- 二维及共享：angular_limits、boundary_mode、debug、help_overlay、leader、leader_gap、leader_interaction、leader_spacing、motion、neighbor、obstacle_avoidance、obstacle_interaction、pause_shortcut、physics_obstacle、population、single_step、steering、theme、ui_layout、viewport_boundary_2d、world_switch。
+- 三维（11 组）：`boundary_3d_checks`、`camera_fade_3d_checks`、`leader_3d_checks`、`leader_interaction_3d_checks`、`motion_3d_checks`、`observation_3d_checks`、`obstacle_3d_checks`、`obstacle_interaction_3d_checks`、`presentation_3d_checks`、`spatial_3d_checks`、`steering_3d_checks`。
+- 二维及共享（21 组）：`angular_limits_checks`、`boundary_mode_checks`、`debug_checks`、`help_overlay_checks`、`leader_checks`、`leader_gap_checks`、`leader_interaction_checks`、`leader_spacing_checks`、`motion_checks`、`neighbor_checks`、`obstacle_avoidance_checks`、`obstacle_interaction_checks`、`pause_shortcut_checks`、`physics_obstacle_checks`、`population_checks`、`single_step_checks`、`steering_checks`、`theme_checks`、`ui_layout_checks`、`viewport_boundary_2d_checks`、`world_switch_checks`。
+
+诊断、性能及图形场景没有 `_checks` 后缀，须按各文档单独运行，不计入这 32 组。部分旧集成检查直接读写默认用户配置，复测时使用运行器统一备份与恢复；仅退出码为 0 不足以证明检查完成，还须出现 PASS 且没有 ERROR。
+
+本次完整回归后同步校订了两套 F2 帮助，再次运行 `help_overlay_checks`、`ui_layout_checks`、`world_switch_checks`、`angular_limits_checks`、`theme_checks` 五组，全部通过。
 
 | 范围 | 主要覆盖 |
 | --- | --- |
@@ -71,4 +75,4 @@
 
 近距离淡化已有 4694 项交付时逻辑检查及 16 组同状态图形对比，见[相机淡化](camera-fade-3d.md)。选中对象保持不透明；未加入相机碰撞，任意队形仍可能遮挡。界面及主题的局部窗口结果见[界面](ui-layout.md)和[主题](themes.md)，相机显示插值的时序对照见[抖动诊断](follow-camera-jitter.md)。
 
-此次避障重构与清理只执行无图形验证，未新增图形或真实键盘验收结果。不规则轮廓、候选/法线可读性、群体绕行观感和旋转父节点下的编辑手感仍待检查。无限世界仍使用单精度坐标；短时窗口检查不代表驱动长期稳定性。较早结果保留在[历次验证记录](validation-history.md)。
+2026-11-06 文档核查只重新执行构建与无图形回归，未新增图形或真实键盘验收结果。不规则轮廓、候选/法线可读性、群体绕行观感和旋转父节点下的编辑手感仍待检查。无限世界仍使用单精度坐标；短时窗口检查不代表驱动长期稳定性。较早结果保留在[历次验证记录](validation-history.md)。

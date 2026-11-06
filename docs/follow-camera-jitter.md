@@ -25,7 +25,7 @@
 
 ## 已实施修复
 
-每个三维物理步开始时记录上一位姿，运动积分和障碍接触完成后记录当前位姿。`Boid3D` 根节点始终保留真实位置与朝向，搜索、转向和碰撞继续读取它；Body 子节点用局部变换补偿到上一物理步和当前步之间的显示位置与朝向。近距离淡化作用于实际显示模型。
+每个三维物理步开始时记录上一位姿，运动积分和障碍接触完成后记录当前位姿。`Boid3D` 根节点始终保留真实位置与朝向，搜索、转向和碰撞继续读取它；Body 子节点用局部变换补偿到上一物理步和当前步之间的显示位置与朝向。当前实现中，[关闭角运动限制](angular-motion.md)时只插值位置，旋转立即使用接触修正后的稳定朝向。近距离淡化作用于实际显示模型。
 
 `SimulationView3D` 以优先级 -10 在每个显示帧读取 `Engine.GetPhysicsInterpolationFraction()` 并统一更新全部模型；相机随后在自己的 `_Process` 中读取领队的 `DisplayGlobalTransform`，保留原有平滑和逐帧鼠标响应。项目的全局物理插值开关、60 Hz 物理频率和二维显示均未改动。暂停时不重复更新静止模型。
 
@@ -33,7 +33,7 @@
 
 暂停与恢复、领队转移 / 移除均清理插值历史；单步立即显示最终状态。新生、初始化、重置及显式改位姿不会从旧坐标拖出轨迹。插值终点在障碍接触修正之后记录；编辑期间冻结相机但继续显示运行中的个体，结束后恢复跟随。
 
-插值显示相比最新物理状态最多滞后一个物理步，60 Hz 下约 16.7 毫秒；这不改变模拟结果。只平滑相机或提高物理频率不能解决原来的时序差异。Godot 官方的[插值说明](https://docs.godotengine.org/en/stable/tutorials/physics/interpolation/physics_interpolation_introduction.html)和[相机插值指导](https://docs.godotengine.org/en/stable/tutorials/physics/interpolation/advanced_physics_interpolation.html)说明了同类问题及原理。
+插值显示相比最新物理状态最多滞后一个物理步，60 Hz 下约 16.7 毫秒；这不改变模拟结果。提高物理频率可减轻跳变，与显示时序同步时也可消除本例抖动，但不能保证其他显示频率下的平滑；本修复让模型与相机共用显示位姿。Godot 官方的[插值说明](https://docs.godotengine.org/en/stable/tutorials/physics/interpolation/physics_interpolation_introduction.html)和[相机插值指导](https://docs.godotengine.org/en/stable/tutorials/physics/interpolation/advanced_physics_interpolation.html)说明了同类问题及原理。
 
 ## 修复验证
 
@@ -49,7 +49,7 @@
 
 每个显示帧还验证物理位置与统计不变，最终轨迹仍与固定 60 Hz 计算一致。专项覆盖旋转、透视拾取、范围 / 连线 / 箭头、接触后的终点、暂停 / 单步 / 恢复、百万级新生位置、初始化、领队转移 / 删除 / 重置，以及编辑时冻结与恢复相机。
 
-另使用真正的引擎 `_PhysicsProcess` / `_Process` 调度采样 120 帧，验证引擎返回帧内插值比例，实际网格和相机目标同时匹配该帧的期望显示位置。完整 28 组无图形回归通过；构建零警告、零错误。通过 Godot MCP 在 Intel Arc / OpenGL Compatibility 图形渲染下运行同一场景也通过全部 1746 项断言；120 帧采样中 109 帧处于物理步之间，网格与相机目标的误差在日志六位小数精度下均为零。图形日志保存在 `.godot/validation/presentation-native.log`，未使用 Computer Use。这项检查不等同于连续操控手感验收。
+另使用真正的引擎 `_PhysicsProcess` / `_Process` 调度采样 120 帧，验证引擎返回帧内插值比例，实际网格和相机目标同时匹配该帧的期望显示位置。2026-11-02 修复交付时完整 28 组无图形回归通过，构建零警告、零错误；当前总结果见[验证记录](3d-implementation-validation.md)。当时通过 Godot MCP 在 Intel Arc / OpenGL Compatibility 图形渲染下运行同一场景也通过全部 1746 项断言；120 帧采样中 109 帧处于物理步之间，网格与相机目标的误差在日志六位小数精度下均为零。图形日志保存在 `.godot/validation/presentation-native.log`，未使用 Computer Use。这项检查不等同于连续操控手感验收。
 
 ## 重复诊断
 

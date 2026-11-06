@@ -1,5 +1,7 @@
 # BoidsLab 架构与扩展入口
 
+本文说明当前实现；领域术语见[术语表](../CONTEXT.md)，验证结果见[验证记录](3d-implementation-validation.md)。除单独说明外，二维运动坐标属于 `Boids` 容器，默认场景中与世界坐标一致；三维同理。障碍查询会把完整父变换转换到该模拟坐标系。
+
 ## 更新方式与职责划分
 
 项目参考 [SebLague/Boids 的管理器](https://github.com/SebLague/Boids/blob/fdda4db1368df92fbacd8a644bbe6dc61d705441/Assets/Scripts/BoidManager.cs)与[个体脚本](https://github.com/SebLague/Boids/blob/fdda4db1368df92fbacd8a644bbe6dc61d705441/Assets/Scripts/Boid.cs)，采用“管理器统一调度、个体更新自身、独立场景显示外观”的组织方式。2D 与 3D 均已实现基础运动、朝向跟随、两种 CPU 邻居搜索、分离/对齐/聚集规则、观察相机与单选调试。均没有 GPU 计算。
@@ -55,7 +57,7 @@ F1 和顶部“隐藏界面”按钮切换整个 `UIRoot.Visible`，包含操作
 
 空格映射到 `toggle_pause`，由 `MainController._Input()` 在 GUI 处理前拦截。仅首次按下调用现有 `ToggleRunning()`；长按重复事件与松开事件也标记为已处理，避免触发有焦点控件的 `ui_accept`、改变复选框或在输入框插入空格。HUD 隐藏时同样有效，暂停按钮和状态文字同步刷新。这只切换模拟的运行状态，不暂停整个 SceneTree，所以相机、选择与 UI 继续响应。
 
-操作指引集中在 `scenes/ui/help_overlay.tscn` 的 RichTextLabel 中。`HelpOverlay` 与 `UIRoot` 并列，所以 F1 隐藏 HUD 后仍可由 F2 打开。F2（`toggle_help`）、Esc（`close_help`）与空格都由主控制器处理；弹层不会自动修改 `IsRunning`。弹层最大为 760 × 680，随可用视口缩小，正文在内部滚动，不创建原生 Window。
+操作指引正文分别保存在 `scenes/worlds/world_2d.tres` 和 `world_3d.tres` 的 `Instructions` 中，由主控制器调用 `HelpOverlay.SetInstructions()` 填入 RichTextLabel；`scenes/ui/help_overlay.tscn` 只定义弹层布局。`HelpOverlay` 与 `UIRoot` 并列，所以 F1 隐藏 HUD 后仍可由 F2 打开。F2（`toggle_help`）、Esc（`close_help`）与空格都由主控制器处理；弹层不会自动修改 `IsRunning`。弹层最大为 760 × 680，随可用视口缩小，正文在内部滚动，不创建原生 Window。
 
 `HelpOverlay` 负责显示、关闭、居中及遮罩点击。遮罩消费按下和松开，松开后再关闭，避免关闭点击穿透；点击卡片不会关闭。`MainController.OnHelpOpenChanged()` 暂时禁用 HUD 的递归键盘焦点，并通过 `ISimulationWorld.SetInteractionEnabled(false)` 禁用世界交互。2D 世界把该请求交给相机，取消未结束的点击/拖动并关闭手势处理，仍记录原始光标位置供恢复使用，物理更新照常执行。关闭后恢复世界输入和仍可见的原控件焦点。3D 世界把同一交互开关交给 SimulationCamera3D 与 ObstacleEditor3D，取消选择、相机拖动、障碍拖动与放置；弹层无需依赖具体相机类型。
 
@@ -72,16 +74,16 @@ F1 和顶部“隐藏界面”按钮切换整个 `UIRoot.Visible`，包含操作
 ```text
 Godot → BoidManager._PhysicsProcess(delta)
 		   └── 运行请求开启时 → Step(delta)
-								  ├── NeighborSearch.Search：复制状态并搜索邻居
+								  ├── 同步障碍查询，NeighborSearch.Search 复制状态并搜索邻居
 								  ├── 读取领队步前快照，确定本步共用的身后跟随区域
-								  ├── 优先避障，否则领队到达目标 / 跟随者的群集与跟随合力
+								  ├── 优先避障，否则领队到达目标 / 普通个体的群集与跟随合力，观察模式再施加软边界
 								  ├── 遍历已注册个体
 								  │     ├── Boid2D.UpdateBoid(delta, steering)：移动与朝向积分
 								  │     └── ResolveMotion：按模式处理接触与边界；无障碍物时仅执行必要的环绕
 								  └── 记录数量、搜索/更新耗时、候选次数与平均邻居数
 ```
 
-`Step()` 在个体循环前按 WrapBounds 规范化位置，然后调用 `NeighborSearch2D.Search(..., wrapBounds)`。两种搜索都读取同一时间步开始时的位置、速度副本，不访问已经更新过的节点状态。随后为全部个体计算优先避障或群集转向，写入复用的 `Vector2[]`；全部算完后再逐个积分、按模式进行障碍物接触修正与环绕。个体增删后按实际数量调整数组，每步覆盖所有条目，关闭规则不会遗留旧转向。
+`Step()` 在个体循环前按 WrapBounds 规范化位置，同步本步障碍查询，再调用 `NeighborSearch2D.Search(..., wrapBounds)`。两种搜索都读取同一时间步开始时的位置、速度副本，不访问已经更新过的节点状态。随后为全部个体计算优先避障或群集转向，写入复用的 `Vector2[]`；全部算完后再逐个积分、按模式进行障碍物接触修正与环绕。个体增删后按实际数量调整数组，每步覆盖所有条目，关闭规则不会遗留旧转向。
 
 `UpdateBoid()` 验证初始化状态和正的有限时间步长，执行移动与朝向积分，返回运动状态是否变化。管理器在运动改变状态后请求调试图形重绘。原生 `Polygon2D` 的显示由场景节点负责，不需要统一绘制所有个体的函数。这里使用 Godot 的固定物理回调（默认 60 次/秒）；`MainController` 每 0.25 秒只刷新统计标签，不影响运动频率。
 
@@ -120,7 +122,7 @@ Godot → BoidManager._PhysicsProcess(delta)
 
 ## 领队、目标与跟随
 
-观察模式由 `ViewportBoundaryEnabled` 选择软边界或环绕，默认关闭；领队身份优先，存在时停用两类边界。`SetLeader` 在有/无领队的切换上清除邻居统计，返回环绕时立即规范化位置，返回软边界时保留位置。转移身份不经过中间观察模式。关闭软边界立即恢复环绕；切换开关不重置群体、速度、朝向或运行状态。`BoundarySteering2D` 使用扩展边界外侧 20% 缓冲带和 0.5 秒响应，群集同轴向外分量不能抵消回归请求，避障优先，合力限幅；详见[二维视口软边界](viewport-boundary-2d.md)。
+观察模式由 `ViewportBoundaryEnabled` 选择软边界或环绕，默认关闭；领队身份优先，存在时停用两类边界。`SetLeader` 在有/无领队的切换上清除邻居统计，返回环绕时立即规范化位置，返回软边界时保留位置。转移身份不经过中间观察模式。关闭软边界立即恢复环绕；切换开关不重置群体、速度、朝向或运行状态。`BoundarySteering2D` 的缓冲带位于扩展边界内侧，各轴靠近两端的 20% 区域逐渐增强回归，越界后保持最大回归请求，速度响应为 0.5 秒；群集同轴向外分量不能抵消回归请求，避障优先，合力限幅。详见[二维视口软边界](viewport-boundary-2d.md)。
 
 `BoidManager.Leader` 保存唯一领队引用，`SelectedBoid` 仍只表示普通选择。`SetSelectedBoidLeader(bool)` 是 UI 请求入口，`SetLeader(Boid2D?)` 验证个体属于本世界、转移标记并清空旧目标。移除领队、Reset 或解除身份时清空引用和目标，不能只记录可能在重置后复用的 ID。`Boid2D.IsLeader` 管理持久的紫色本体，`SimulationView` 绘制紫色菱形和目标标记；金色选择圆环可以与身份标记同时出现。
 
@@ -138,11 +140,11 @@ Godot → BoidManager._PhysicsProcess(delta)
 
 障碍物采用独立 `Obstacle2D` 节点，保存形状与尺寸，直接在世界坐标下绘制矩形或圆形。缩放改变几何尺寸，不通过 Node2D.Scale 放大描边或鼠标容差；选中边框与缩放手柄按相机倍率补偿为稳定的屏幕尺寸。障碍物位置独立于相机，相机变化也不修改障碍物几何。
 
-`ObstaclePanel` 只发送创建、删除、尺寸修改与取消放置请求。`Refresh(ObstacleSelection?, ObstacleShape?)` 接收选中对象的形状、宽高深与当前放置状态；用 `SetValueNoSignal()` 回填数值，避免拖动时的状态同步反过来触发编辑。圆形/球体显示直径，矩形显示宽度和高度，长方体增加深度；无选择时尺寸与删除控件禁用。尺寸范围来自 `ObstacleSize` 的统一常量，避障参数范围与持久化由 `BoidConfig` 管理。
+`ObstaclePanel` 只发送创建、删除、尺寸修改与取消放置请求。`Refresh(ObstacleSelection?, ObstacleShape?)` 接收选中对象的形状、宽高深与当前放置状态；用 `SetValueNoSignal()` 回填数值，避免拖动时的状态同步反过来触发编辑。圆形/球体显示直径，矩形显示宽度和高度，长方体增加深度；无选择或正在放置时隐藏尺寸与删除控件。自定义障碍隐藏尺寸控件，但仍可删除。尺寸范围来自 `ObstacleSize` 的统一常量，避障参数范围与持久化由 `BoidConfig` 管理。
 
 添加按钮进入放置模式，下次世界点击确定位置并选中。障碍物本体拖动、缩放手柄及 Shift + 滚轮缩放优先于相机输入；普通空白拖动和滚轮保留原有相机操作。障碍物选择与 Boid 选择互斥。Delete 删除选中障碍物，但编辑输入框时由 GUI 处理；Esc 或右键取消放置。操作说明打开时取消待定操作并禁用世界交互，模拟运行状态不受影响。
 
-`ObstacleAvoidance` / `ObstacleAvoidance3D` 只消费统一圆/球查询结果：前方危险时才展开按偏角排序的缓存方向；不再识别 Rectangle、Circle、Box、Sphere。障碍物检测与两种 Boid 邻居搜索独立。需要避让时优先采用避障转向，其他时间沿用三条群集规则。`AvoidanceEnabled` 默认开启，`AvoidanceLookAhead` 默认为 0.75 秒，`ObstacleClearance` 默认为 12 世界像素，旧配置没有这些键时保留默认值。障碍物布局、选中对象与放置状态不保存；Reset 保留布局，只重建鸟群。
+`ObstacleAvoidance` / `ObstacleAvoidance3D` 只消费统一圆/球查询结果：前方受阻或近表面需要脱离时才展开按偏角排列的缓存方向；不再识别 Rectangle、Circle、Box、Sphere。障碍物检测与两种 Boid 邻居搜索独立。需要避让时优先采用避障转向，其他时间沿用三条群集规则。`AvoidanceEnabled` 默认开启，`AvoidanceLookAhead` 默认为 0.75 秒，`ObstacleClearance` 默认为 12 长度单位（二维世界像素、三维世界单位），旧配置没有这些键时保留默认值。障碍物布局、选中对象与放置状态不保存；Reset 保留布局，只重建鸟群。
 
 二维管理器只给鼠标领队传入 `LeaderTarget`。策略用目标距离限制远期前瞻，同时保留当前速度的制动检测；危险或近表面时优先检查精确目标方向，畅通则沿用到达转向，制动范围内有障碍则先刹车，目标方向受阻才展开相对目标的候选。近表面缓冲范围不等于实际碰撞半径，可通行窄缝和已到达目标不会因此触发横向驱赶。普通个体与三维策略不受这一目标参数影响。
 
@@ -205,17 +207,17 @@ MainController               └──> SimulationView
 
 界面的「目标个体数量」通过 Enter 或失焦提交给 `ISimulationWorld.ResizePopulation()`，两个管理器立即补齐或缩减差额，保持已有状态；数字草稿不会触发增删。种子仍只在 Reset 生效。`InitializePopulation()` 使用局部随机生成器复现重置结果；即时增量使用另一份随机生成器，Reset 时以种子异或固定常量初始化，之后连续使用，不受未重置的种子编辑影响。
 
-缩减从列表末尾移除，优先保留领队，其次是普通选择。新增复用 `SpawnBoid()`，在观察范围或无限世界的群体质心附近采样，用已有障碍的带间距距离函数过滤；每个待新增个体最多尝试 64 次，首次耗尽后结束本次增量并设置 `PopulationSpawnLimited`。UI 保留请求数，显示实际数并允许 Enter 重试。三维批量操作结束后统一刷新调试与材质；两种世界均使旧搜索和统计失效。细节与验收见 [数量即时增减](population-resizing.md)。
+缩减从列表末尾移除，优先保留领队，其次是普通选择。新增复用 `SpawnBoid()`，在观察范围或无限世界的群体质心附近采样，用统一障碍查询的 `Occupied(position, ObstacleClearance)` 过滤。每个待新增个体最多尝试 64 次，首次耗尽后结束本次增量并设置 `PopulationSpawnLimited`。UI 保留请求数，显示实际数并允许 Enter 重试。三维批量操作结束后统一刷新调试与材质；两种世界均使旧搜索和统计失效。细节与验收见 [数量即时增减](population-resizing.md)。
 
 管理器对外提供 `IReadOnlyList<Boid2D> Boids`，它包装同一个内部列表，会反映创建和移除。这个接口只限制集合增删入口；其中的 Boid 仍然是实际节点对象。调试绘制可以读取节点状态，正常运动更新由管理器调度个体完成。
 
-配置持久化到 `user://boids_lab.cfg`，包括所有可视化开关，不包含个体生成结果、运行请求或选择状态。
+二维配置持久化到 `user://boids_lab.cfg`，三维配置到 `user://boids_lab_3d.cfg`，包括对应的可视化开关，不包含个体生成结果、运行请求或选择状态；主题偏好独立保存到 `user://boids_lab_ui.cfg`。
 
 ## 单选与调试绘制
 
 `BoidManager.SelectedBoid` 保存唯一选择；按下时命中测试在实际 Polygon2D 的局部坐标中进行，同时提供 10 个视口像素的中心容差。多个命中对象取屏幕距离最近者，完全重叠时优先当前选中个体。松开确认的是按下时记录的实例，避免运行中的个体移走而选不中。再次点击选中对象或点击空白会取消，拖动及 UI 点击保持选择。Reset 和 RemoveBoid 清理选择，已移除的待定点击对象不会再被选中。
 
-`Boid2D.SetSelected()` 只改变 Body 的颜色；取消时恢复进入场景时记录的原色，不改变运动状态。`SimulationView` 额外绘制选择圆环。高亮不依赖任何可视化开关；UI 隐藏后仍属于世界的一部分。
+`Boid2D.SetSelected()` 只改变选择状态并刷新 Body 颜色，不改变运动状态；颜色取自当前主题，领队颜色优先于选择颜色，取消选择后恢复对应身份颜色。`SimulationView` 额外绘制选择圆环。高亮不依赖任何可视化开关；UI 隐藏后仍属于世界的一部分。
 
 `DebugOverlayGeometry.Build()` 从当前节点状态构造四组线段，再由 `SimulationView._Draw()` 使用原生 `DrawMultiline()` 绘制：
 
@@ -256,7 +258,7 @@ MainController               └──> SimulationView
 | `main.tscn` | Game、World 容器及 CanvasLayer HUD |
 | `boids_world_2d.tscn` | 管理器根节点、个体与障碍物容器、背景/调试节点和 Camera2D |
 | `boid_2d.tscn` | 单个 Boid 的场景模板，子 Polygon2D 定义三角形外观 |
-| `lab_theme.tres` | 原生 Theme / StyleBoxFlat，统一 UI 样式 |
+| `lab_theme.tres` | 编辑器预览的静态 Theme / StyleBoxFlat；运行时由 LabTheme 按配色资源生成主题 |
 
 ## 控制与统计语义
 
@@ -273,7 +275,7 @@ MainController               └──> SimulationView
 
 实际数量来自已注册集合，包括空群体的 0。Stopwatch 分别测量搜索耗时与整步耗时：前者包含快照、格子构建、候选距离检查与结果写入；后者还包含三条规则计算、个体运动积分与障碍物接触，不包含渲染。候选检查次数按有向距离检查计数，排除自身，不计格子查找，不把规则中的邻居遍历重复算作搜索检查；平均邻居数为有向邻居总数除以实际数量，空群体测量后为 0。界面显示最近一次物理步的数值，并非 0.25 秒内的累加或平均，FPS 独立来自引擎实测。
 
-首次运行前、Reset、增删个体或邻域结果失效时，计时与邻居指标显示 `--`。暂停保留最近读数；有领队时平移缩放不影响物理状态和统计，无领队时同步新边界并使旧邻域结果失效。
+首次运行前、Reset、增删个体或邻域结果失效时，计时与邻居指标显示 `--`。暂停保留最近读数。二维相机变化在无领队时同步边界并使邻域结果失效，有领队时只改变观察；三维观察相机的旋转、平移和缩放均不修改模拟范围或统计，三维观察盒尺寸变化才使结果失效。
 
 ## 三维基础世界与共享 UI
 
@@ -287,12 +289,12 @@ Game3D (MainController)
 │       │   └── Boid_0 ... (Boid3D)
 │       │       └── Body (MeshInstance3D / CylinderMesh 六棱锥)
 │       ├── SimulationView (Node3D / SimulationView3D)
-│           ├── ReferenceFrame (MeshInstance3D / ImmediateMesh 盒状边框)
-│           ├── Grid (MeshInstance3D / 可切换底面网格)
-│           ├── DebugOverlay (MeshInstance3D / 合批调试线段)
-│           ├── Camera3D (SimulationCamera3D，环绕、平移、缩放与复位)
-│           ├── WorldEnvironment
-│           └── Sun (DirectionalLight3D)
+│       │   ├── ReferenceFrame (MeshInstance3D / ImmediateMesh 盒状边框)
+│       │   ├── Grid (MeshInstance3D / 可切换底面网格)
+│       │   ├── DebugOverlay (MeshInstance3D / 合批调试线段)
+│       │   ├── Camera3D (SimulationCamera3D，环绕、平移、缩放与复位)
+│       │   ├── WorldEnvironment
+│       │   └── Sun (DirectionalLight3D)
 │       ├── Obstacles (Node3D / 障碍物实例)
 │       ├── ObstacleEditor (Node3D / ObstacleEditor3D)
 │       └── LeaderController (Node / LeaderController3D)
@@ -308,7 +310,7 @@ Game3D (MainController)
 ```text
 Godot → BoidManager3D._PhysicsProcess(delta)
 		└── IsRunning → Step(delta)
-					   ├── NeighborSearch3D 复制实际坐标快照并执行所选搜索
+					   ├── 同步障碍查询，NeighborSearch3D 复制实际坐标快照并执行所选搜索
 					   ├── 从共同快照计算领队控制 / 跟随与群集 / 软边界，普通个体避障优先
 					   ├── 遍历个体
 					   │   ├── Boid3D.UpdateBoid(delta, steeringAcceleration)
@@ -326,7 +328,7 @@ Godot → BoidManager3D._PhysicsProcess(delta)
 
 `BoidConfig` 新增 WorldWidth、WorldHeight、WorldDepth，默认 2560×1440×1440，范围 100～100000，步长 10。管理器的 WorldBounds 保存观察盒尺寸与运行时中心；WorldSize 从配置读取。初始化中心为原点，改变尺寸保持中心和所有位置，不重置相机。视角从不回写模拟范围。底面网格与边框立即重建，Home 根据最新盒重新取景。
 
-`BoundarySteering3D.Apply` 在各轴外侧 20% 平滑增强向内目标速度，响应时间 0.5 秒；外沿与越界时覆盖同轴向外群集输入，合力再限幅。普通个体优先避障；边界只改变转向，不直接修正位置。最大加速度为零时无法主动返回。
+`BoundarySteering3D.Apply` 在观察盒内侧、各轴靠近两端的 20% 缓冲带中平滑增强向内目标速度，响应时间 0.5 秒；外沿与越界时覆盖同轴向外群集输入，合力再限幅。普通个体优先避障；边界只改变转向，不直接修正位置。最大加速度为零时无法主动返回。
 
 `ShowBoundary` 默认关闭，保存于三维配置的 `visualization/show_boundary_3d`。三维「显示边界」控件只控制 ReferenceFrame 的可见性，暂停时也立即生效；ShowGrid 独立控制底面网格。存在领队时两者始终隐藏，退出后按各自开关恢复，不影响边界转向计算。
 
