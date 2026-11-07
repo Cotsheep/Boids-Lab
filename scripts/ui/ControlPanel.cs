@@ -166,6 +166,10 @@ public partial class ControlPanel : VBoxContainer
                     value => config.LeaderFollowDistance = (float)value, $"单位：{lengthUnit}；领队与身后跟随区域前缘的间隔；区域随跟随人数扩大。");
                 AddNumber("LeaderFollowWeight", "领队跟随权重", BoidConfig.LeaderFollowWeightRange, config.LeaderFollowWeight,
                     value => config.LeaderFollowWeight = (float)value, "与群集规则共同作用；设为零关闭跟随贡献，避障仍优先。");
+                AddToggle("ShowLeaderFollowRegion", "显示跟随范围", config.ShowLeaderFollowRegion, value => config.ShowLeaderFollowRegion = value)
+                    .TooltipText = threeDimensional
+                        ? "用半透明球体显示领队身后的跟随区域，随人数和距离更新；未指定领队或跟随权重为零时隐藏。"
+                        : "用半透明圆显示领队身后的跟随区域，随人数和距离更新；未指定领队或跟随权重为零时隐藏。";
             }
             if (threeDimensional)
             {

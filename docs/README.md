@@ -6,14 +6,18 @@
 
 | 文档 | 内容 |
 | --- | --- |
-| [项目 README](../README.md) | 打开运行、二维/三维操作、参数范围与构建说明 |
+| [项目 README](../README.md) | 快速运行与基本操作 |
+| [详细使用说明](usage.md) | 二维/三维完整操作、群集规则、边界与调试观察 |
+| [参数与配置](configuration.md) | 默认值、输入范围、单位与配置保存行为 |
+| [开发与构建说明](development.md) | 运行环境、工程目录、构建方法与开发机环境记录 |
 | [领域术语表](../CONTEXT.md) | 个体数量、选择、领队、操控、跟随区域与边界的统一定义 |
 | [自动验证与验收状态](3d-implementation-validation.md) | 当前回归、复现命令、性能测量与实机验收边界 |
 | [实机验收清单](manual-acceptance.md) | 供维护者检查键鼠操控、视觉效果、单步与数量调整 |
 | [架构说明](architecture.md) | 管理器统一更新、规则计算、状态与 UI 分工 |
 | [界面分组](ui-layout.md) | 五类参数、固定操作栏、输入提交与布局检查 |
-| [冰岩明暗主题](themes.md) | 可编辑配色资源、Remote Inspector 调色、主题与世界显示 |
+| [明暗主题](themes.md) | 可编辑配色资源、Remote Inspector 调色、主题与世界显示 |
 | [领队跟随抖动诊断](follow-camera-jitter.md) | 复现、显示插值修复、时序与生命周期回归 |
+| [领队跟随范围显示](leader-follow-region.md) | 半透明跟随圆 / 球、显示开关与真实区域同步 |
 | [世界切换](world-switching.md) | 两套配置隔离、切换顺序与清理语义 |
 | [二维视口软边界](viewport-boundary-2d.md) | 可选视口软边界、环绕/领队衔接及相机变化 |
 | [角运动与直接朝向](angular-motion.md) | 角速度/角加速度统一开关、极低速度处理及三维显示 |
@@ -28,6 +32,7 @@
 
 ## 文档维护约定
 
+- 项目 README 只保留快速运行与基本操作；详细用法、参数、实现、构建环境及验证记录放在 `docs/` 中，并通过导航连接。
 - `CONTEXT.md` 只记录领域术语、关系和歧义；实现细节放在架构或对应功能文档中。
 - 参数默认值、范围和步长以 `scripts/simulation/BoidConfig.cs` 为准；二维长度使用世界像素，三维使用世界单位，屏幕容差另标视口像素。
 - 操作说明正文在 `scenes/worlds/world_2d.tres` 与 `world_3d.tres`，弹层布局在 `scenes/ui/help_overlay.tscn`；修改用户可见行为时同步检查 README、功能说明和两套 F2 帮助。

@@ -63,6 +63,7 @@ public partial class BoidManager : Node2D, ISimulationWorld
     private Vector2[] _steeringAccelerations = Array.Empty<Vector2>();
     private Boid2D? _pressedBoid;
     private Vector2 _leaderHeading = Vector2.Right;
+    internal Vector2 LeaderFollowHeading => _leaderHeading;
     private bool _interactionEnabled = true;
     private bool _viewportBoundaryEnabled;
 

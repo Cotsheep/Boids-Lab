@@ -44,6 +44,8 @@ public partial class LabPalette : Resource
     private Color _warning = new("f4c26b");
     [Export] public Color Success { get => _success; set => SetColor(ref _success, value); }
     private Color _success = new("80c8b7");
+    [Export] public Color LeaderText { get => _leaderText; set => SetColor(ref _leaderText, value); }
+    private Color _leaderText = new("83bfff");
 
     [ExportGroup("强调与交互")]
     [Export] public Color Accent { get => _accent; set => SetColor(ref _accent, value); }
@@ -59,11 +61,11 @@ public partial class LabPalette : Resource
     [Export] public Color Boid { get => _boid; set => SetColor(ref _boid, value); }
     private Color _boid = new("ffa94d");
     [Export] public Color Selection { get => _selection; set => SetColor(ref _selection, value); }
-    private Color _selection = new("ffe394");
+    private Color _selection = new("ff96b2");
     [Export] public Color Leader { get => _leader; set => SetColor(ref _leader, value); }
-    private Color _leader = new("d69cff");
+    private Color _leader = new("83bfff");
     [Export] public Color SelectedLeader { get => _selectedLeader; set => SetColor(ref _selectedLeader, value); }
-    private Color _selectedLeader = new("ffa1eb");
+    private Color _selectedLeader = new("d3ebff");
 
     [ExportGroup("场景与障碍")]
     [Export] public Color Grid { get => _grid; set => SetColor(ref _grid, value); }

@@ -26,7 +26,7 @@ public partial class Obstacle3D : Node3D
     private readonly StandardMaterial3D _material = new() { Roughness = 0.8f };
     private readonly StandardMaterial3D _lineMaterial = new()
     {
-        ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded, AlbedoColor = new Color("ffe394"),
+        ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded, AlbedoColor = new Color("ff96b2"),
     };
 
     public override void _Ready()

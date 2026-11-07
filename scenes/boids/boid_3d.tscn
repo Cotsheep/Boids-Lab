@@ -9,15 +9,15 @@ roughness = 0.8
 
 [sub_resource type="StandardMaterial3D" id="Material_selection"]
 shading_mode = 0
-albedo_color = Color(1, 0.89019608, 0.58039216, 1)
+albedo_color = Color(1, 0.58823529, 0.69803922, 1)
 
 [sub_resource type="StandardMaterial3D" id="Material_leader"]
 shading_mode = 0
-albedo_color = Color(0.83921569, 0.61176471, 1, 1)
+albedo_color = Color(0.51372549, 0.74901961, 1, 1)
 
 [sub_resource type="StandardMaterial3D" id="Material_selected_leader"]
 shading_mode = 0
-albedo_color = Color(1, 0.63137255, 0.92156863, 1)
+albedo_color = Color(0.82745098, 0.92156863, 1, 1)
 
 [sub_resource type="CylinderMesh" id="Mesh_boid"]
 material = SubResource("Material_boid")

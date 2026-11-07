@@ -9,7 +9,7 @@ public partial class Boid2D : Node2D
     public int Id { get; private set; }
     public bool IsSelected { get; private set; }
     public bool IsLeader { get; private set; }
-    public static readonly Color LeaderColor = new("d69cff");
+    public static readonly Color LeaderColor = new("83bfff");
     private Polygon2D? _body;
     private LabPalette _palette = LabPalette.Dark;
     internal void ApplyPalette(LabPalette palette) { _palette = palette; RefreshAppearance(); }
@@ -50,7 +50,8 @@ public partial class Boid2D : Node2D
     private void RefreshAppearance()
     {
         if (_body is not null)
-            _body.Color = IsLeader ? _palette.Leader : IsSelected ? _palette.Selection : _palette.Boid;
+            _body.Color = IsLeader ? (IsSelected ? _palette.SelectedLeader : _palette.Leader)
+                : IsSelected ? _palette.Selection : _palette.Boid;
     }
 
     internal bool HitTest(Vector2 viewportPosition)

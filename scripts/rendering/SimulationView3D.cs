@@ -28,6 +28,7 @@ public partial class SimulationView3D : Node3D
         foreach (Boid3D boid in _manager.Boids) ApplyBoidPalette(boid);
         _manager.GetNode<ObstacleEditor3D>("ObstacleEditor").ApplyPalette(palette);
         RebuildReferenceGeometry(_manager.WorldBounds);
+        RefreshFollowRegionPalette();
         RefreshDebug();
     }
     private BoidConfig? _config;
@@ -38,6 +39,19 @@ public partial class SimulationView3D : Node3D
     {
         ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
         VertexColorUseAsAlbedo = true,
+    };
+    private Node3D? _followRegion;
+    private readonly StandardMaterial3D _followFillMaterial = new()
+    {
+        ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
+        Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
+        DepthDrawMode = BaseMaterial3D.DepthDrawModeEnum.Disabled,
+    };
+    private readonly StandardMaterial3D _followOutlineMaterial = new()
+    {
+        ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
+        Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
+        DepthDrawMode = BaseMaterial3D.DepthDrawModeEnum.Disabled,
     };
 
     public override void _Ready() => ProcessPriority = -10; // 先更新模型显示，再让默认优先级的相机跟随。
@@ -55,6 +69,7 @@ public partial class SimulationView3D : Node3D
     {
         if (_manager is null) return;
         foreach (Boid3D boid in _manager.Boids) boid.PreparePresentation(_manager.IsRunning ? fraction : 1);
+        RefreshFollowRegion();
     }
 
     public void Bind(BoidConfig config, BoidManager3D manager)
@@ -62,6 +77,70 @@ public partial class SimulationView3D : Node3D
         _config = config;
         _manager = manager;
         GetNode<MeshInstance3D>("DebugOverlay").Mesh = _debugMesh;
+        CreateFollowRegion();
+    }
+
+    internal (Vector3 Center, float Radius)? FollowRegion
+    {
+        get
+        {
+            if (_config?.ShowLeaderFollowRegion != true || _manager?.Leader is not { } leader
+                || _config.LeaderFollowWeight <= 0 || _manager.Boids.Count <= 2) return null;
+            float radius = LeaderSteering3D.FollowRadius(_manager.Boids.Count - 1, _config);
+            Transform3D pose = leader.DisplayTransform;
+            return (LeaderSteering3D.FollowPoint(pose.Origin, pose.Basis * Vector3.Forward,
+                _config.LeaderFollowDistance + radius), radius);
+        }
+    }
+
+    private void CreateFollowRegion()
+    {
+        if (_followRegion is not null) return;
+        _followRegion = new Node3D { Name = "LeaderFollowRegion", Visible = false };
+        AddChild(_followRegion);
+        _followRegion.AddChild(new MeshInstance3D
+        {
+            Name = "Fill", Mesh = new SphereMesh { Radius = 1, Height = 2, RadialSegments = 48, Rings = 24 },
+            MaterialOverride = _followFillMaterial, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+        });
+        var rings = new ImmediateMesh();
+        rings.SurfaceBegin(Mesh.PrimitiveType.Lines);
+        const int segments = 96;
+        for (int plane = 0; plane < 3; plane++)
+            for (int i = 0; i < segments; i++)
+            {
+                Vector2 a = Vector2.FromAngle(Mathf.Tau * i / segments);
+                Vector2 b = Vector2.FromAngle(Mathf.Tau * (i + 1) / segments);
+                AddLine(rings, plane == 0 ? new(a.X, a.Y, 0) : plane == 1 ? new(a.X, 0, a.Y) : new(0, a.X, a.Y),
+                    plane == 0 ? new(b.X, b.Y, 0) : plane == 1 ? new(b.X, 0, b.Y) : new(0, b.X, b.Y));
+            }
+        rings.SurfaceEnd();
+        _followRegion.AddChild(new MeshInstance3D
+        {
+            Name = "Outline", Mesh = rings, MaterialOverride = _followOutlineMaterial,
+            CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+        });
+        RefreshFollowRegionPalette();
+    }
+
+    private void RefreshFollowRegionPalette()
+    {
+        _followOutlineMaterial.AlbedoColor = new Color(Palette.Leader, Palette.IsLight ? 0.46f : 0.45f);
+    }
+
+    private void RefreshFollowRegion()
+    {
+        if (_followRegion is null) return;
+        if (FollowRegion is not { } region) { _followRegion.Visible = false; return; }
+        _followRegion.Visible = true;
+        Transform3D coordinates = GlobalTransform.AffineInverse() * _manager!.GetNode<Node3D>("Boids").GlobalTransform;
+        _followRegion.Transform = coordinates * new Transform3D(Basis.Identity.Scaled(Vector3.One * region.Radius), region.Center);
+        // 镜头进入跟随球时淡出填充，避免整幅画面蒙上一层颜色；轮廓仍保留深度遮挡。
+        Vector3 scale = _followRegion.GlobalBasis.Scale.Abs();
+        float worldRadius = Mathf.Max(scale.X, Mathf.Max(scale.Y, scale.Z));
+        float distance = GetNode<SimulationCamera3D>("Camera3D").GlobalPosition.DistanceTo(_followRegion.GlobalPosition);
+        float opacity = Mathf.SmoothStep(1, 1.4f, distance / Mathf.Max(worldRadius, 0.001f));
+        _followFillMaterial.AlbedoColor = new Color(Palette.Leader, (Palette.IsLight ? 0.065f : 0.06f) * opacity);
     }
 
     public void Configure(Aabb bounds, bool resetCamera = true)
@@ -112,6 +191,7 @@ public partial class SimulationView3D : Node3D
     public void RefreshDebug()
     {
         if (_config is null || _manager is null) return;
+        RefreshFollowRegion();
         RefreshNearCameraFade(_config, _manager);
         GetNode<MeshInstance3D>("Grid").Visible = _config.ShowGrid && _manager.Leader is null;
         GetNode<MeshInstance3D>("ReferenceFrame").Visible = _config.ShowBoundary && _manager.Leader is null;

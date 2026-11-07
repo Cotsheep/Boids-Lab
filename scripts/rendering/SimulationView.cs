@@ -6,6 +6,7 @@ namespace BoidsLab;
 public partial class SimulationView : Node2D
 {
     public const float GridSpacing = 40;
+    internal readonly record struct Marker(Vector2 Center, float Radius, Color Color, float Width);
     public DebugOverlayGeometry DebugGeometry { get; } = new();
     public LabPalette Palette { get; private set; } = LabPalette.Dark;
     public void ApplyPalette(LabPalette palette)
@@ -33,9 +34,38 @@ public partial class SimulationView : Node2D
         if (_manager is null) return;
         DrawRect(_manager.ViewBounds, Palette.Canvas);
         if (_config?.ShowGrid == true) DrawGrid();
+        DrawLeaderFollowRegion();
         DrawDebugOverlays();
         DrawAvoidance();
         DrawLeaderMarkers();
+    }
+
+    internal (Vector2 Center, float Radius)? FollowRegion
+    {
+        get
+        {
+            if (_config?.ShowLeaderFollowRegion != true || _manager?.Leader is not { } leader
+                || _config.LeaderFollowWeight <= 0 || _manager.Boids.Count <= 2) return null;
+            float radius = LeaderSteering.FollowRadius(_manager.Boids.Count - 1, _config);
+            return (LeaderSteering.FollowPoint(leader.Position, _manager.LeaderFollowHeading,
+                _config.LeaderFollowDistance + radius), radius);
+        }
+    }
+
+    private void DrawLeaderFollowRegion()
+    {
+        if (FollowRegion is not { } region) return;
+        Transform2D coordinates = GlobalTransform.AffineInverse() * _manager!.GetNode<Node2D>("Boids").GlobalTransform;
+        float scale = (GetGlobalTransformWithCanvas() * coordinates).X.Length();
+        float unitsPerPixel = 1 / Mathf.Max(scale, 0.001f);
+        DrawSetTransformMatrix(coordinates);
+        DrawCircle(region.Center, region.Radius, new Color(Palette.Leader, Palette.IsLight ? 0.11f : 0.085f));
+        DrawArc(region.Center, region.Radius, 0, Mathf.Tau, 128,
+            new Color(Palette.Leader, Palette.IsLight ? 0.1f : 0.14f), 5 * unitsPerPixel, true);
+        DrawArc(region.Center, region.Radius, 0, Mathf.Tau, 128,
+            new Color(Palette.Leader, Palette.IsLight ? 0.9f : 0.82f), 1.5f * unitsPerPixel, true);
+        DrawCircle(region.Center, 2 * unitsPerPixel, new Color(Palette.Leader, 0.95f), true, -1, true);
+        DrawSetTransformMatrix(Transform2D.Identity);
     }
 
     private void DrawAvoidance()
@@ -53,19 +83,31 @@ public partial class SimulationView : Node2D
 
     private void DrawLeaderMarkers()
     {
-        if (_manager?.Leader is not { } leader) return;
-        float unitsPerPixel = 1 / Mathf.Max(0.001f, GetGlobalTransformWithCanvas().X.Length());
-        float radius = Mathf.Max(18, 18 * unitsPerPixel);
-        Vector2 center = leader.Position;
-        // 紫色菱形表示持久的领队身份；金色选择圆环仍表示当前普通选择。
-        Vector2[] diamond = { center + Vector2.Up * radius, center + Vector2.Right * radius,
-            center + Vector2.Down * radius, center + Vector2.Left * radius, center + Vector2.Up * radius };
-        DrawPolyline(diamond, Palette.Leader, 2 * unitsPerPixel, true);
-        if (_manager.LeaderTarget is not { } target) return;
+        DrawMarker(LeaderMarker);
+        if (!HasSeparateLeaderTarget || _manager?.LeaderTarget is not { } target) return;
+        float unitsPerPixel = UnitsPerPixel;
         float arm = 10 * unitsPerPixel;
         DrawArc(target, 6 * unitsPerPixel, 0, Mathf.Tau, 32, Palette.Leader, 2 * unitsPerPixel, true);
         DrawLine(target - Vector2.Right * arm, target + Vector2.Right * arm, Palette.Leader, unitsPerPixel);
         DrawLine(target - Vector2.Down * arm, target + Vector2.Down * arm, Palette.Leader, unitsPerPixel);
+    }
+
+    private float UnitsPerPixel => 1 / Mathf.Max(0.001f, GetGlobalTransformWithCanvas().X.Length());
+
+    internal Marker? SelectionMarker => _manager?.SelectedBoid is { } selected && selected != _manager.Leader
+        ? new Marker(selected.Position, Mathf.Max(14, 11 * UnitsPerPixel), Palette.Selection, 2 * UnitsPerPixel) : null;
+
+    internal Marker? LeaderMarker => _manager?.Leader is { } leader
+        ? new Marker(leader.Position, Mathf.Max(18, 18 * UnitsPerPixel),
+            leader.IsSelected ? Palette.SelectedLeader : Palette.Leader, (leader.IsSelected ? 2.5f : 1.5f) * UnitsPerPixel) : null;
+
+    internal bool HasSeparateLeaderTarget => LeaderMarker is { } marker && _manager?.LeaderTarget is { } target
+        && target.DistanceSquaredTo(marker.Center) > Mathf.Pow(marker.Radius + 12 * UnitsPerPixel, 2);
+
+    private void DrawMarker(Marker? marker)
+    {
+        if (marker is { } value)
+            DrawArc(value.Center, value.Radius, 0, Mathf.Tau, 96, value.Color, value.Width, true);
     }
 
     private void DrawGrid()
@@ -103,8 +145,6 @@ public partial class SimulationView : Node2D
             DrawMultiline(DebugGeometry.NeighborPoints.ToArray(), Palette.Selection, 1.5f * unitsPerPixel, true);
         if (DebugGeometry.VelocityPoints.Count > 0)
             DrawMultiline(DebugGeometry.VelocityPoints.ToArray(), Palette.Velocity, unitsPerPixel, true);
-        if (_manager.SelectedBoid is { } selected)
-            DrawArc(selected.Position, Mathf.Max(14, 11 * unitsPerPixel), 0, Mathf.Tau, 64,
-                Palette.Selection, 2 * unitsPerPixel, true);
+        DrawMarker(SelectionMarker);
     }
 }

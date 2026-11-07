@@ -62,6 +62,7 @@ public sealed class BoidConfig
     public float FollowCameraDistance { get; set; } = (float)FollowCameraDistanceRange.Default;
     public bool ViewportBoundaryEnabled { get; set; }
     public bool FadeNearbyBoids { get; set; } = true;
+    public bool ShowLeaderFollowRegion { get; set; }
     public bool ShowGrid { get; set; } = true;
     public bool ShowBoundary { get; set; }
     public bool ShowNeighbors { get; set; }
@@ -141,6 +142,7 @@ public sealed class BoidConfig
         WorldDepth = (float)WorldDepthRange.Constrain(Number("world_depth_3d", WorldDepth));
         FollowCameraDistance = (float)FollowCameraDistanceRange.Constrain(Number("follow_camera_distance_3d", FollowCameraDistance));
         FadeNearbyBoids = Flag("visualization", "fade_nearby_boids_3d", FadeNearbyBoids);
+        ShowLeaderFollowRegion = Flag("visualization", "show_leader_follow_region", ShowLeaderFollowRegion);
         ShowGrid = Flag("visualization", "show_grid", ShowGrid);
         ShowBoundary = Flag("visualization", "show_boundary_3d", ShowBoundary);
         ShowNeighbors = Flag("visualization", "show_neighbors", ShowNeighbors);
@@ -181,6 +183,7 @@ public sealed class BoidConfig
         file.SetValue("simulation", "world_depth_3d", WorldDepth);
         file.SetValue("simulation", "follow_camera_distance_3d", FollowCameraDistance);
         file.SetValue("visualization", "fade_nearby_boids_3d", FadeNearbyBoids);
+        file.SetValue("visualization", "show_leader_follow_region", ShowLeaderFollowRegion);
         file.SetValue("visualization", "show_grid", ShowGrid);
         file.SetValue("visualization", "show_boundary_3d", ShowBoundary);
         file.SetValue("visualization", "show_neighbors", ShowNeighbors);

@@ -87,7 +87,7 @@ public partial class ThemeChecks : Node
 
     private void CheckContrast(LabPalette p)
     {
-        foreach (Color text in new[] { p.Text, p.Muted, p.AccentText, p.Warning, p.Success, p.Leader })
+        foreach (Color text in new[] { p.Text, p.Muted, p.AccentText, p.Warning, p.Success, p.LeaderText })
             Check(Contrast(text, p.Panel) >= 4.5, "Semantic text contrasts with its panel");
         Check(Contrast(p.OnAccent, p.Accent) >= 4.5, "Primary action text has sufficient contrast");
         Check(Contrast(p.AccentText, p.AccentWash) >= 4.5, "Active category remains readable");
@@ -104,7 +104,8 @@ public partial class ThemeChecks : Node
         const string path = "res://.godot/validation/editable-palette.tres";
         Check(ResourceSaver.Save(copy, path) == Error.Ok, "Palette saves as a native Godot resource");
         var loaded = ResourceLoader.Load<LabPalette>(path, cacheMode: ResourceLoader.CacheMode.Ignore);
-        Check(loaded is not null && loaded.IsLight && loaded.Boid == copy.Boid && loaded.ObstaclePreview == copy.ObstaclePreview,
+        Check(loaded is not null && loaded.IsLight && loaded.Boid == copy.Boid && loaded.ObstaclePreview == copy.ObstaclePreview
+            && loaded.LeaderText == copy.LeaderText,
             "Inspector color properties round-trip through a .tres resource");
         Check(LabPalette.Light.Boid != copy.Boid, "Duplicated palettes can be customized without changing the default resource");
     }
@@ -186,8 +187,9 @@ public partial class ThemeChecks : Node
             Check(Snapshot().SequenceEqual(before) && Equals(camera, CameraState()) && World.Stats.Equals(stats)
                 && World.IsRunning == running && Config.RandomSeed == configBefore, "Theme switch preserves motion, camera, statistics and running state");
             Check(Panel.CurrentCategory == "Flocking" && page.ScrollVertical == scroll, "Theme switch preserves category and scroll");
-            Check(Find<Label>("SeparationRadiusWarning").GetThemeColor("font_color") == p.Warning,
-                "Existing warning labels change palette without losing their role");
+            Check(Find<Label>("SeparationRadiusWarning").GetThemeColor("font_color") == p.Warning
+                && Find<Label>("LeaderStatus").GetThemeColor("font_color") == p.LeaderText,
+                "Warning and leader labels keep readable text colors independently of world highlights");
             Check(_app.GetNode<Control>("%UIRoot").Theme.GetStylebox("normal", "LineEdit") is StyleBoxFlat input && input.BgColor == p.Input,
                 "Numeric inputs use the selected palette");
             help.Open();
@@ -265,7 +267,7 @@ public partial class ThemeChecks : Node
             _app.SetLightTheme(false);
             _app.SetLightTheme(true);
             Check(two.Leader == source && Snapshot().SequenceEqual(before) && GodotObject.IsInstanceValid(obstacle), "2D identities, obstacles and positions survive theme switches");
-            Check(source.GetNode<Polygon2D>("Body").Color == LabPalette.Light.Leader
+            Check(source.GetNode<Polygon2D>("Body").Color == (source.IsSelected ? LabPalette.Light.SelectedLeader : LabPalette.Light.Leader)
                 && ordinary.GetNode<Polygon2D>("Body").Color == LabPalette.Light.Boid, "New and existing 2D boids use readable light colors");
             two.Reset();
             Check(two.Boids.All(b => b.GetNode<Polygon2D>("Body").Color == LabPalette.Light.Boid), "Reset retains the chosen 2D palette");

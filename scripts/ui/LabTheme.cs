@@ -77,7 +77,7 @@ public static class LabTheme
         theme.SetColor("selection_color", "RichTextLabel", p.AccentWash);
         theme.SetStylebox("focus", "RichTextLabel", focus);
         foreach (var (name, color) in new[] { ("MutedLabel", p.Muted), ("AccentLabel", p.AccentText),
-            ("WarningLabel", p.Warning), ("SuccessLabel", p.Success), ("LeaderLabel", p.Leader) })
+            ("WarningLabel", p.Warning), ("SuccessLabel", p.Success), ("LeaderLabel", p.LeaderText) })
         {
             theme.SetTypeVariation(name, "Label");
             theme.SetColor("font_color", name, color);

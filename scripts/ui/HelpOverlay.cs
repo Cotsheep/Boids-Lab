@@ -36,7 +36,7 @@ public partial class HelpOverlay : Control
     private string ColorInstructions() => _instructions
         .Replace("[color=#78dcca][b]", $"[color=#{_palette.AccentText.ToHtml(false)}][b]")
         .Replace("#78dcca", "#" + _palette.Perception.ToHtml(false))
-        .Replace("#d69cff", "#" + _palette.Leader.ToHtml(false))
+        .Replace("#d69cff", "#" + _palette.LeaderText.ToHtml(false))
         .Replace("#ffad5c", "#" + _palette.Separation.ToHtml(false))
         .Replace("#70baff", "#" + _palette.Velocity.ToHtml(false))
         .Replace("#ffd36b", "#" + _palette.Selection.ToHtml(false));

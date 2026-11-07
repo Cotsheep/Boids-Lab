@@ -54,8 +54,8 @@ public partial class LeaderInteractionChecks : Node
             Click(checkbox.GetGlobalRect().GetCenter());
             Check(world.Leader == a && a.IsLeader && checkbox.ButtonPressed && !world.IsRunning,
                 "Native checkbox assigns selected Boid without resuming");
-            Check(a.GetNode<Polygon2D>("Body").Color == Boid2D.LeaderColor,
-                "Leader uses special color even while selected");
+            Check(a.GetNode<Polygon2D>("Body").Color == world.GetNode<SimulationView>("SimulationView").Palette.SelectedLeader,
+                "Selected leader uses the distinct selected-leader highlight");
             Click(Screen(a));
             Check(world.SelectedBoid is null && world.Leader == a && a.IsLeader && checkbox.Disabled,
                 "Deselecting does not clear Leader identity");

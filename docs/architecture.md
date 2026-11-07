@@ -124,7 +124,7 @@ Godot → BoidManager._PhysicsProcess(delta)
 
 观察模式由 `ViewportBoundaryEnabled` 选择软边界或环绕，默认关闭；领队身份优先，存在时停用两类边界。`SetLeader` 在有/无领队的切换上清除邻居统计，返回环绕时立即规范化位置，返回软边界时保留位置。转移身份不经过中间观察模式。关闭软边界立即恢复环绕；切换开关不重置群体、速度、朝向或运行状态。`BoundarySteering2D` 的缓冲带位于扩展边界内侧，各轴靠近两端的 20% 区域逐渐增强回归，越界后保持最大回归请求，速度响应为 0.5 秒；群集同轴向外分量不能抵消回归请求，避障优先，合力限幅。详见[二维视口软边界](viewport-boundary-2d.md)。
 
-`BoidManager.Leader` 保存唯一领队引用，`SelectedBoid` 仍只表示普通选择。`SetSelectedBoidLeader(bool)` 是 UI 请求入口，`SetLeader(Boid2D?)` 验证个体属于本世界、转移标记并清空旧目标。移除领队、Reset 或解除身份时清空引用和目标，不能只记录可能在重置后复用的 ID。`Boid2D.IsLeader` 管理持久的紫色本体，`SimulationView` 绘制紫色菱形和目标标记；金色选择圆环可以与身份标记同时出现。
+`BoidManager.Leader` 保存唯一领队引用，`SelectedBoid` 仍只表示普通选择。`SetSelectedBoidLeader(bool)` 是 UI 请求入口，`SetLeader(Boid2D?)` 验证个体属于本世界、转移标记并清空旧目标。移除领队、Reset 或解除身份时清空引用和目标，不能只记录可能在重置后复用的 ID。`Boid2D.IsLeader` 管理持久的领队身份，`SimulationView` 绘制单一身份圆环；选中领队时本体及同一圆环使用选中领队色并加强轮廓，不叠加普通选择环。目标准星在贴近领队时隐藏，远处仍显示。
 
 `SimulationCamera2D.ObservePointer()` 保存最近鼠标事件的视口坐标；障碍物编辑器消费手势前也更新这个位置。`BoidManager._Process()` 在 GUI 处理后用最终相机变换换算鼠标世界坐标，调用 `SetLeaderTarget`；静止光标也能在相机移动后得到正确目标。UI 悬停、帮助、障碍物编辑、离开窗口或失焦时保留最后目标，暂停时仍可更新标记。此回调只采样输入，运动依然只由 `_PhysicsProcess` 驱动。UI 通过原有接口和事件同步角色，目标存在状态未变时不反复刷新控件。
 
@@ -372,7 +372,7 @@ Godot → BoidManager3D._PhysicsProcess(delta)
 
 `ObstaclePanel` 按选择 / 放置状态显示尺寸和操作按钮，不变更障碍编辑事件或碰撞逻辑。界面分组与验证见[界面说明](ui-layout.md)。
 
-## 冰岩主题与外观偏好
+## 明暗主题与外观偏好
 
 `LabPalette : Resource` 导出分组颜色属性；明 / 暗资源为 `themes/bingyan_light.tres` 和 `bingyan_dark.tres`，由主场景的 LightPalette / DarkPalette 槽引用。`LabTheme` 生成原生控件样式。`MainController` 缓存两套 Theme，向 HUD、帮助及当前 SimulationView 应用同一配色；动态控件继承语义角色。`AppearancePreferences` 独立保存到 `user://boids_lab_ui.cfg`，不混入两套 BoidConfig。
 
